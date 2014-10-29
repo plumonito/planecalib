@@ -183,7 +183,7 @@ void TextureHelper::updateInternal(const cv::Mat &img)
     }
     else
     {
-        DTSLAM_LOG << "Warning: image not continous, wasting time repacking texture.\n";
+		MYAPP_LOG << "Warning: image not continous, wasting time repacking texture.\n";
         uchar *data = new uchar[img.cols * img.rows * 4];
         uchar *src = img.data;
         uchar *dst = data;

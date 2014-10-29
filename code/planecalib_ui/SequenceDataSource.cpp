@@ -33,7 +33,7 @@ cv::Mat SequenceDataSource::readImage(int idx)
 	}
 	catch(cv::Exception &ex)
 	{
-		DTSLAM_LOG << "\n\nAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHH\n\n";
+		MYAPP_LOG << "\n\nAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHH\n\n";
 		throw ex;
 		return cv::Mat();
 	}
@@ -47,7 +47,7 @@ bool SequenceDataSource::open(const std::string &sequenceFormat, int startIdx)
 	cv::Mat sampleImg = readImage(startIdx);
 	if(sampleImg.empty())
 	{
-		DTSLAM_LOG << "Error opening image sequence, format=" << sequenceFormat << ", startIdx=" << startIdx << "\n";
+		MYAPP_LOG << "Error opening image sequence, format=" << sequenceFormat << ", startIdx=" << startIdx << "\n";
 		return false;
 	}
     setSourceSize(sampleImg.size());

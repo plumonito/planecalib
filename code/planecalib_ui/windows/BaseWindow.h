@@ -238,17 +238,17 @@ template<class TBase>
 void KeyBindingHandler<TBase>::showHelp() const
 {
 	if(mKeyBindings.empty())
-		DTSLAM_LOG << "No keyboard bindings.\n";
+		MYAPP_LOG << "No keyboard bindings.\n";
 	else
 	{
-		DTSLAM_LOG << "Keyboard bindings:\n";
+		MYAPP_LOG << "Keyboard bindings:\n";
 		for(auto it=mKeyBindings.begin(), end=mKeyBindings.end(); it!=end; ++it)
 		{
 			const Binding &bind = *it;
 
-			DTSLAM_LOG << " - Key ";
+			MYAPP_LOG << " - Key ";
 			LogKeyName(bind.isSpecial, bind.key);
-			DTSLAM_LOG << ": " << bind.description << "\n";
+			MYAPP_LOG << ": " << bind.description << "\n";
 		}
 	}
 }
@@ -257,15 +257,15 @@ template<class TBase>
 void KeyBindingHandler<TBase>::LogKeyName(bool isSpecial, unsigned char key)
 {
 	if(!isSpecial && key >= 32)
-		DTSLAM_LOG << "'" << key << "'";
+		MYAPP_LOG << "'" << key << "'";
 	else if(isSpecial && (key>=GLUT_KEY_F1 && key<=GLUT_KEY_F12))
 	{
-		DTSLAM_LOG << "'F" << (int)(key-GLUT_KEY_F1+1) << "'";
+		MYAPP_LOG << "'F" << (int)(key - GLUT_KEY_F1 + 1) << "'";
 	}
 	else if(!isSpecial && key == 27)
-		DTSLAM_LOG << "'Esc'";
+		MYAPP_LOG << "'Esc'";
 	else
-		DTSLAM_LOG << (int)key;
+		MYAPP_LOG << (int)key;
 }
 
 } /* namespace planecalib */

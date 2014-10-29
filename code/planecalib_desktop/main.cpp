@@ -121,7 +121,7 @@ int main(int argc, char**argv)
 	//Glew
 	if(glewInit() != GLEW_OK)
 	{
-		DTSLAM_LOG << "Error initializing GLEW!\n";
+		MYAPP_LOG << "Error initializing GLEW!\n";
 		return 0;
 	}
 

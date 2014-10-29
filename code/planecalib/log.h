@@ -23,9 +23,9 @@
 
 
 #ifdef ENABLE_LOG
-#define DTSLAM_LOG (planecalib::Log(__FILE__, __LINE__, __FUNCTION__))
+#define MYAPP_LOG (planecalib::Log(__FILE__, __LINE__, __FUNCTION__))
 #else
-#define DTSLAM_LOG (planecalib::NullLog(__FILE__, __LINE__, __FUNCTION__))
+#define MYAPP_LOG (planecalib::NullLog(__FILE__, __LINE__, __FUNCTION__))
 #endif
 
 namespace cv

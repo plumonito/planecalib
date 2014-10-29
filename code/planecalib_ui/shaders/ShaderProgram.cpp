@@ -38,7 +38,7 @@ static bool CheckShaderStatus(GLuint shader)
         {
             std::unique_ptr<char[]> message(new char[messageLength]);
             glGetShaderInfoLog(shader, messageLength, 0, message.get());
-            DTSLAM_LOG << "GLSL compiler message: " << message.get() << "\n";
+			MYAPP_LOG << "GLSL compiler message: " << message.get() << "\n";
         }
         return false;
     }
@@ -58,7 +58,7 @@ static bool CheckFragmentProgramStatus(GLuint program, GLenum mode)
         {
             std::unique_ptr<char[]> message(new char[messageLength]);
             glGetProgramInfoLog(program, messageLength, 0, message.get());
-            DTSLAM_LOG << "GLSL compiler message: " << message.get() << "\n";
+			MYAPP_LOG << "GLSL compiler message: " << message.get() << "\n";
         }
         return false;
     }
@@ -130,7 +130,7 @@ bool ShaderProgram::LoadFragmentProgram(GLuint &programId, const char *vertexSha
 	vertexShaderFile.open(vertexShaderFileName);
     if (!vertexShaderFile)
     {
-        DTSLAM_LOG << "unable to open \"" << vertexShaderFileName << "\"!\n";
+		MYAPP_LOG << "unable to open \"" << vertexShaderFileName << "\"!\n";
         return false;
     }
 
@@ -141,7 +141,7 @@ bool ShaderProgram::LoadFragmentProgram(GLuint &programId, const char *vertexSha
     fragmentShaderFile.open(fragmentShaderFileName);
     if (!fragmentShaderFile)
     {
-        DTSLAM_LOG << "unable to open \"" << fragmentShaderFileName << "\"!\n";
+		MYAPP_LOG << "unable to open \"" << fragmentShaderFileName << "\"!\n";
         return false;
     }
 
@@ -161,7 +161,7 @@ bool ShaderProgram::load(const char *vertexShaderFilename, const char *fragmentS
     mLoaded = LoadFragmentProgram(mId, vertexShaderFilename, fragmentShaderFilename);
     if (!mLoaded)
     {
-        DTSLAM_LOG << "Error loading " << vertexShaderFilename << " or " << fragmentShaderFilename << "\n";
+		MYAPP_LOG << "Error loading " << vertexShaderFilename << " or " << fragmentShaderFilename << "\n";
         return false;
     }
 

@@ -30,7 +30,7 @@ bool BaseWindow::init(PlaneCalibApp *app, const cv::Size &imageSize)
 
 void BaseWindow::showHelp() const
 {
-	DTSLAM_LOG << "\n--" << mName << " help--\n";
+	MYAPP_LOG << "\n--" << mName << " help--\n";
 	mKeyBindings.showHelp();
 }
 

@@ -21,7 +21,6 @@
 #include <ceres/loss_function.h>
 
 #undef LOG
-#define GLOG_NO_ABBREVIATED_SEVERITIES
 #include <glog/logging.h>
 #include "planecalib/log.h"
 
@@ -74,7 +73,7 @@ bool PlaneCalibApp::init(void)
 
     if (!initImageSrc())
     {
-    	DTSLAM_LOG << "Couldn't initialize image source.\n";
+		MYAPP_LOG << "Couldn't initialize image source.\n";
         return false;
     }
 
@@ -96,12 +95,12 @@ bool PlaneCalibApp::init(void)
 
 	mImageSrc->setDownsample(mDownsampleInputCount);
 	mImageSize = mImageSrc->getSize();
-	DTSLAM_LOG << "Input image size after downsampling: " << mImageSize << "\n";
+	MYAPP_LOG << "Input image size after downsampling: " << mImageSize << "\n";
 
 	//Get first frame
 	if(!mImageSrc->update())
     {
-    	DTSLAM_LOG << "Couldn't get first frame from image source.\n";
+		MYAPP_LOG << "Couldn't get first frame from image source.\n";
     	return false;
     }
 
@@ -129,7 +128,7 @@ bool PlaneCalibApp::init(void)
 
 	mKeyBindings.addBinding(false, 27, static_cast<KeyBindingHandler<PlaneCalibApp>::SimpleBindingFunc>(&PlaneCalibApp::escapePressed), "Quit.");
 
-	DTSLAM_LOG << "\nBasic keys:\n";
+	MYAPP_LOG << "\nBasic keys:\n";
 	mKeyBindings.showHelp();
 
 	setActiveWindow(mWindows[0].get());
@@ -224,32 +223,32 @@ bool PlaneCalibApp::initImageSrc()
 		//Use video file
 	    std::string videoFilename = FLAGS_DriverDataPath + "/" + FLAGS_DriverVideoFile;
 
-	    DTSLAM_LOG << "Video file: " << videoFilename << "\n";
+		MYAPP_LOG << "Video file: " << videoFilename << "\n";
 		OpenCVDataSource *source = new OpenCVDataSource();
 	    mImageSrc.reset(source);
 	    if(!source->open(videoFilename))
 	    {
-	    	DTSLAM_LOG << "Error opening video.\n";
+			MYAPP_LOG << "Error opening video.\n";
 	        return NULL;
 	    }
 
-	    DTSLAM_LOG << "Opened video file succesfully\n";
+		MYAPP_LOG << "Opened video file succesfully\n";
 	}
 	else if(!FLAGS_DriverSequenceFormat.empty())
 	{
 		//Use image sequence
 	    std::string sequence = FLAGS_DriverDataPath + "/" + FLAGS_DriverSequenceFormat;
 
-	    DTSLAM_LOG << "Image sequence: " << sequence << "\n";
+		MYAPP_LOG << "Image sequence: " << sequence << "\n";
 		SequenceDataSource *source = new SequenceDataSource();
 	    mImageSrc.reset(source);
 	    if(!source->open(sequence, FLAGS_DriverSequenceStartIdx))
 	    {
-	    	DTSLAM_LOG << "Error opening sequence.\n";
+			MYAPP_LOG << "Error opening sequence.\n";
 	        return NULL;
 	    }
 
-	    DTSLAM_LOG << "Opened image sequence succesfully\n";
+		MYAPP_LOG << "Opened image sequence succesfully\n";
 	}
 	else
 	{
@@ -258,22 +257,22 @@ bool PlaneCalibApp::initImageSrc()
 	    mImageSrc.reset(source);
 	    if(!source->open(FLAGS_DriverCameraId))
 	    {
-	    	DTSLAM_LOG << "Error opening camera.\n";
+			MYAPP_LOG << "Error opening camera.\n";
 	        return false;
 	    }
 
 	    mUsingCamera = true;
-	    DTSLAM_LOG << "Camera opened succesfully\n";
+		MYAPP_LOG << "Camera opened succesfully\n";
 	}
 
-	DTSLAM_LOG << "Image source size: " << mImageSrc->getSourceSize() << "\n";
+	MYAPP_LOG << "Image source size: " << mImageSrc->getSourceSize() << "\n";
 
 	return true;
 }
 
 void PlaneCalibApp::exit()
 {
-    DTSLAM_LOG << "clean up...\n";
+	MYAPP_LOG << "clean up...\n";
     mShaders.free();
 }
 
@@ -348,7 +347,7 @@ void PlaneCalibApp::draw(void)
 			mFrameCount++;
 			mAdvanceFrame = false;
 
-			DTSLAM_LOG << "\nFrame #" << mFrameCount << "\n";
+			MYAPP_LOG << "\nFrame #" << mFrameCount << "\n";
 
 			//Read new input frame
 			cv::Mat1b imageGray = mImageSrc->getImgGray();
