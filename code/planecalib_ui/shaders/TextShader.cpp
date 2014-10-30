@@ -17,12 +17,11 @@ bool TextShader::init()
                             attribsCount);
 }
 
-void TextShader::setMVPMatrix(const cv::Matx44f &mvp)
+void TextShader::setMVPMatrix(const Eigen::Matrix4f &mvp)
 {
 	//Transpose to opengl column-major format
-	cv::Matx44f mvpt = mvp.t();
     glUseProgram(mProgram.getId());
-    glUniformMatrix4fv(mUniformMVPMatrix, 1, false, mvpt.val);
+    glUniformMatrix4fv(mUniformMVPMatrix, 1, false, mvp.data());
 }
 
 void TextShader::renderText(GLenum mode, GLuint textureId, const Eigen::Vector4f *vertices, const Eigen::Vector2f *textureCoords,

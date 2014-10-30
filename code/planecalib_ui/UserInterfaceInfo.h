@@ -10,7 +10,8 @@
 
 #include <memory>
 #include <cassert>
-#include <opencv2/core.hpp>
+#include <Eigen/Dense>
+#include <opencv2/core.hpp> //for uchar
 
 namespace planecalib {
 
@@ -18,8 +19,8 @@ class UserInterfaceInfo {
 public:
 	static UserInterfaceInfo &Instance();
 
-	const cv::Size2i &getScreenSize() const {return mScreenSize;}
-	void setScreenSize(const cv::Size2i &sz) {mScreenSize=sz;}
+	const Eigen::Vector2i &getScreenSize() const {return mScreenSize;}
+	void setScreenSize(const Eigen::Vector2i &sz) { mScreenSize = sz; }
 
 	bool getKeyState(uchar key) const {assert(key<kKeyStateSize); return mKeyState[key];}
 	void setKeyState(uchar key, bool state) {assert(key<kKeyStateSize); mKeyState[key] = state;}
@@ -30,7 +31,7 @@ public:
 protected:
 	static std::unique_ptr<UserInterfaceInfo> gInstance;
 
-	cv::Size2i mScreenSize;
+	Eigen::Vector2i mScreenSize;
 
 	static const int kKeyStateSize=256;
 	bool mKeyState[kKeyStateSize];

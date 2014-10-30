@@ -24,15 +24,13 @@ bool ColorShader::init()
     return res;
 }
 
-void ColorShader::setMVPMatrix(const cv::Matx44f &mvp)
+void ColorShader::setMVPMatrix(const Eigen::Matrix4f &mvp)
 {
-	//Transpose to opengl column-major format
-	cv::Matx44f mvpt = mvp.t();
     glUseProgram(mProgram.getId());
-    glUniformMatrix4fv(mUniformMVPMatrix, 1, false, mvpt.val);
+    glUniformMatrix4fv(mUniformMVPMatrix, 1, false, mvp.data());
 
     glUseProgram(mProgram4.getId());
-    glUniformMatrix4fv(mUniformMVPMatrix4, 1, false, mvpt.val);
+    glUniformMatrix4fv(mUniformMVPMatrix4, 1, false, mvp.data());
 }
 
 void ColorShader::drawVertices(GLenum mode, const Eigen::Vector2f *vertices, int count, const Eigen::Vector4f &color)

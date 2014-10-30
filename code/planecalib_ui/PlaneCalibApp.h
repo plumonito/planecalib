@@ -33,7 +33,7 @@ private:
     bool mUsingCamera;
     std::unique_ptr<ImageDataSource> mImageSrc;
     int mDownsampleInputCount;
-    cv::Size2i mImageSize;
+    Eigen::Vector2i mImageSize;
 
     Shaders mShaders;
 

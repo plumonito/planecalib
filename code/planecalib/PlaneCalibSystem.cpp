@@ -7,61 +7,75 @@
 #include "Keyframe.h"
 //#include "BundleAdjuster.h"
 //#include "CeresUtils.h"
+//#include "FeatureGridIndexer.h"
 
 #include "flags.h"
 
 namespace planecalib
 {
 
-//bool PlaneCalibSystem::init(double timestamp, cv::Mat3b &imgColor, cv::Mat1b &imgGray)
-//{
-//	//Wait for other threads
-//	if(mBAFuture.valid())
-//		mBAFuture.get();
-//	if(mExpanderFuture.valid())
-//		mExpanderFuture.get();
-//
-//	//Create first key frame
-//    std::unique_ptr<SlamKeyFrame> keyFrame(new SlamKeyFrame());
-//	keyFrame->mOriginalRegionID = 0;
-//    keyFrame->init(camera, imgColor, imgGray);
-//    keyFrame->setTimestamp(timestamp);
-//    keyFrame->setPose(std::unique_ptr<Pose3D>(new FullPose3D()));
-//
-//    DTSLAM_LOG << "Pyramid sizes: ";
-//    DTSLAM_LOG << keyFrame->getImage(0).size();
-//    for(int octave=1; octave<keyFrame->getPyramid().getOctaveCount(); octave++)
-//    	DTSLAM_LOG << ", " << keyFrame->getImage(octave).size();
-//    DTSLAM_LOG << "\n";
-//
-//    DTSLAM_LOG << "SBI size: " << keyFrame->getSBI().size() << "\n";
-//
-//	//Reset map
-//	mMap.reset(new SlamMap());
-//	mPoseLog.clear();
-//
-//	//Reset tracker
-//	mTracker.reset(new PoseTracker());
-//	mTracker->init(camera, keyFrame->getImage(0).size(), keyFrame->getPyramid().getOctaveCount());
-//
-//	//Prepare map expander
-//	mMapExpander.reset(new SlamMapExpander());
-//	mMapExpander->init(camera, this);
-//	mExpanderCheckPending = false;
-//
-//	//Start region
-//	startNewRegion(NULL, std::move(keyFrame));
-//	mTracker->setActiveRegion(mActiveRegion);
-//	mTracker->resetTracking(mActiveRegion->getKeyFrames().back()->getPose());
-//
-//	if(FLAGS_SavePose)
-//	{
-//		std::remove(kSavePoseFilename);
-//	}
-//
-//	return true;
-//}
-//
+bool PlaneCalibSystem::init(double timestamp, cv::Mat3b &imgColor, cv::Mat1b &imgGray)
+{
+	//Wait for other threads
+	if(mExpanderFuture.valid())
+		mExpanderFuture.get();
+
+	//Create first key frame
+    std::unique_ptr<Keyframe> keyframe(new Keyframe());
+    keyframe->init(imgColor, imgGray);
+    keyframe->setTimestamp(timestamp);
+    keyframe->setPose(Eigen::Matrix3fr::Identity());
+
+	Eigen::Vector2i imageSize = keyframe->getImageSize();
+
+    MYAPP_LOG << "Pyramid sizes: ";
+	MYAPP_LOG << imageSize;
+    for(int octave=1; octave<keyframe->getPyramid().getOctaveCount(); octave++)
+		MYAPP_LOG << ", " << keyframe->getImage(octave).size();
+	MYAPP_LOG << "\n";
+
+	MYAPP_LOG << "SBI size: " << keyframe->getSBI().size() << "\n";
+
+	//Reset map
+	mMap.reset(new Map());
+
+	//Reset tracker
+	mTracker.reset(new PoseTracker());
+	mTracker->init(imageSize, keyframe->getOctaveCount());
+
+	//Prepare map expander
+	//mMapExpander.reset(new SlamMapExpander());
+	//mMapExpander->init(camera, this);
+	//mExpanderCheckPending = false;
+
+	//Start map
+	//Add keyframe
+	Keyframe *pkeyframe = keyframe.get();
+	mMap->addKeyframe(std::move(keyframe));
+
+	Eigen::Matrix3fr poseInv = pkeyframe->getPose().inverse();
+
+	//Create 2D features
+	for (int octave = 0, end = pkeyframe->getPyramid().getOctaveCount(); octave != end; ++octave)
+	{
+		const int scale = 1 << octave;
+
+		//cv::Size2i tileSize(scale*FLAGS_FrameKeypointGridSize, scale*FLAGS_FrameKeypointGridSize);
+		//auto keypoints = FeatureGridIndexer<KeypointData>::ApplyNonMaximaSuppresion(pkeyframe->getKeypoints(octave), imageSize, tileSize, scale*16);
+		auto keypoints = pkeyframe->getKeypoints(octave);
+		for (auto kp : keypoints)
+		{
+			mMap->createFeature(*pkeyframe, poseInv, kp.position, octave);
+		}
+
+		MYAPP_LOG << "Created " << keypoints.size() << " features in octave " << octave << "\n";
+	}
+
+	mTracker->resetTracking(mMap->getKeyframes().back()->getPose());
+
+	return true;
+}
+
 //bool SlamSystem::init(const CameraModel *camera, std::unique_ptr<SlamMap> map)
 //{
 //	//Wait for other threads
@@ -98,43 +112,8 @@ namespace planecalib
 //	return true;
 //}
 //
-//void SlamSystem::startNewRegion(SlamKeyFrame *previousRegionFrame, std::unique_ptr<SlamKeyFrame> keyframe_)
-//{
-//	DTSLAM_LOG << "\n-------------------------\nCreating start region\n-------------------------\n";
-//
-//	//Create region
-//	SlamRegion *region = mMap->createRegion();
-//
-//	//Add keyframe
-//	SlamKeyFrame *keyframe = keyframe_.get();
-//	region->addKeyFrame(std::move(keyframe_));
-//
-//
-//	region->setPreviousRegionSourceFrame(previousRegionFrame);
-//
-//    //Create 2D features
-//	cv::Size2i imageSize = keyframe->getImage(0).size();
-//	for (int octave = 0, end = keyframe->getPyramid().getOctaveCount(); octave!=end; ++octave)
-//    {
-//    	const int scale = 1<<octave;
-//
-//    	//FeatureGridIndexer<KeyPointData> keypoints = keyFrame->getKeyPoints(octave).applyNonMaximaSuppresion(scale*PatchWarper::kPatchRightSize);
-//		//auto &keypoints = keyFrame->getKeyPoints(octave);
-//		cv::Size2i tileSize(scale*FLAGS_FrameKeypointGridSize, scale*FLAGS_FrameKeypointGridSize);
-//		auto keypoints = FeatureGridIndexer<KeyPointData>::ApplyNonMaximaSuppresion(keyframe->getKeyPoints(octave), imageSize, tileSize, scale*PatchWarper::kPatchRightSize);
-//    	for(auto kp : keypoints)
-//    	{
-//    		region->createFeature2D(*keyframe, kp.position, kp.xn, octave);
-//    	}
-//
-//    	DTSLAM_LOG << "Created " << keypoints.size() << " features in octave " << octave << "\n";
-//    }
-//	
-//    //Set as active region for expander
-//    mActiveRegion = region;
-//	mMapExpander->setRegion(mActiveRegion);
-//}
-//
+
+
 //void SlamSystem::processImage(double timestamp, cv::Mat3b &imgColor, cv::Mat1b &imgGray)
 //{
 //	//Reset profiler for each image

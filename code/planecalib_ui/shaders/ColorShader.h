@@ -15,8 +15,7 @@ public:
     bool init();
     void free() {mProgram.free(); mProgram4.free();}
 
-    //mvp is in normal opencv row-major order
-    void setMVPMatrix(const cv::Matx44f &mvp);
+	void setMVPMatrix(const Eigen::Matrix4f &mvp);
 
     void drawVertices(GLenum mode, const Eigen::Vector2f *vertices, int count, const Eigen::Vector4f &color);
 	void drawVertices(GLenum mode, const Eigen::Vector2f *vertices, const Eigen::Vector4f *color, int count);

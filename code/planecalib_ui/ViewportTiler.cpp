@@ -18,18 +18,20 @@ ViewportTiler::ViewportTiler()
 
 }
 
-void ViewportTiler::configDevice(const cv::Rect2i &viewportArea, int rows, int cols)
+void ViewportTiler::configDevice(const Eigen::Vector2i &viewportOrigin, const Eigen::Vector2i &viewportSize, int rows, int cols)
 {
 	assert(rows>0 && cols>0);
 	mRows = rows;
 	mCols = cols;
 
-	mViewportArea = viewportArea;
-	mCellSize = cv::Size2i(viewportArea.width/cols, viewportArea.height/rows);
+	mViewportOrigin = viewportOrigin;
+	mViewportSize = viewportSize;
+	mCellSize = Eigen::Vector2i(viewportSize.x()/cols, viewportSize.y()/rows);
 
-	mFullScreenTile.mAspectRatio = (float)mViewportArea.width / mViewportArea.height;
-	mFullScreenTile.mViewportArea = mViewportArea;
-	setImageMVP(&mFullScreenTile, mViewportArea.size());
+	mFullScreenTile.mAspectRatio = (float)mViewportSize.x() / mViewportSize.y();
+	mFullScreenTile.mViewportOrigin = mViewportOrigin;
+	mFullScreenTile.mViewportSize = mViewportSize;
+	setImageMVP(&mFullScreenTile, mViewportSize);
 
 	mTiles.clear();
 	mTileMatrix.clear();
@@ -41,10 +43,10 @@ void ViewportTiler::addTile(int row, int col, float aspectRatio, int rowSpan, in
 	ViewportTileInfo *tile = new ViewportTileInfo();
 	mTiles.push_back(std::unique_ptr<ViewportTileInfo>(tile));
 
-	tile->mViewportArea.x = mViewportArea.x + col*mCellSize.width;
-	tile->mViewportArea.y = mViewportArea.y + row*mCellSize.height;
-	tile->mViewportArea.width = mCellSize.width*colSpan;
-	tile->mViewportArea.height = mCellSize.height*rowSpan;
+	tile->mViewportOrigin.x() = mViewportOrigin.x() + col*mCellSize.x();
+	tile->mViewportOrigin.y() = mViewportOrigin.y() + row*mCellSize.y();
+	tile->mViewportSize.x() = mCellSize.x()*colSpan;
+	tile->mViewportSize.y() = mCellSize.y()*rowSpan;
 
 	tile->mAspectRatio = aspectRatio;
 	resetMVP(tile);
@@ -65,11 +67,11 @@ void ViewportTiler::addTile(int row, int col, float aspectRatio, int rowSpan, in
 void ViewportTiler::resetMVP(ViewportTileInfo *tile)
 {
 	//Configure mvp matrix to correct aspect ratio
-	float viewportAspect = static_cast<float>(tile->mViewportArea.width) / tile->mViewportArea.height;
+	float viewportAspect = static_cast<float>(tile->mViewportSize.x()) / tile->mViewportSize.x();
 	if(tile->mAspectRatio == -1.0f)
 	{
 		tile->mAspectRatio = viewportAspect;
-		tile->mMvp = cv::Matx44f::eye();
+		tile->mMvp = Eigen::Matrix4f::Identity();
 	}
 	else
 	{
@@ -77,57 +79,57 @@ void ViewportTiler::resetMVP(ViewportTileInfo *tile)
 	}
 }
 
-cv::Matx44f ViewportTiler::createAspectMVP(float viewportAspect, float newAspect)
+Eigen::Matrix4f ViewportTiler::createAspectMVP(float viewportAspect, float newAspect)
 {
 	if(viewportAspect > newAspect)
 	{
 		//Shrink in x
-		return cv::Matx44f(newAspect/viewportAspect,0,0,0, 0,1,0,0, 0,0,1,0, 0,0,0,1);
+		return (Eigen::Matrix4f() << newAspect / viewportAspect, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1).finished();
 	}
 	else
 	{
 		//Shrink in y
-		return cv::Matx44f(1,0,0,0, 0,viewportAspect/newAspect,0,0, 0,0,1,0, 0,0,0,1);
+		return (Eigen::Matrix4f() << 1, 0, 0, 0, 0, viewportAspect / newAspect, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1).finished();
 	}
 }
 
-void ViewportTiler::setImageMVP(ViewportTileInfo *tile, const cv::Size2i &imageSize)
+void ViewportTiler::setImageMVP(ViewportTileInfo *tile, const Eigen::Vector2i &imageSize)
 {
-	float viewportAspect = static_cast<float>(tile->mViewportArea.width) / tile->mViewportArea.height;
+	float viewportAspect = static_cast<float>(tile->mViewportSize.x()) / tile->mViewportSize.y();
 	tile->mMvp = GetImageSpaceMvp(viewportAspect, imageSize);
 }
 
 
-cv::Matx44f ViewportTiler::GetImageSpaceMvp(float viewportAspect, const cv::Size2i &imageSize)
+Eigen::Matrix4f ViewportTiler::GetImageSpaceMvp(float viewportAspect, const Eigen::Vector2i &imageSize)
 {
-	float imageAspect = static_cast<float>(imageSize.width) / imageSize.height;
-	cv::Size2f paddedSize = imageSize;
+	float imageAspect = static_cast<float>(imageSize.x()) / imageSize.y();
+	Eigen::Vector2f paddedSize = imageSize.cast<float>();
     if (viewportAspect > imageAspect)
     {
         // Viewport is wider than image
         // Use entire viewport height and add padding on x
-    	paddedSize.width += viewportAspect * imageSize.height - imageSize.width;
+    	paddedSize.x() += viewportAspect * imageSize.y() - imageSize.x();
     }
     else
     {
         // Viewport is taller than rectangle
         // Use entire viewport width and add padding on y
-    	paddedSize.height += imageSize.width / viewportAspect - imageSize.height;
+    	paddedSize.y() += imageSize.x() / viewportAspect - imageSize.y();
     }
 
     float zNear = 0.001f;
     float zFar = 100.0f;
 
-    const float sx = (2.0f) / (paddedSize.width);
-    const float tx = -((imageSize.width) / 2.0f) * sx;
+    const float sx = (2.0f) / (paddedSize.x());
+	const float tx = -((imageSize.x()) / 2.0f) * sx;
     //const float tx = -1;
-    const float sy = -(2.0f) / (paddedSize.height);
-    const float ty = -((imageSize.height) / 2.0f) * sy;
+	const float sy = -(2.0f) / (paddedSize.y());
+	const float ty = -((imageSize.y()) / 2.0f) * sy;
     //const float ty = 1;
     const float sz = -2.0f / (zFar - zNear);
     const float tz  = -2.0f / (zFar + zNear);
 
-    return cv::Matx44f(sx,0,tx,0, 0,sy,ty,0, 0,0,sz,tz, 0,0,1,0);
+    return (Eigen::Matrix4f() << sx,0,tx,0, 0,sy,ty,0, 0,0,sz,tz, 0,0,1,0).finished();
 }
 
 void ViewportTiler::fillTiles()
@@ -146,13 +148,13 @@ void ViewportTiler::fillTiles()
 void ViewportTiler::setActiveTile(ViewportTileInfo *tile)
 {
 	mActiveTile = tile;
-	glViewport(mActiveTile->mViewportArea.x, mActiveTile->mViewportArea.y, mActiveTile->mViewportArea.width, mActiveTile->mViewportArea.height);
+	glViewport(mActiveTile->mViewportOrigin.x(), mActiveTile->mViewportOrigin.y(), mActiveTile->mViewportSize.x(), mActiveTile->mViewportSize.y());
 }
 
-void ViewportTiler::screenToVertex(const cv::Point2f &screenPoint, int &tileIdx, cv::Vec4f &vertex) const
+void ViewportTiler::screenToVertex(const Eigen::Vector2f &screenPoint, int &tileIdx, Eigen::Vector4f &vertex) const
 {
-	int tileX = (int)(screenPoint.x / mCellSize.width);
-	int tileY = (int)(screenPoint.y / mCellSize.height);
+	int tileX = (int)(screenPoint.x() / mCellSize.x());
+	int tileY = (int)(screenPoint.y() / mCellSize.y());
 
 	if(tileX < 0 || tileX >= mCols || tileY < 0 || tileY >= mRows)
 	{
@@ -162,8 +164,8 @@ void ViewportTiler::screenToVertex(const cv::Point2f &screenPoint, int &tileIdx,
 
 	tileIdx = tileY*mCols + tileX;
 	const auto &tile = *mTiles[tileIdx];
-	cv::Matx44f mvpInv = tile.mMvp.inv();
-	vertex = mvpInv * cv::Vec4f(2*(screenPoint.x-tile.mViewportArea.x)/tile.mViewportArea.width-1, 1-2*(screenPoint.y-tile.mViewportArea.y)/tile.mViewportArea.height, 1, 1);
+	Eigen::Matrix4f mvpInv = tile.mMvp.inverse();
+	vertex = mvpInv * Eigen::Vector4f(2 * (screenPoint.x() - tile.mViewportOrigin.x()) / tile.mViewportSize.x() - 1, 1 - 2 * (screenPoint.y() - tile.mViewportOrigin.y()) / tile.mViewportSize.y(), 1, 1);
 }
 
 }

@@ -26,7 +26,9 @@ public:
 		BaseWindow("MainWindow")
 	{}
 
-	bool init(PlaneCalibApp *app, const cv::Size &imageSize);
+	EIGEN_MAKE_ALIGNED_OPERATOR_NEW
+
+	bool init(PlaneCalibApp *app, const Eigen::Vector2i &imageSize);
 	void showHelp() const;
 
 	void updateState();
@@ -45,6 +47,8 @@ protected:
     PoseTracker *mTracker;
 
 	const Eigen::Matrix3f mTrackerPose;
+
+	TextureHelper mRefTexture;
 
 	//Draw data
 	std::vector<Eigen::Vector2f> mImagePoints;

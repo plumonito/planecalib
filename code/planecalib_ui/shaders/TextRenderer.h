@@ -54,7 +54,7 @@ public:
     void setActiveFontSmall() {mActiveFont = &mFontData[0];}
     void setActiveFontBig() {mActiveFont = &mFontData[1];}
 
-    void setMVPMatrix(const cv::Matx44f &mvp) {mShader->setMVPMatrix(mvp);}
+	void setMVPMatrix(const Eigen::Matrix4f &mvp) { mShader->setMVPMatrix(mvp); }
     void setRenderCharHeight(float height) {mRenderCharHeight = height;}
     void setCaret(const Eigen::Vector4f &caret) {mRenderCaret = mRenderCaret0 = caret;}
     void setCaret(const Eigen::Vector2f &caret) {setCaret(Eigen::Vector4f(caret.x(), caret.y(), 1, 1));}

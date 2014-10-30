@@ -130,7 +130,7 @@ public:
 	void requireInit() {mIsInitialized=false;}
 	const std::string &getName() const {return mName;}
 
-	virtual bool init(PlaneCalibApp *app, const cv::Size &imageSize);
+	virtual bool init(PlaneCalibApp *app, const Eigen::Vector2i &imageSize);
 
 	virtual void showHelp() const;
 
@@ -161,7 +161,7 @@ protected:
 	bool mIsInitialized;
 	PlaneCalibApp *mApp;
     Shaders *mShaders;
-    cv::Size mImageSize;
+	Eigen::Vector2i mImageSize;
 
     std::string mName;
     KeyBindingHandler<BaseWindow> mKeyBindings;

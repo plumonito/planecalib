@@ -17,6 +17,12 @@ namespace planecalib
 {
 ///////////////////////////////////////////////////////
 
+DEFINE_int32(PyramidMaxTopLevelWidth, 240, "Maximum width of the highest pyramid level for a frame.");
+DEFINE_int32(SBIMaxWidth, 60, "Maximum width for the Small Blurry Image, input will be downsampled until width is less than this.");
+DEFINE_int32(FeatureDetectorThreshold, 10, "Threshold for the keypoint detector");
+DEFINE_int32(MatcherPixelSearchDistance, 8, "The search distance for matching features (distance from point projection or from epiplar line). Units in pixels of the highest pyramid level.");
+
+
 DEFINE_int32(DriverCameraId, 0, "Id of the camera to open (OpenCV).");
 DEFINE_string(DriverDataPath, "c:/code/dslam/datasets", "Path to all data files (videos, camera calibrations, etc.)");
 DEFINE_string(DriverVideoFile, "", "Name of the video file to use (e.g. rotation3.mp4). If both VideoFile and SequenceFormat are empty, the camera is used.");
@@ -41,7 +47,7 @@ int gWindowId;
 
 void changeSize(int w, int h)
 {
-	planecalib::UserInterfaceInfo::Instance().setScreenSize(cv::Size(w,h));
+	planecalib::UserInterfaceInfo::Instance().setScreenSize(Eigen::Vector2i(w, h));
 	gApp->resize();
 }
 
@@ -108,13 +114,13 @@ int main(int argc, char**argv)
 	google::ParseCommandLineFlags(&argc, &argv, true);
 
 	//cv::Size initialSize(1980,1040);
-	cv::Size initialSize(planecalib::FLAGS_WindowWidth, planecalib::FLAGS_WindowHeight);
+	Eigen::Vector2i initialSize(planecalib::FLAGS_WindowWidth, planecalib::FLAGS_WindowHeight);
 
 	//init GLUT and create window
 	glutInit(&argc, argv );
 	glutInitDisplayMode(GLUT_DEPTH | GLUT_DOUBLE | GLUT_RGBA | GLUT_ALPHA);
 	//glutInitWindowPosition(900,10);
-	glutInitWindowSize(initialSize.width,initialSize.height);
+	glutInitWindowSize(initialSize.x(),initialSize.y());
 	planecalib::UserInterfaceInfo::Instance().setScreenSize(initialSize);
 	gWindowId = glutCreateWindow("dslam");
 

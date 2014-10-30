@@ -16,7 +16,7 @@ namespace planecalib
 {
 	DECLARE_int32(PyramidMaxTopLevelWidth);
 	DECLARE_int32(SBIMaxWidth);
-	DECLARE_int32(FASTThreshold);
+	DECLARE_int32(FeatureDetectorThreshold);
 	DECLARE_int32(FrameKeypointGridSize);
 
 

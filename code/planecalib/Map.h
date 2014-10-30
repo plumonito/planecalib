@@ -5,6 +5,7 @@
 #include <memory>
 #include <atomic>
 #include <Eigen/Dense>
+#include "eutils.h"
 #include "Keyframe.h"
 #include "shared_mutex.h"
 
@@ -28,15 +29,15 @@ public:
 
 	void clear();
 
-	const std::vector<std::unique_ptr<Keyframe>> &getKeyFrames() const { return mKeyframes; }
+	const std::vector<std::unique_ptr<Keyframe>> &getKeyframes() const { return mKeyframes; }
 	const std::vector<std::unique_ptr<Feature>> &getFeatures() const { return mFeatures; }
 
 	void addKeyframe(std::unique_ptr<Keyframe> newKeyframe);
 
-	void getFeaturesInView(const Eigen::Matrix3f &pose, const Eigen::Vector2i &imageSize, int octaveCount, std::unordered_set<Feature*> &featuresToIgnore, std::vector<std::vector<FeatureProjectionInfo>> &featuresInView);
-	FeatureProjectionInfo projectFeature(const Eigen::Matrix3f &pose, Feature &feature);
+	void getFeaturesInView(const Eigen::Matrix3fr &pose, const Eigen::Vector2i &imageSize, int octaveCount, std::unordered_set<Feature*> &featuresToIgnore, std::vector<std::vector<FeatureProjectionInfo>> &featuresInView);
+	FeatureProjectionInfo projectFeature(const Eigen::Matrix3fr &pose, Feature &feature);
 
-	Feature *createFeature(Keyframe &keyFrame, const Eigen::Vector2f &position, int octave);
+	Feature *createFeature(Keyframe &keyframe, const Eigen::Matrix3fr &poseInv, const Eigen::Vector2f &position, int octave);
 
 	void moveToGarbage(Feature &feature);
 
@@ -85,7 +86,7 @@ public:
 
 	Feature &getFeature() const {return *mFeature;}
 	Keyframe &getKeyframe() const {return *mKeyframe;}
-	const Eigen::Matrix3f &getFramePose() const { return mKeyframe->getPose(); } //Shortcut
+	const Eigen::Matrix3fr &getFramePose() const { return mKeyframe->getPose(); } //Shortcut
 
 	Eigen::Vector2f getPosition() const { return mPosition; }
 	int getOctave() const {return mOctave;}

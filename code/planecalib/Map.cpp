@@ -17,7 +17,7 @@ namespace planecalib {
 // Map
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-	void Map::getFeaturesInView(const Eigen::Matrix3f &pose, const Eigen::Vector2i &imageSize, int octaveCount, std::unordered_set<Feature*> &featuresToIgnore, std::vector<std::vector<FeatureProjectionInfo>> &featuresInView)
+void Map::getFeaturesInView(const Eigen::Matrix3fr &pose, const Eigen::Vector2i &imageSize, int octaveCount, std::unordered_set<Feature*> &featuresToIgnore, std::vector<std::vector<FeatureProjectionInfo>> &featuresInView)
 {
 	ProfileSection s("getFeaturesInView");
 
@@ -41,7 +41,7 @@ namespace planecalib {
 	}
 }
 
-FeatureProjectionInfo Map::projectFeature(const Eigen::Matrix3f &pose, Feature &feature)
+FeatureProjectionInfo Map::projectFeature(const Eigen::Matrix3fr &pose, Feature &feature)
 {
 	Eigen::Vector2f pos = eutils::HomographyPoint(pose, feature.getPosition());
 	Eigen::Vector2f posPlusOne = eutils::HomographyPoint(pose, feature.getPositionPlusOne());
@@ -60,6 +60,28 @@ FeatureProjectionInfo Map::projectFeature(const Eigen::Matrix3f &pose, Feature &
 	}
 
 	return FeatureProjectionInfo(&feature, feature.getMeasurements()[0].get(), octave, pos);
+}
+
+void Map::addKeyframe(std::unique_ptr<Keyframe> newKeyframe)
+{
+	mKeyframes.push_back(std::move(newKeyframe));
+}
+
+Feature *Map::createFeature(Keyframe &keyframe, const Eigen::Matrix3fr &poseInv, const Eigen::Vector2f &position, int octave)
+{
+	int scale = 1 << octave;
+	std::unique_ptr<Feature> feature(new Feature());
+
+	Eigen::Vector2f pos = eutils::HomographyPoint(poseInv, position);
+	Eigen::Vector2f posPlusOne = eutils::HomographyPoint(poseInv, position+Eigen::Vector2f(scale,0));
+	
+	feature->mPosition = pos;
+	feature->mPlusOneOffset = posPlusOne - pos;
+	feature->mMeasurements.emplace_back(new FeatureMeasurement(feature.get(), &keyframe, position, octave));
+
+	Feature *pfeature = feature.get();
+	mFeatures.push_back(std::move(feature));
+	return pfeature;
 }
 
 }

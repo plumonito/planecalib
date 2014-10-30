@@ -97,7 +97,7 @@ bool PlaneCalibApp::init(void)
 	int scale = 1<<mDownsampleInputCount;
 
 	mImageSrc->setDownsample(mDownsampleInputCount);
-	mImageSize = mImageSrc->getSize();
+	mImageSize = eutils::FromSize(mImageSrc->getSize());
 	MYAPP_LOG << "Input image size after downsampling: " << mImageSize << "\n";
 
 	//Get first frame
@@ -108,8 +108,10 @@ bool PlaneCalibApp::init(void)
     }
 
 	//System
+	cv::Mat1b imageGray = mImageSrc->getImgGray();
+	cv::Mat3b imageColor = mImageSrc->getImgColor();
 	mSystem = new PlaneCalibSystem();
-	//mSystem->init(mImageSrc->getCaptureTime(), imageColor, imageGray);
+	mSystem->init(mImageSrc->getCaptureTime(), imageColor, imageGray);
 	mSystem->setSingleThreaded(FLAGS_DriverSingleThreaded);
 
 	//Add windows
@@ -394,9 +396,9 @@ void PlaneCalibApp::draw(void)
 		    Profiler::Instance().logStats(ss);
 		}
 
-	    cv::Size2i screenSize = UserInterfaceInfo::Instance().getScreenSize();
-		float viewportAspect = static_cast<float>(screenSize.width) / screenSize.height;
-		glViewport(0,0,screenSize.width,screenSize.height);
+	    Eigen::Vector2i screenSize = UserInterfaceInfo::Instance().getScreenSize();
+		float viewportAspect = static_cast<float>(screenSize.x()) / screenSize.y();
+		glViewport(0,0,screenSize.x(),screenSize.y());
 		mShaders.getText().setMVPMatrix(ViewportTiler::GetImageSpaceMvp(viewportAspect, screenSize));
 
 	    mShaders.getText().setActiveFontSmall();

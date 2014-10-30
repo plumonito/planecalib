@@ -20,7 +20,7 @@ void MainWindow::showHelp() const
 		"Three display modes: show matches, show reprojected features with 3 measurements, and show all reprojected features.\n";
 }
 
-bool MainWindow::init(PlaneCalibApp *app, const cv::Size &imageSize)
+bool MainWindow::init(PlaneCalibApp *app, const Eigen::Vector2i &imageSize)
 {
 	BaseWindow::init(app, imageSize);
 
@@ -31,12 +31,15 @@ bool MainWindow::init(PlaneCalibApp *app, const cv::Size &imageSize)
 
 	//mKeyBindings.addBinding(false, 't', static_cast<KeyBindingHandler<BaseWindow>::SimpleBindingFunc>(&ARWindow::toggleDisplayType), "Toggle display mode.");
 
+	mRefTexture.create(GL_RGB, eutils::ToSize(imageSize));
+	mRefTexture.update(mSystem->getMap().getKeyframes()[0]->getColorImage());
+
 	return true;
 }
 
 void MainWindow::updateState()
 {
-	//shared_lock<shared_mutex> lockRead(mSystem->getMap().getMutex());
+	shared_lock<shared_mutex> lockRead(mSystem->getMap().getMutex());
 
 	//Clear all
 	mImagePoints.clear();
@@ -44,13 +47,22 @@ void MainWindow::updateState()
 
 	//Add features
 	//mTrackerPose = &mTracker->getCurrentPose();
+	for (auto &p : mSystem->getMap().getFeatures())
+	{
+		const Feature &feature = *p;
+		Eigen::Vector4f color = StaticColors::Green();
+
+		mImagePoints.push_back(feature.getPosition());
+		mImagePointColors.push_back(color);
+	}
+	//for ()
 
 	const float pointAlpha = 0.6f;
 }
 
 void MainWindow::resize()
 {
-    mTiler.configDevice(cv::Rect2i(cv::Point2i(0,0),UserInterfaceInfo::Instance().getScreenSize()),1);
+    mTiler.configDevice(Eigen::Vector2i::Zero(),UserInterfaceInfo::Instance().getScreenSize(),1);
 	mTiler.fillTiles();
 	mTiler.setImageMVP(0, mImageSize);
 }
@@ -61,12 +73,13 @@ void MainWindow::draw()
     mShaders->getTexture().setMVPMatrix(mTiler.getMVP());
 	mShaders->getColor().setMVPMatrix(mTiler.getMVP());
 
-	//Draw texture
-	mShaders->getTexture().renderTexture(mCurrentImageTextureTarget, mCurrentImageTextureId, mImageSize, 1.0f);
+	//Draw textures
+	mShaders->getTexture().renderTexture(mRefTexture.getTarget(), mRefTexture.getId(), mImageSize, 1.0f);
+	mShaders->getTexture().renderTexture(mCurrentImageTextureTarget, mCurrentImageTextureId, mImageSize, 0.5f);
 
 	//Draw image points
 	glPointSize(8);
-	//mShaders->getColor().drawVertices(GL_POINTS, mImagePoints.data(), mImagePointColors.data(), mImagePoints.size());
+	mShaders->getColor().drawVertices(GL_POINTS, mImagePoints.data(), mImagePointColors.data(), mImagePoints.size());
 }
 
 } /* namespace dtslam */

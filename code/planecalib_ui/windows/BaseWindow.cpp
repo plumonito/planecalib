@@ -13,10 +13,10 @@
 namespace planecalib
 {
 
-bool BaseWindow::init(PlaneCalibApp *app, const cv::Size &imageSize)
+bool BaseWindow::init(PlaneCalibApp *app, const Eigen::Vector2i &imageSize)
 {
 	assert(app);
-	assert(imageSize.width>0 && imageSize.height>0);
+	assert(imageSize.x()>0 && imageSize.y()>0);
 
 	mIsInitialized = true;
 	mApp = app;

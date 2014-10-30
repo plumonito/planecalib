@@ -64,7 +64,7 @@ void Keyframe::init(const cv::Mat3b &imageColor, const cv::Mat1b &imageGray)
 	    //FAST
 	    std::vector<cv::KeyPoint> keypoints;
 		//cv::FAST(roi, keypoints, kFASTThreshold, false);
-	    cv::FAST(mPyramid[octave], keypoints, FLAGS_FASTThreshold, true);
+		cv::FAST(mPyramid[octave], keypoints, FLAGS_FeatureDetectorThreshold, true);
 
 	    //int maxX = mPyramid[octave].cols - PatchWarper::kPatchSize - 1;
 	    //int maxY = mPyramid[octave].rows - PatchWarper::kPatchSize - 1;

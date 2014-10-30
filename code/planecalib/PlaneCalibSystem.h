@@ -6,7 +6,7 @@
 #include <future>
 #include "stdutils.h"
 #include "Map.h"
-//#include "PoseTracker.h"
+#include "PoseTracker.h"
 //#include "SlamMapExpander.h"
 
 namespace planecalib
@@ -40,7 +40,7 @@ protected:
 
 	std::unique_ptr<Map> mMap;
 
-	//std::unique_ptr<PoseTracker> mTracker;
+	std::unique_ptr<PoseTracker> mTracker;
 	//std::unique_ptr<SlamMapExpander> mMapExpander;
 
 	std::future<Keyframe *> mExpanderFuture;

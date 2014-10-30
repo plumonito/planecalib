@@ -34,15 +34,13 @@ bool TextureShader::init()
 	return res;
 }
 
-void TextureShader::setMVPMatrix(const cv::Matx44f &mvp)
+void TextureShader::setMVPMatrix(const Eigen::Matrix4f &mvp)
 {
-	//Transpose to opengl column-major format
-	cv::Matx44f mvpt = mvp.t();
     glUseProgram(mProgram.getId());
-    glUniformMatrix4fv(mUniformMVPMatrix, 1, false, mvpt.val);
+    glUniformMatrix4fv(mUniformMVPMatrix, 1, false, mvp.data());
 
     glUseProgram(mProgramFA.getId());
-    glUniformMatrix4fv(mUniformMVPMatrixFA, 1, false, mvpt.val);
+    glUniformMatrix4fv(mUniformMVPMatrixFA, 1, false, mvp.data());
 }
 
 void TextureShader::renderTexture(GLuint target, GLuint id, const cv::Size &imageSize,
@@ -84,17 +82,17 @@ void TextureShader::renderTexture(GLenum mode, GLuint target, GLuint id, const E
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 // Fixed alpha
-void TextureShader::renderTexture(GLuint target, GLuint id, const cv::Size &imageSize,
+void TextureShader::renderTexture(GLuint target, GLuint id, const Eigen::Vector2i &imageSize,
                                     const Eigen::Vector2f &screenOrigin, float alpha)
 {
     const float kDepth = 1.0f;
 
 	//std::vector<Eigen::Vector4f, Eigen::aligned_allocator<Eigen::Vector4f>> vertices;
 	std::vector<Eigen::Vector4f> vertices;
-	vertices.push_back(Eigen::Vector4f(screenOrigin.x() + (float)imageSize.width - 1, screenOrigin.y(), kDepth, 1.0f));
+	vertices.push_back(Eigen::Vector4f(screenOrigin.x() + (float)imageSize.x() - 1, screenOrigin.y(), kDepth, 1.0f));
 	vertices.push_back(Eigen::Vector4f(screenOrigin.x(), screenOrigin.y(), kDepth, 1.0f));
-	vertices.push_back(Eigen::Vector4f(screenOrigin.x() + (float)imageSize.width - 1, screenOrigin.y() + (float)imageSize.height - 1, kDepth, 1.0f));
-	vertices.push_back(Eigen::Vector4f(screenOrigin.x(), screenOrigin.y() + (float)imageSize.height - 1, kDepth, 1.0f));
+	vertices.push_back(Eigen::Vector4f(screenOrigin.x() + (float)imageSize.x() - 1, screenOrigin.y() + (float)imageSize.y() - 1, kDepth, 1.0f));
+	vertices.push_back(Eigen::Vector4f(screenOrigin.x(), screenOrigin.y() + (float)imageSize.y() - 1, kDepth, 1.0f));
 	
     Eigen::Vector2f const textureCoords[] =
     { Eigen::Vector2f(1, 0), Eigen::Vector2f(0, 0), Eigen::Vector2f(1, 1), Eigen::Vector2f(0, 1) };
