@@ -7,15 +7,19 @@
 #include <memory>
 #include <chrono>
 #include <opencv2/core/core.hpp>
+#include <Eigen/Dense>
 
 #include "planecalib/Profiler.h"
 
 #include "Application.h"
-#include "shaders/DTSlamShaders.h"
+#include "shaders/Shaders.h"
 #include "windows/BaseWindow.h"
 
 namespace planecalib
 {
+
+class PlaneCalibSystem;
+
 class ImageDataSource;
 class OpenCVDataSource;
 
@@ -31,7 +35,7 @@ private:
     int mDownsampleInputCount;
     cv::Size2i mImageSize;
 
-    DTSlamShaders mShaders;
+    Shaders mShaders;
 
     volatile bool mQuit;
 
@@ -51,7 +55,7 @@ private:
 	std::chrono::high_resolution_clock::duration mFPSSampleAccum;
 	int mFPSSampleCount;
 
-    //SlamSystem mSlam;
+	PlaneCalibSystem *mSystem;
 
     std::vector<std::unique_ptr<BaseWindow>> mWindows;
     BaseWindow *mActiveWindow;
@@ -62,7 +66,8 @@ public:
 
     bool getFinished() {return mQuit;}
 
-    DTSlamShaders &getShaders() {return mShaders;}
+    Shaders &getShaders() {return mShaders;}
+	PlaneCalibSystem *getSystem() { return mSystem; }
 
     bool init();
     void resize();
@@ -76,6 +81,8 @@ public:
     void touchUp(int id, int x, int y);
 
     void draw(void);
+	
+	EIGEN_MAKE_ALIGNED_OPERATOR_NEW
 
 private:
     bool initImageSrc();

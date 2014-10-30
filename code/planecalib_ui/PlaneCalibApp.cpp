@@ -27,6 +27,7 @@
 #include "ImageDataSource.h"
 
 //#include "planecalib/flags.h"
+#include "planecalib/PlaneCalibSystem.h"
 
 #include "OpenCVDataSource.h"
 #include "SequenceDataSource.h"
@@ -34,6 +35,8 @@
 #include "ViewportTiler.h"
 
 #include "flags.h"
+
+#include "windows/MainWindow.h"
 
 namespace planecalib
 {
@@ -104,14 +107,13 @@ bool PlaneCalibApp::init(void)
     	return false;
     }
 
-    //Init camera
-
-	//Slam system
-	//mSlam.init(mCamera.get(), mImageSrc->getCaptureTime(), imageColor, imageGray);
-	//mSlam.setSingleThreaded(FLAGS_DriverSingleThreaded);
+	//System
+	mSystem = new PlaneCalibSystem();
+	//mSystem->init(mImageSrc->getCaptureTime(), imageColor, imageGray);
+	mSystem->setSingleThreaded(FLAGS_DriverSingleThreaded);
 
 	//Add windows
-	//mWindows.push_back(std::unique_ptr<BaseWindow>(new MatchesWindow()));
+	mWindows.push_back(std::unique_ptr<BaseWindow>(new MainWindow()));
 
 	//Add bindings
 	mKeyBindings.addBinding(true, GLUT_KEY_F5, static_cast<KeyBindingHandler<PlaneCalibApp>::SimpleBindingFunc>(&PlaneCalibApp::runVideo), "Run the video stream.");
@@ -150,7 +152,7 @@ void PlaneCalibApp::resetSystem()
 {
 	cv::Mat1b imageGray = mImageSrc->getImgGray();
 	cv::Mat3b imageColor = mImageSrc->getImgColor();
-	//mSlam.init(mCamera.get(), mImageSrc->getCaptureTime(), imageColor, imageGray);
+	//mSystem->init(mImageSrc->getCaptureTime(), imageColor, imageGray);
 
 	for(int i=0; i<(int)mWindows.size(); ++i)
 		mWindows[i]->requireInit();
@@ -399,7 +401,7 @@ void PlaneCalibApp::draw(void)
 
 	    mShaders.getText().setActiveFontSmall();
 	    mShaders.getText().setRenderCharHeight(10);
-	    mShaders.getText().setCaret(cv::Point2f(0,0));
+	    mShaders.getText().setCaret(Eigen::Vector2f(0,0));
 	    mShaders.getText().setColor(StaticColors::Green());
 	    mShaders.getText().renderText(ss);
 

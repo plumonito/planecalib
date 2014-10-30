@@ -8,7 +8,7 @@
 #ifndef TEXTRENDERER_H_
 #define TEXTRENDERER_H_
 
-#include <opencv2/core/core.hpp>
+#include <Eigen/Dense>
 #include <sstream>
 #include <memory>
 #include "../TextureHelper.h"
@@ -30,7 +30,7 @@ public:
 
 	void flush();
 
-	void setColor(const cv::Vec4f &color);
+	void setColor(const Eigen::Vector4f &color);
 
     template<class T>
     TextRendererStream &operator <<(const T &value);
@@ -56,9 +56,9 @@ public:
 
     void setMVPMatrix(const cv::Matx44f &mvp) {mShader->setMVPMatrix(mvp);}
     void setRenderCharHeight(float height) {mRenderCharHeight = height;}
-    void setCaret(const cv::Vec4f &caret) {mRenderCaret = mRenderCaret0 = caret;}
-    void setCaret(const cv::Point2f &caret) {setCaret(cv::Vec4f(caret.x, caret.y, 1, 1));}
-    void setColor(const cv::Vec4f &color) {mActiveColor = color;}
+    void setCaret(const Eigen::Vector4f &caret) {mRenderCaret = mRenderCaret0 = caret;}
+    void setCaret(const Eigen::Vector2f &caret) {setCaret(Eigen::Vector4f(caret.x(), caret.y(), 1, 1));}
+    void setColor(const Eigen::Vector4f &color) {mActiveColor = color;}
 
     void renderText(const std::string &str)
     {
@@ -83,12 +83,12 @@ protected:
 
     std::vector<TextFontData> mFontData;
     TextFontData *mActiveFont;
-    cv::Vec4f mActiveColor;
+    Eigen::Vector4f mActiveColor;
 
     float mRenderCharHeight;
 
-    cv::Vec4f mRenderCaret0;
-    cv::Vec4f mRenderCaret;
+    Eigen::Vector4f mRenderCaret0;
+    Eigen::Vector4f mRenderCaret;
 
     void prepareFontData(TextFontData &data, int face, double scale, int thickness, int lineType);
 };

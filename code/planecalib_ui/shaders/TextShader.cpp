@@ -25,8 +25,8 @@ void TextShader::setMVPMatrix(const cv::Matx44f &mvp)
     glUniformMatrix4fv(mUniformMVPMatrix, 1, false, mvpt.val);
 }
 
-void TextShader::renderText(GLenum mode, GLuint textureId, const cv::Vec4f *vertices, const cv::Vec2f *textureCoords,
-		int count, const cv::Vec4f &color)
+void TextShader::renderText(GLenum mode, GLuint textureId, const Eigen::Vector4f *vertices, const Eigen::Vector2f *textureCoords,
+		int count, const Eigen::Vector4f &color)
 {
     glUseProgram(mProgram.getId());
 

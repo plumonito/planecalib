@@ -1,7 +1,7 @@
 #ifndef COLOR_SHADER_H_
 #define COLOR_SHADER_H_
 
-#include <opencv2/core.hpp>
+#include <Eigen/Dense>
 #include "ShaderProgram.h"
 
 namespace planecalib
@@ -18,13 +18,13 @@ public:
     //mvp is in normal opencv row-major order
     void setMVPMatrix(const cv::Matx44f &mvp);
 
-    void drawVertices(GLenum mode, const cv::Point2f *vertices, int count, const cv::Vec4f &color);
-    void drawVertices(GLenum mode, const cv::Point2f *vertices, const cv::Vec4f *color, int count);
-    void drawVertices(GLenum mode, const cv::Vec4f *vertices, int count, const cv::Vec4f &color);
-    void drawVertices(GLenum mode, const cv::Vec4f *vertices, const cv::Vec4f *color, int count);
-    void drawVertices(GLenum mode, const unsigned int *indices, unsigned int indexCount, const cv::Vec4f *vertices, const cv::Vec4f *color);
-    void drawRect(const cv::Point2f center[], int count, const cv::Vec4f &color, float size, float aspect);
-    void drawRect(const cv::Point2f center[], const cv::Vec4f color[], int count, float size, float aspect);
+    void drawVertices(GLenum mode, const Eigen::Vector2f *vertices, int count, const Eigen::Vector4f &color);
+	void drawVertices(GLenum mode, const Eigen::Vector2f *vertices, const Eigen::Vector4f *color, int count);
+    void drawVertices(GLenum mode, const Eigen::Vector4f *vertices, int count, const Eigen::Vector4f &color);
+    void drawVertices(GLenum mode, const Eigen::Vector4f *vertices, const Eigen::Vector4f *color, int count);
+    void drawVertices(GLenum mode, const unsigned int *indices, unsigned int indexCount, const Eigen::Vector4f *vertices, const Eigen::Vector4f *color);
+    void drawRect(const Eigen::Vector2f center[], int count, const Eigen::Vector4f &color, float size, float aspect);
+    void drawRect(const Eigen::Vector2f center[], const Eigen::Vector4f color[], int count, float size, float aspect);
 
 protected:
     ShaderProgram mProgram;

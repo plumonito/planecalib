@@ -1,8 +1,10 @@
 #ifndef TEXTURE_SHADER_H_
 #define TEXTURE_SHADER_H_
 
-#include <opencv2/core.hpp>
+#include <Eigen/Dense>
 #include "ShaderProgram.h"
+
+#include "planecalib/eutils.h"
 
 namespace planecalib
 {
@@ -18,17 +20,17 @@ public:
     //mvp is in normal opencv row-major order
     void setMVPMatrix(const cv::Matx44f &mvp);
 
-    void renderTexture(GLuint target, GLuint id, const cv::Size &imageSize) {renderTexture(target,id,imageSize,cv::Point2f(0,0));}
+    void renderTexture(GLuint target, GLuint id, const cv::Size &imageSize) {renderTexture(target,id,imageSize,Eigen::Vector2f(0,0));}
     void renderTexture(GLuint target, GLuint id, const cv::Size &imageSize,
-                                        const cv::Point2f &screenOrigin);
-    void renderTexture(GLenum mode, GLuint target, GLuint id, const cv::Vec4f *vertices,
-                                        const cv::Vec2f *textureCoords, int count);
+                                        const Eigen::Vector2f &screenOrigin);
+    void renderTexture(GLenum mode, GLuint target, GLuint id, const Eigen::Vector4f *vertices,
+                                        const Eigen::Vector2f *textureCoords, int count);
 
-    void renderTexture(GLuint target, GLuint id, const cv::Size &imageSize, float alpha) {renderTexture(target,id,imageSize,cv::Point2f(0,0), alpha);}
+    void renderTexture(GLuint target, GLuint id, const cv::Size &imageSize, float alpha) {renderTexture(target,id,imageSize,Eigen::Vector2f(0,0), alpha);}
     void renderTexture(GLuint target, GLuint id, const cv::Size &imageSize,
-                                        const cv::Point2f &screenOrigin, float alpha);
-    void renderTexture(GLenum mode, GLuint target, GLuint id, const cv::Vec4f *vertices,
-                                        const cv::Vec2f *textureCoords, int count, float alpha);
+                                        const Eigen::Vector2f &screenOrigin, float alpha);
+    void renderTexture(GLenum mode, GLuint target, GLuint id, const Eigen::Vector4f *vertices,
+                                        const Eigen::Vector2f *textureCoords, int count, float alpha);
 
 protected:
     ShaderProgram mProgram;

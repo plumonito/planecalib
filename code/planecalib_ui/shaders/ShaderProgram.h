@@ -37,6 +37,7 @@
 #include <string>
 #include <GL/glew.h>
 #include "planecalib/log.h"
+#include "planecalib/eutils.h"
 
 namespace planecalib
 {

@@ -5,12 +5,12 @@
  *      Author: Dan
  */
 
-#include "DTSlamShaders.h"
+#include "Shaders.h"
 
 namespace planecalib
 {
 
-DTSlamShaders::DTSlamShaders()
+Shaders::Shaders()
 {
 }
 

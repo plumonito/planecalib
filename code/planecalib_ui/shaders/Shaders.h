@@ -5,8 +5,8 @@
  *      Author: Dan
  */
 
-#ifndef DTSlamShaders_H_
-#define DTSlamShaders_H_
+#ifndef SHADERS_H_
+#define SHADERS_H_
 
 #include "ColorShader.h"
 #include "TextShader.h"
@@ -18,9 +18,9 @@
 namespace planecalib
 {
 
-class DTSlamShaders {
+class Shaders {
 public:
-	DTSlamShaders();
+	Shaders();
 
 	bool init()
 	{
@@ -56,4 +56,4 @@ protected:
 
 }
 
-#endif /* DTSlamShaders_H_ */
+#endif

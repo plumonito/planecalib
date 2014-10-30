@@ -29,7 +29,7 @@ void TextRendererStream::flush()
 	}
 }
 
-void TextRendererStream::setColor(const cv::Vec4f &color) 
+void TextRendererStream::setColor(const Eigen::Vector4f &color) 
 { 
 	flush(); 
 	mRenderer.setColor(color); 
@@ -116,8 +116,8 @@ void TextRenderer::renderText(std::stringstream &str)
 	if(str.str().empty())
 		return;
 
-    std::vector<cv::Vec4f> vertexBuffer;
-    std::vector<cv::Vec2f> texCoordsBuffer;
+	std::vector<Eigen::Vector4f> vertexBuffer;
+	std::vector<Eigen::Vector2f> texCoordsBuffer;
 
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
@@ -141,18 +141,18 @@ void TextRenderer::renderText(std::stringstream &str)
 				int c = line[i];
 				float renderWidth = mActiveFont->mCharAspect[c] * mRenderCharHeight;
 
-				cv::Vec4f *vertices = &vertexBuffer[i*6];
-				cv::Vec2f *texCoords = &texCoordsBuffer[i*6];
+				Eigen::Vector4f *vertices = &vertexBuffer[i*6];
+				Eigen::Vector2f *texCoords = &texCoordsBuffer[i * 6];
 
 				vertices[0] = mRenderCaret;
-				vertices[3] = vertices[1] = mRenderCaret + cv::Vec4f(0, mRenderCharHeight, 0, 0);
-				vertices[4] = vertices[2] = mRenderCaret + cv::Vec4f(renderWidth, 0, 0, 0);
-				vertices[5] =  mRenderCaret + cv::Vec4f(renderWidth, mRenderCharHeight, 0, 0);
+				vertices[3] = vertices[1] = mRenderCaret + Eigen::Vector4f(0, mRenderCharHeight, 0, 0);
+				vertices[4] = vertices[2] = mRenderCaret + Eigen::Vector4f(renderWidth, 0, 0, 0);
+				vertices[5] =  mRenderCaret + Eigen::Vector4f(renderWidth, mRenderCharHeight, 0, 0);
 
-				texCoords[0] = cv::Vec2f(mActiveFont->mCharTexStart[c], 0);
-				texCoords[3] = texCoords[1] = cv::Vec2f(mActiveFont->mCharTexStart[c], 1.0f);
-				texCoords[4] = texCoords[2] = cv::Vec2f(mActiveFont->mCharTexEnd[c], 0);
-				texCoords[5] = cv::Vec2f(mActiveFont->mCharTexEnd[c], 1.0f);
+				texCoords[0] = Eigen::Vector2f(mActiveFont->mCharTexStart[c], 0);
+				texCoords[3] = texCoords[1] = Eigen::Vector2f(mActiveFont->mCharTexStart[c], 1.0f);
+				texCoords[4] = texCoords[2] = Eigen::Vector2f(mActiveFont->mCharTexEnd[c], 0);
+				texCoords[5] = Eigen::Vector2f(mActiveFont->mCharTexEnd[c], 1.0f);
 
 				mRenderCaret[0] += renderWidth;
 			}

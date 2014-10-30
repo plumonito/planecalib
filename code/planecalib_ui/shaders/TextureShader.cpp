@@ -46,23 +46,22 @@ void TextureShader::setMVPMatrix(const cv::Matx44f &mvp)
 }
 
 void TextureShader::renderTexture(GLuint target, GLuint id, const cv::Size &imageSize,
-                                    const cv::Point2f &screenOrigin)
+                                    const Eigen::Vector2f &screenOrigin)
 {
     const float kDepth = 1.0f;
-    cv::Vec4f const vertices[] =
-    { cv::Vec4f(screenOrigin.x + (float)imageSize.width - 1, screenOrigin.y, kDepth, 1.0f), cv::Vec4f(screenOrigin.x,
-                                                                                                      screenOrigin.y,
-                                                                                                      kDepth, 1.0f),
-      cv::Vec4f(screenOrigin.x + (float)imageSize.width - 1, screenOrigin.y + (float)imageSize.height - 1, kDepth,
-                1.0f),
-      cv::Vec4f(screenOrigin.x, screenOrigin.y + (float)imageSize.height - 1, kDepth, 1.0f) };
-    cv::Vec2f const textureCoords[] =
-    { cv::Vec2f(1, 0), cv::Vec2f(0, 0), cv::Vec2f(1, 1), cv::Vec2f(0, 1) };
+    Eigen::Vector4f const vertices[] =
+	{ Eigen::Vector4f(screenOrigin.x() + (float)imageSize.width - 1, screenOrigin.y(), kDepth, 1.0f),
+	Eigen::Vector4f(screenOrigin.x(), screenOrigin.y(), kDepth, 1.0f),
+	Eigen::Vector4f(screenOrigin.x() + (float)imageSize.width - 1, screenOrigin.y() + (float)imageSize.height - 1, kDepth, 1.0f),
+	Eigen::Vector4f(screenOrigin.x(), screenOrigin.y() + (float)imageSize.height - 1, kDepth, 1.0f) };
+    
+	Eigen::Vector2f const textureCoords[] =
+	{ Eigen::Vector2f(1, 0), Eigen::Vector2f(0, 0), Eigen::Vector2f(1, 1), Eigen::Vector2f(0, 1) };
     renderTexture(GL_TRIANGLE_STRIP, target, id, vertices, textureCoords, 4);
 }
 
-void TextureShader::renderTexture(GLenum mode, GLuint target, GLuint id, const cv::Vec4f *vertices,
-                                    const cv::Vec2f *textureCoords, int count)
+void TextureShader::renderTexture(GLenum mode, GLuint target, GLuint id, const Eigen::Vector4f *vertices,
+                                    const Eigen::Vector2f *textureCoords, int count)
 {
     assert(target == GL_TEXTURE_2D);
 
@@ -86,23 +85,24 @@ void TextureShader::renderTexture(GLenum mode, GLuint target, GLuint id, const c
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 // Fixed alpha
 void TextureShader::renderTexture(GLuint target, GLuint id, const cv::Size &imageSize,
-                                    const cv::Point2f &screenOrigin, float alpha)
+                                    const Eigen::Vector2f &screenOrigin, float alpha)
 {
     const float kDepth = 1.0f;
-    cv::Vec4f const vertices[] =
-    { cv::Vec4f(screenOrigin.x + (float)imageSize.width - 1, screenOrigin.y, kDepth, 1.0f), cv::Vec4f(screenOrigin.x,
-                                                                                                      screenOrigin.y,
-                                                                                                      kDepth, 1.0f),
-      cv::Vec4f(screenOrigin.x + (float)imageSize.width - 1, screenOrigin.y + (float)imageSize.height - 1, kDepth,
-                1.0f),
-      cv::Vec4f(screenOrigin.x, screenOrigin.y + (float)imageSize.height - 1, kDepth, 1.0f) };
-    cv::Vec2f const textureCoords[] =
-    { cv::Vec2f(1, 0), cv::Vec2f(0, 0), cv::Vec2f(1, 1), cv::Vec2f(0, 1) };
-    renderTexture(GL_TRIANGLE_STRIP, target, id, vertices, textureCoords, 4, alpha);
+
+	//std::vector<Eigen::Vector4f, Eigen::aligned_allocator<Eigen::Vector4f>> vertices;
+	std::vector<Eigen::Vector4f> vertices;
+	vertices.push_back(Eigen::Vector4f(screenOrigin.x() + (float)imageSize.width - 1, screenOrigin.y(), kDepth, 1.0f));
+	vertices.push_back(Eigen::Vector4f(screenOrigin.x(), screenOrigin.y(), kDepth, 1.0f));
+	vertices.push_back(Eigen::Vector4f(screenOrigin.x() + (float)imageSize.width - 1, screenOrigin.y() + (float)imageSize.height - 1, kDepth, 1.0f));
+	vertices.push_back(Eigen::Vector4f(screenOrigin.x(), screenOrigin.y() + (float)imageSize.height - 1, kDepth, 1.0f));
+	
+    Eigen::Vector2f const textureCoords[] =
+    { Eigen::Vector2f(1, 0), Eigen::Vector2f(0, 0), Eigen::Vector2f(1, 1), Eigen::Vector2f(0, 1) };
+    renderTexture(GL_TRIANGLE_STRIP, target, id, vertices.data(), textureCoords, 4, alpha);
 }
 
-void TextureShader::renderTexture(GLenum mode, GLuint target, GLuint id, const cv::Vec4f *vertices,
-                                    const cv::Vec2f *textureCoords, int count, float alpha)
+void TextureShader::renderTexture(GLenum mode, GLuint target, GLuint id, const Eigen::Vector4f *vertices,
+                                    const Eigen::Vector2f *textureCoords, int count, float alpha)
 {
     assert(target == GL_TEXTURE_2D);
 

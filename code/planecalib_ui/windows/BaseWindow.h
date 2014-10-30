@@ -8,8 +8,10 @@
 #ifndef BASEWINDOW_H_
 #define BASEWINDOW_H_
 
+#include "planecalib/eutils.h"
+
 #include <string>
-#include <opencv2/core.hpp>
+#include <Eigen/Dense>
 #include <cassert>
 
 #undef ERROR //From miniglog
@@ -27,8 +29,7 @@ namespace planecalib
 
 class PlaneCalibApp;
 class ImageDataSource;
-class DTSlamShaders;
-class SlamSystem;
+class Shaders;
 
 class BaseWindow;
 
@@ -159,7 +160,7 @@ public:
 protected:
 	bool mIsInitialized;
 	PlaneCalibApp *mApp;
-    DTSlamShaders *mShaders;
+    Shaders *mShaders;
     cv::Size mImageSize;
 
     std::string mName;

@@ -1,7 +1,7 @@
 #ifndef TEXT_SHADER_H_
 #define TEXT_SHADER_H_
 
-#include <opencv2/core.hpp>
+#include <Eigen/Dense>
 #include "ShaderProgram.h"
 
 namespace planecalib
@@ -18,7 +18,7 @@ public:
     //mvp is in normal opencv row-major order
     void setMVPMatrix(const cv::Matx44f &mvp);
 
-    void renderText(GLenum mode, GLuint textureId, const cv::Vec4f *vertices, const cv::Vec2f *textureCoords, int count, const cv::Vec4f &color);
+    void renderText(GLenum mode, GLuint textureId, const Eigen::Vector4f *vertices, const Eigen::Vector2f *textureCoords, int count, const Eigen::Vector4f &color);
 
 protected:
     ShaderProgram mProgram;

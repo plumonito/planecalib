@@ -33,7 +33,8 @@ public:
 
 	void addKeyframe(std::unique_ptr<Keyframe> newKeyframe);
 
-	void getFeaturesInView(const Eigen::Matrix3f &pose, const std::unordered_set<Feature*> &featuresToIgnore, std::vector<std::vector<FeatureProjectionInfo>> &featuresInView);
+	void getFeaturesInView(const Eigen::Matrix3f &pose, const Eigen::Vector2i &imageSize, int octaveCount, std::unordered_set<Feature*> &featuresToIgnore, std::vector<std::vector<FeatureProjectionInfo>> &featuresInView);
+	FeatureProjectionInfo projectFeature(const Eigen::Matrix3f &pose, Feature &feature);
 
 	Feature *createFeature(Keyframe &keyFrame, const Eigen::Vector2f &position, int octave);
 
@@ -104,7 +105,8 @@ class FeatureProjectionInfo
 public:
 	//////////////////////////
 	//Constructors
-	FeatureProjectionInfo()
+	FeatureProjectionInfo():
+		mFeature(NULL), mSourceMeasurement(NULL)
 	{}
 
 	FeatureProjectionInfo(Feature *feature_, FeatureMeasurement *sourceMeasurement_, int octave_, int trackLength_, const Eigen::Vector2f &position) :
@@ -117,7 +119,7 @@ public:
 	}
 
 	Feature &getFeature() const {return *mFeature;}
-	FeatureMeasurement &getSourceMeasurement() const {return *mSourceMeasurement;}
+	FeatureMeasurement *getSourceMeasurement() const {return mSourceMeasurement;}
 	Eigen::Vector2f getPosition() const { return mPosition; }
 
 	int getOctave() const {return mOctave;}
