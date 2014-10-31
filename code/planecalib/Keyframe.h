@@ -19,22 +19,6 @@ class FeatureMeasurement;
 
 ///////////////////////////////////
 // Classes
-struct KeypointData
-{
-public:
-	KeypointData(const Eigen::Vector2f &position_, int score_, int octave_):
-		position(position_),score(score_),octave(octave_)
-	{}
-
-	Eigen::Vector2f position;
-	int score;
-	int octave;
-	
-	//For feature indexer
-	Eigen::Vector2i getPosition() const { return position.cast<int>(); }
-	int getScore() const { return score; }
-};
-
 class Keyframe
 {
 public:
@@ -60,7 +44,11 @@ public:
 
 	//Note: mKeyPoints never changes and is therefore a shared_ptr between all the copies of this frame (just like the images)
 	//		That way pointers to key points will remain valid for all copies of the frame.
-	std::vector<KeypointData> &getKeypoints(int octave) const {return (*mKeypoints)[octave];}
+	std::vector<cv::KeyPoint> &getKeypoints(int octave) const {return (*mKeypoints)[octave];}
+	
+	//Note: descriptors are shared between all copies of the frame
+	const cv::Mat1b &getDescriptors(int octave) const { return mDescriptors[octave]; }
+	cv::Matx<uchar, 1, 32> getDescriptor(int octave, int idx);
 
 	const Eigen::Matrix3fr &getPose() const {return mPose;}
 	Eigen::Matrix3fr &getPose() { return mPose; }
@@ -84,7 +72,9 @@ protected:
 
 	//Note: mKeyPoints never changes and is therefore a shared_ptr between all the copies of this frame (just like the images)
 	//		That way pointers to key points will remain valid for all copies of the frame.
-	std::shared_ptr<std::vector<std::vector<KeypointData>>> mKeypoints;
+	std::shared_ptr<std::vector<std::vector<cv::KeyPoint>>> mKeypoints;
+
+	std::vector<cv::Mat1b> mDescriptors;
 
 	Eigen::Matrix3fr mPose;
 

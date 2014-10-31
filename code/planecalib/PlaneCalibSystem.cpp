@@ -5,6 +5,7 @@
 #include <ceres/rotation.h>
 
 #include "Keyframe.h"
+#include "Profiler.h"
 //#include "BundleAdjuster.h"
 //#include "CeresUtils.h"
 //#include "FeatureGridIndexer.h"
@@ -17,7 +18,8 @@ namespace planecalib
 bool PlaneCalibSystem::init(double timestamp, cv::Mat3b &imgColor, cv::Mat1b &imgGray)
 {
 	//Wait for other threads
-	if(mExpanderFuture.valid())
+	mExpanderCheckPending = false;
+	if (mExpanderFuture.valid())
 		mExpanderFuture.get();
 
 	//Create first key frame
@@ -29,7 +31,7 @@ bool PlaneCalibSystem::init(double timestamp, cv::Mat3b &imgColor, cv::Mat1b &im
 	Eigen::Vector2i imageSize = keyframe->getImageSize();
 
     MYAPP_LOG << "Pyramid sizes: ";
-	MYAPP_LOG << imageSize;
+	MYAPP_LOG << eutils::ToSize(imageSize);
     for(int octave=1; octave<keyframe->getPyramid().getOctaveCount(); octave++)
 		MYAPP_LOG << ", " << keyframe->getImage(octave).size();
 	MYAPP_LOG << "\n";
@@ -63,15 +65,16 @@ bool PlaneCalibSystem::init(double timestamp, cv::Mat3b &imgColor, cv::Mat1b &im
 		//cv::Size2i tileSize(scale*FLAGS_FrameKeypointGridSize, scale*FLAGS_FrameKeypointGridSize);
 		//auto keypoints = FeatureGridIndexer<KeypointData>::ApplyNonMaximaSuppresion(pkeyframe->getKeypoints(octave), imageSize, tileSize, scale*16);
 		auto keypoints = pkeyframe->getKeypoints(octave);
-		for (auto kp : keypoints)
+		for (uint i = 0; i < keypoints.size(); i++)
 		{
-			mMap->createFeature(*pkeyframe, poseInv, kp.position, octave);
+			auto &kp = keypoints[i];
+			mMap->createFeature(*pkeyframe, poseInv, Eigen::Vector2f(kp.pt.x, kp.pt.y), octave, pkeyframe->getDescriptor(octave,i));
 		}
 
 		MYAPP_LOG << "Created " << keypoints.size() << " features in octave " << octave << "\n";
 	}
 
-	mTracker->resetTracking(mMap->getKeyframes().back()->getPose());
+	mTracker->resetTracking(mMap.get(), mMap->getKeyframes().back()->getPose());
 
 	return true;
 }
@@ -114,49 +117,33 @@ bool PlaneCalibSystem::init(double timestamp, cv::Mat3b &imgColor, cv::Mat1b &im
 //
 
 
-//void SlamSystem::processImage(double timestamp, cv::Mat3b &imgColor, cv::Mat1b &imgGray)
-//{
-//	//Reset profiler for each image
-//	//Profiler::Instance().reset();
-//
-//	//Build keyframe structure
-//	std::unique_ptr<SlamKeyFrame> frame(new SlamKeyFrame());
-//	{
-//		ProfileSection ss("buildKeyFrame");
-//		frame->init(&mTracker->getCamera(), imgColor, imgGray);
-//		frame->setTimestamp(timestamp);
-//	}
-//
-//	//Tracking
-//	bool trackingSuccesful=false;
-//	{
-//		//Read lock while tracking
-//		shared_lock<shared_mutex> lockRead(mMap->getMutex());
-//
-//		//Reset?
-//		if (&mTracker->getActiveRegion() != mActiveRegion) //Reset after new region
-//		{
-//			DTSLAM_LOG << "Resetting tracker to end of new region.\n";
-//			mTracker->setActiveRegion(mActiveRegion);
-//			mTracker->resetTracking(mActiveRegion->getKeyFrames().back()->getPose());
-//		}
-//
-//		//Track
-//		trackingSuccesful = mTracker->trackFrame(std::move(frame));
-//
-//		//Save pose for evaluation
-//		if (FLAGS_SavePose)
-//			saveCurrentPose();
-//	}
-//
-//	if (trackingSuccesful)
-//		mExpanderCheckPending = true;
-//
-//	SlamKeyFrame *refFrame = mActiveRegion->getKeyFrames().back().get();
-//	cv::Vec3f poseDiff = mTracker->getCurrentPose().getCenter() - refFrame->getPose().getCenter();
-//	mPoseLog.emplace_back(refFrame, poseDiff);
-//}
-//
+void PlaneCalibSystem::processImage(double timestamp, cv::Mat3b &imgColor, cv::Mat1b &imgGray)
+{
+	//Reset profiler for each image
+	//Profiler::Instance().reset();
+
+	//Build keyframe structure
+	std::unique_ptr<Keyframe> frame(new Keyframe());
+	{
+		ProfileSection ss("buildKeyFrame");
+		frame->init(imgColor, imgGray);
+		frame->setTimestamp(timestamp);
+	}
+
+	//Tracking
+	bool trackingSuccesful=false;
+	{
+		//Read lock while tracking
+		shared_lock<shared_mutex> lockRead(mMap->getMutex());
+
+		//Track
+		trackingSuccesful = mTracker->trackFrame(std::move(frame));
+	}
+
+	if (trackingSuccesful)
+		mExpanderCheckPending = true;
+}
+
 //void SlamSystem::idle()
 //{
 //	//Is the expander running?

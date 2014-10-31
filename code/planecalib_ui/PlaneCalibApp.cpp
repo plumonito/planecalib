@@ -98,7 +98,7 @@ bool PlaneCalibApp::init(void)
 
 	mImageSrc->setDownsample(mDownsampleInputCount);
 	mImageSize = eutils::FromSize(mImageSrc->getSize());
-	MYAPP_LOG << "Input image size after downsampling: " << mImageSize << "\n";
+	MYAPP_LOG << "Input image size after downsampling: " << eutils::ToSize(mImageSize) << "\n";
 
 	//Get first frame
 	if(!mImageSrc->update())
@@ -110,7 +110,7 @@ bool PlaneCalibApp::init(void)
 	//System
 	cv::Mat1b imageGray = mImageSrc->getImgGray();
 	cv::Mat3b imageColor = mImageSrc->getImgColor();
-	mSystem = new PlaneCalibSystem();
+	mSystem.reset( new PlaneCalibSystem() );
 	mSystem->init(mImageSrc->getCaptureTime(), imageColor, imageGray);
 	mSystem->setSingleThreaded(FLAGS_DriverSingleThreaded);
 
@@ -363,7 +363,7 @@ void PlaneCalibApp::draw(void)
 
 			//Process new frame
 			auto tic = std::chrono::high_resolution_clock::now();
-			//mSlam.processImage(mImageSrc->getCaptureTime(), imageColor, imageGray);
+			mSystem->processImage(mImageSrc->getCaptureTime(), imageColor, imageGray);
 			mFPSSampleAccum += std::chrono::high_resolution_clock::now()-tic;
 			mFPSSampleCount++;
 

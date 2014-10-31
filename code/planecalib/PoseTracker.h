@@ -22,7 +22,7 @@ class PoseTracker
 {
 public:
 	void init(const Eigen::Vector2i &imageSize, int octaveCount);
-	void resetTracking(const Eigen::Matrix3fr &initialPose);
+	void resetTracking(Map *map, const Eigen::Matrix3fr &initialPose);
 
 	int getMatcherSearchRadius() const {return mMatcherSearchRadius;}
 
@@ -30,7 +30,7 @@ public:
 
 	void resync();
 
-	bool isLost() const;
+	bool isLost() const { return mIsLost; }
 
 	const Eigen::Matrix3fr &getCurrentPose() const { return mCurrentPose; }
 	void setCurrentPose(const Eigen::Matrix3fr &pose) { mCurrentPose = pose; }
@@ -53,7 +53,9 @@ protected:
 	/////////////////////////////////////////////////////
 	// Protected members
 
-	//bool mIsLost;
+	bool mIsLost;
+
+	Map *mMap;
 
 	Eigen::Vector2i mImageSize;
 	int mOctaveCount;
@@ -90,7 +92,7 @@ protected:
 
 	void updateFeatureProjections(const Eigen::Matrix3fr &pose,
 			std::vector<FeatureProjectionInfo> &featureProjections);
-	void findMatches(const int octave, const std::vector<std::pair<Feature *, KeypointData*>> &matches);
+	void findMatches(const int octave, const std::vector<std::pair<Feature *, cv::KeyPoint*>> &matches);
 };
 
 } /* namespace dtslam */

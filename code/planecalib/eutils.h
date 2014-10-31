@@ -55,6 +55,22 @@ public:
 	{
 		return cv::Size2i(sz.x(), sz.y());
 	}
+
+	template <class T>
+	static Eigen::Matrix<T, 2, 1> FromCV(const cv::Point_<T> &p)
+	{
+		return Eigen::Matrix<T, 2, 1>(p.x,p.y);
+	}
+
+	template <class T, int m, int n>
+	static Eigen::Matrix<T, m, n> FromCV(const cv::Matx<T, m, n> &mat)
+	{
+		Eigen::Matrix<T, crows, ccols> res;
+		for (int x = 0; x < n; x++)
+			for (int y = 0; y < m; y++)
+				res(y, x) = mat(y, x);
+		return res;
+	}
 };
 
 }

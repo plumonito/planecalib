@@ -43,6 +43,8 @@ protected:
 	std::unique_ptr<PoseTracker> mTracker;
 	//std::unique_ptr<SlamMapExpander> mMapExpander;
 
+	std::atomic<bool> mExpanderCheckPending;
+
 	std::future<Keyframe *> mExpanderFuture;
 	std::atomic<bool> mExpanderFinished;
 	//std::atomic<bool> mExpanderAdding;

@@ -24,7 +24,7 @@ bool MainWindow::init(PlaneCalibApp *app, const Eigen::Vector2i &imageSize)
 {
 	BaseWindow::init(app, imageSize);
 
-	mSystem = app->getSystem();
+	mSystem = &app->getSystem();
 	//mTracker = &app->getSystem().getTracker();
 
 	resize();

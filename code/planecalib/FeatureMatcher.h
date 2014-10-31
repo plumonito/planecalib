@@ -32,7 +32,7 @@ public:
 	{}
 
 	const FeatureMeasurement *getSourceMeasurement() const { return mSourceMeasurement; }
-	const Feature &getfeature() const { return mSourceMeasurement->getFeature(); }
+	const Feature &getFeature() const { return mSourceMeasurement->getFeature(); }
 	const Eigen::Vector2f &getPosition() const { return mPosition; }
 	int getOctave() const { return mOctave; }
 	int getTrackLength() const { return mTrackLength; }

@@ -8,6 +8,7 @@
 #include "PoseTracker.h"
 
 #include <limits>
+#include <opencv2/features2d.hpp>
 #include "Profiler.h"
 #include "log.h"
 
@@ -48,8 +49,9 @@ void PoseTracker::init(const Eigen::Vector2i &imageSize, int octaveCount)
 //		return it->second;
 //}
 
-void PoseTracker::resetTracking(const Eigen::Matrix3fr &initialPose)
+void PoseTracker::resetTracking(Map *map, const Eigen::Matrix3fr &initialPose)
 {
+	mMap = map;
 	mCurrentPose = initialPose;
 
 	//Forget all previous matches
@@ -62,6 +64,76 @@ void PoseTracker::resetTracking(const Eigen::Matrix3fr &initialPose)
 	mFeaturesInView.resize(mOctaveCount);
 	mMatches.clear();
 	mReprojectionErrors.clear();
+}
+
+bool PoseTracker::trackFrame(std::unique_ptr<Keyframe> frame_)
+{
+	ProfileSection s("trackFrame");
+
+	//Save old data 
+	std::unordered_set<const Feature*> featuresToIgnore;
+	mLastFrame.reset(NULL);
+	mLastMatches.clear();
+	if (mFrame)
+	{
+		mLastFrame = std::move(mFrame);
+	
+		for (int i = 0, end = mMatches.size(); i != end; ++i)
+		{
+			if (mReprojectionErrors[i].isInlier)
+			{
+				mLastMatches.push_back(mMatches[i]);
+				featuresToIgnore.insert(&mMatches[i].getFeature());
+			}
+		}
+	}
+	
+	//Reset new frame data
+	mFrame = std::move(frame_);
+	mFeaturesInView.clear();
+	mFeaturesInView.resize(mOctaveCount);
+	mMatches.clear();
+	mReprojectionErrors.clear();
+	
+	//Get features in view
+	mMap->getFeaturesInView(mCurrentPose, mImageSize, mOctaveCount, featuresToIgnore, mFeaturesInView);
+
+	//Match
+	for (int octave = mOctaveCount - 1; octave >= 0; octave--)
+	{
+		auto &keypoints = mFrame->getKeypoints(octave);
+
+		for (auto &projection : mFeaturesInView[octave])
+		{
+			cv::BFMatcher matcher(cv::NORM_HAMMING, true);
+			std::vector<cv::KeyPoint *> candidateFeatures;
+			std::vector<cv::Matx<float,1,32>> candidateDescriptors;
+
+			//Find candidates
+			for (int i = 0; i < (int)keypoints.size(); i++)
+			{
+				auto &kp = keypoints[i];
+				if ((eutils::FromCV(kp.pt) - projection.getPosition()).squaredNorm() < 10 * 10)
+				{
+					candidateFeatures.push_back(&kp);
+					candidateDescriptors.push_back(mFrame->getDescriptor(octave, i));
+					matcher.add(mFrame->getDescriptor(octave, i));
+				}
+			}
+
+			if (candidateDescriptors.empty())
+				continue;
+
+			//Match
+			std::vector<cv::DMatch> matches;
+			cv::Mat_<uchar> descMat(candidateDescriptors.size(), 32, (uchar*)candidateDescriptors.data());
+			matcher.match(projection.getSourceMeasurement()->getDescriptor(), matches);
+
+			//matches[0].
+		}
+	}
+
+	return true;
 }
 
 //bool PoseTracker::trackFrame(std::unique_ptr<SlamKeyFrame> frame_)

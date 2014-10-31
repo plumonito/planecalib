@@ -17,7 +17,7 @@ namespace planecalib {
 // Map
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-void Map::getFeaturesInView(const Eigen::Matrix3fr &pose, const Eigen::Vector2i &imageSize, int octaveCount, std::unordered_set<Feature*> &featuresToIgnore, std::vector<std::vector<FeatureProjectionInfo>> &featuresInView)
+void Map::getFeaturesInView(const Eigen::Matrix3fr &pose, const Eigen::Vector2i &imageSize, int octaveCount, std::unordered_set<const Feature*> &featuresToIgnore, std::vector<std::vector<FeatureProjectionInfo>> &featuresInView)
 {
 	ProfileSection s("getFeaturesInView");
 
@@ -67,9 +67,11 @@ void Map::addKeyframe(std::unique_ptr<Keyframe> newKeyframe)
 	mKeyframes.push_back(std::move(newKeyframe));
 }
 
-Feature *Map::createFeature(Keyframe &keyframe, const Eigen::Matrix3fr &poseInv, const Eigen::Vector2f &position, int octave)
+Feature *Map::createFeature(Keyframe &keyframe, const Eigen::Matrix3fr &poseInv, const Eigen::Vector2f &position, int octave, const cv::Matx<uchar,1,32> &descriptor)
 {
 	int scale = 1 << octave;
+
+	//Create feature
 	std::unique_ptr<Feature> feature(new Feature());
 
 	Eigen::Vector2f pos = eutils::HomographyPoint(poseInv, position);
@@ -77,10 +79,15 @@ Feature *Map::createFeature(Keyframe &keyframe, const Eigen::Matrix3fr &poseInv,
 	
 	feature->mPosition = pos;
 	feature->mPlusOneOffset = posPlusOne - pos;
-	feature->mMeasurements.emplace_back(new FeatureMeasurement(feature.get(), &keyframe, position, octave));
+	
+	//Create measurement
+	feature->mMeasurements.emplace_back(new FeatureMeasurement(feature.get(), &keyframe, position, octave, descriptor));
+	keyframe.getMeasurements().push_back(feature->mMeasurements.back().get());
 
+	//Add feature to map
 	Feature *pfeature = feature.get();
 	mFeatures.push_back(std::move(feature));
+
 	return pfeature;
 }
 

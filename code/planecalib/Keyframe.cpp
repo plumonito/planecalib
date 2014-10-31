@@ -17,7 +17,7 @@
 namespace planecalib {
 
 Keyframe::Keyframe() :
-		mKeypoints(new std::vector<std::vector<KeypointData>>())
+		mKeypoints(new std::vector<std::vector<cv::KeyPoint>>())
 {
 }
 
@@ -52,33 +52,23 @@ void Keyframe::init(const cv::Mat3b &imageColor, const cv::Mat1b &imageGray)
 
 	//Extract key points
 	mKeypoints->resize(mPyramid.getOctaveCount());
+	mDescriptors.resize(mPyramid.getOctaveCount());
 
 	for(int octave=0; octave<mPyramid.getOctaveCount(); octave++)
 	{
 	    const int scale = 1<<octave;
+		std::vector<cv::KeyPoint> &keypoints = mKeypoints->at(octave);
 
-	    //Create ROI
-	    //cv::Rect roiRect(kNoFeatureBorderSize,kNoFeatureBorderSize, mPyramid[octave].cols-2*kNoFeatureBorderSize, mPyramid[octave].rows-2*kNoFeatureBorderSize);
-	    //cv::Mat1b roi = mPyramid[octave](roiRect);
+	    //ORB features
+		cv::ORB orb(500, 2, 1);
+		orb(mPyramid[octave], cv::noArray(), keypoints, mDescriptors[octave]);
 
-	    //FAST
-	    std::vector<cv::KeyPoint> keypoints;
-		//cv::FAST(roi, keypoints, kFASTThreshold, false);
-		cv::FAST(mPyramid[octave], keypoints, FLAGS_FeatureDetectorThreshold, true);
-
-	    //int maxX = mPyramid[octave].cols - PatchWarper::kPatchSize - 1;
-	    //int maxY = mPyramid[octave].rows - PatchWarper::kPatchSize - 1;
-
-		//Store features
-		mKeypoints->at(octave).clear();
-	    for(auto &keypoint : keypoints)
+		//Fix scale features
+		for(auto &keypoint : keypoints)
 	    {
-	    	//if(keypoint.pt.x < PatchWarper::kPatchSize || keypoint.pt.y < PatchWarper::kPatchSize || keypoint.pt.x > maxX || keypoint.pt.y > maxY)
-	    	//	continue;
-
-	    	Eigen::Vector2f pos((int)(scale*keypoint.pt.x), (int)(scale*keypoint.pt.y));
-
-			mKeypoints->at(octave).emplace_back(pos, (int)keypoint.response, octave);
+			keypoint.octave = octave;
+			keypoint.pt = scale*keypoint.pt;
+			keypoint.size *= scale;
 	    }
     }
 }
@@ -96,6 +86,24 @@ std::unique_ptr<Keyframe> Keyframe::copyWithoutFeatures() const
 	newFrame->mKeypoints = mKeypoints;
 	
 	return newFrame;
+}
+
+cv::Matx<uchar, 1, 32> Keyframe::getDescriptor(int octave, int idx)
+{
+	assert(octave < (int)mDescriptors.size());
+	auto &desc = mDescriptors[octave];
+
+	assert(idx < desc.rows);
+	assert(32 == desc.cols);
+	uchar *row = desc.ptr(idx);
+
+	cv::Matx<uchar, 1, 32> res;
+	for (int i = 0; i < 32; i++)
+	{
+		res(0,i) = row[i];
+	}
+	
+	return res;
 }
 
 void Keyframe::removeMeasurement(FeatureMeasurement *m)

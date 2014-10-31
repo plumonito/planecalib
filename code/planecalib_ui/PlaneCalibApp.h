@@ -55,7 +55,7 @@ private:
 	std::chrono::high_resolution_clock::duration mFPSSampleAccum;
 	int mFPSSampleCount;
 
-	PlaneCalibSystem *mSystem;
+	std::unique_ptr<PlaneCalibSystem> mSystem;
 
     std::vector<std::unique_ptr<BaseWindow>> mWindows;
     BaseWindow *mActiveWindow;
@@ -67,7 +67,7 @@ public:
     bool getFinished() {return mQuit;}
 
     Shaders &getShaders() {return mShaders;}
-	PlaneCalibSystem *getSystem() { return mSystem; }
+	PlaneCalibSystem &getSystem() { return *mSystem; }
 
     bool init();
     void resize();
