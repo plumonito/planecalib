@@ -77,6 +77,15 @@ public:
 	{
 		return cv::Point_<T>(p.x(), p.y());
 	}
+
+	template <class T, int m, int n, int options>
+	static cv::Matx<T,m,n> ToCV(const Eigen::Matrix<T, m, n, options> &emat)
+	{
+		cv::Matx<T, m, n> cmat;
+		Eigen::Map<Eigen::Matrix3fr> cmat_map(cmat.val);
+		cmat_map = emat;
+		return cmat;
+	}
 };
 
 }

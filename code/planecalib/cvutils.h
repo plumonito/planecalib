@@ -29,6 +29,14 @@ public:
 		return cv::Matx23f(a00, a01, a02, a10, a11, a12);
 	}
 
+	static cv::Point2f HomographyPoint(const cv::Matx33f &H, const cv::Point2f &p)
+	{
+		const cv::Vec3f v(p.x, p.y, 1);
+		const cv::Vec3f Hv = H*v;
+
+		return cv::Point2f(Hv[0] / Hv[2], Hv[1] / Hv[2]);
+	}
+
 	static void CalculateDerivatives(const cv::Mat1b &img, cv::Mat1s &dx, cv::Mat1s &dy);
 
 	//static cv::Matx33f SkewSymmetric(const cv::Vec3f &t)
