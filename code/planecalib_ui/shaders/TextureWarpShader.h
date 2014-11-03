@@ -15,20 +15,19 @@ public:
     bool init();
     void free() {mProgram.free(); mProgram_Alpha.free();}
 
-    //mvp is in normal opencv row-major order
-    void setMVPMatrix(const cv::Matx44f &mvp);
+    void setMVPMatrix(const Eigen::Matrix4f &mvp);
 
-    void renderTexture(GLuint target, GLuint id, const cv::Matx33f &homography, const cv::Size &imageSize) {renderTexture(target,id,homography,imageSize,cv::Point2f(0,0));}
-    void renderTexture(GLuint target, GLuint id, const cv::Matx33f &homography, const cv::Size &imageSize,
-                                        const cv::Point2f &screenOrigin);
-    void renderTexture(GLenum mode, GLuint target, GLuint id, const cv::Matx33f &homography, const cv::Size2i &imageSize, const cv::Vec4f *vertices,
-                                        const cv::Vec2f *textureCoords, int count);
+	void renderTexture(GLuint target, GLuint id, const Eigen::Matrix3fr &homography, const Eigen::Vector2i &imageSize) { renderTexture(target, id, homography, imageSize, Eigen::Vector2i(0, 0)); }
+	void renderTexture(GLuint target, GLuint id, const Eigen::Matrix3fr &homography, const Eigen::Vector2i &imageSize,
+										const Eigen::Vector2i &screenOrigin);
+	void renderTexture(GLenum mode, GLuint target, GLuint id, const Eigen::Matrix3fr &homography, const Eigen::Vector2i &imageSize, const Eigen::Vector4f *vertices,
+		const Eigen::Vector2f *textureCoords, int count);
 
-    void renderTexture(GLuint target, GLuint id, const cv::Matx33f &homography, float alpha, const cv::Size &imageSize) {renderTexture(target,id,homography,alpha,imageSize,cv::Point2f(0,0));}
-    void renderTexture(GLuint target, GLuint id, const cv::Matx33f &homography, float alpha, const cv::Size &imageSize,
-                                        const cv::Point2f &screenOrigin);
-    void renderTexture(GLenum mode, GLuint target, GLuint id, const cv::Matx33f &homography, float alpha, const cv::Size2i &imageSize, const cv::Vec4f *vertices,
-                                        const cv::Vec2f *textureCoords, int count);
+	void renderTexture(GLuint target, GLuint id, const Eigen::Matrix3fr &homography, float alpha, const Eigen::Vector2i &imageSize) { renderTexture(target, id, homography, alpha, imageSize, Eigen::Vector2i(0, 0)); }
+	void renderTexture(GLuint target, GLuint id, const Eigen::Matrix3fr &homography, float alpha, const Eigen::Vector2i &imageSize,
+										const Eigen::Vector2i &screenOrigin);
+	void renderTexture(GLenum mode, GLuint target, GLuint id, const Eigen::Matrix3fr &homography, float alpha, const Eigen::Vector2i &imageSize, const Eigen::Vector4f *vertices,
+										const Eigen::Vector2f *textureCoords, int count);
 
 protected:
     ShaderProgram mProgram;

@@ -10,9 +10,10 @@
 #include <limits>
 #include <opencv2/features2d.hpp>
 #include <opencv2/calib3d.hpp>
+#include <opencv2/video.hpp>
 #include "Profiler.h"
 #include "log.h"
-
+#include "HomographyEstimation.h"
 #include "flags.h"
 
 namespace planecalib {
@@ -70,7 +71,7 @@ void PoseTracker::resetTracking(Map *map, const Eigen::Matrix3fr &initialPose)
 bool PoseTracker::trackFrame(std::unique_ptr<Keyframe> frame_)
 {
 	ProfileSection s("trackFrame");
-
+	
 	//Save old data 
 	std::unordered_set<const Feature*> featuresToIgnore;
 	mLastFrame.reset(NULL);
@@ -96,7 +97,47 @@ bool PoseTracker::trackFrame(std::unique_ptr<Keyframe> frame_)
 	mMatches.clear();
 	mMatchMap.clear();
 	mReprojectionErrors.clear();
-	
+
+	//mCurrentPose = Eigen::Matrix3fr::Identity();
+	//cv::Mat1f cvPose(3,3,mCurrentPose.data());
+	//try
+	//{
+	//	ProfileSection s("estimateTransform");
+
+	//	//auto &refImg = mMap->getKeyframes().front()->getSBI();
+	//	//auto &img = mFrame->getSBI();
+	//	auto &refImg = mMap->getKeyframes().front()->getImage(0);
+	//	auto &img = mFrame->getImage(0);
+	//	const int scale = mImageSize.x() / img.cols;
+
+	//	cv::Matx33f cvM = cvPose;
+	//	mCurrentPose(0, 2) /= scale;
+	//	mCurrentPose(1, 2) /= scale;
+	//	mCurrentPose(2, 0) *= scale;
+	//	mCurrentPose(2, 1) *= scale;
+
+	//	cvM = cv::Matx33f::eye();
+
+	//	HomographyEstimation he;
+	//	//he.estimateSimilarityDirect(refImg, img, cvM);
+	//	//he.estimateHomographyDirect(refImg, img, cvM);
+
+	//	cv::Mat1f mm(3, 3, cvM.val);
+	//	cv::findTransformECC(refImg, img, mm, cv::MOTION_HOMOGRAPHY, cv::TermCriteria(cv::TermCriteria::COUNT + cv::TermCriteria::EPS, 100,0.001));
+
+	//	((cv::Mat1f)cvM).copyTo(cvPose);
+
+	//	mCurrentPose(0, 2) *= scale;
+	//	mCurrentPose(1, 2) *= scale;
+	//	mCurrentPose(2, 0) /= scale;
+	//	mCurrentPose(2, 1) /= scale;
+	//}
+	//catch (...)
+	//{
+	//	MYAPP_LOG << "Error finding homography\n";
+	//}
+	//return false;
+
 	//Get features in view
 	//mMap->getFeaturesInView(mCurrentPose, mImageSize, mOctaveCount, featuresToIgnore, mFeaturesInView);
 
@@ -146,14 +187,12 @@ bool PoseTracker::trackFrame(std::unique_ptr<Keyframe> frame_)
 		//	}
 		//}
 
-		//cv::ORB orb(500, 2, 1);
-		//cv::SURF sf;
-		cv::AKAZE featDet;
+		cv::ORB featDet(500, 2, 1);
 		
 		std::vector<cv::KeyPoint> refKeypoints;
 		cv::Mat1b refDesc;
 		featDet(mMap->getKeyframes().front()->getImage(octave), cv::noArray(), refKeypoints, refDesc);
-
+		
 		std::vector<cv::KeyPoint> imgKeypoints;
 		cv::Mat1b imgDesc;
 		featDet(mFrame->getImage(octave), cv::noArray(), imgKeypoints, imgDesc);
@@ -180,14 +219,21 @@ bool PoseTracker::trackFrame(std::unique_ptr<Keyframe> frame_)
 		}
 
 		//Homography
-		if (mMatches.size() >= 4)
+		MYAPP_LOG << "Matches=" << refPoints.size() << "\n";
+		//if (mMatches.size() >= 4)
+		if (refPoints.size() >= 4)
 		{
-			cv::Mat H = cv::findHomography(refPoints, imgPoints);
+			Eigen::Matrix<uchar,Eigen::Dynamic,1> mask(refPoints.size());
+			cv::Mat1b mask_cv(refPoints.size(), 1, mask.data());
+
+			cv::Mat H = cv::findHomography(refPoints, imgPoints, mask_cv, cv::RANSAC);
+			MYAPP_LOG << "Inliers=" << (int)mask.sum() << "\n";
 			if (H.empty())
 				MYAPP_LOG << "H  failed \n";
 			else
 			{
-				//mCurrentPose = eutils::FromCV(H);
+				cv::Matx33f cvH = H;
+				mCurrentPose = eutils::FromCV(cvH);
 				MYAPP_LOG << "H = " << H << "\n";
 			}
 		}

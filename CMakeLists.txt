@@ -1,5 +1,7 @@
 cmake_minimum_required(VERSION 3.0)
 
+project(planecalib CXX C)
+
 add_subdirectory(3rdparty)
 
 if(MSVC)

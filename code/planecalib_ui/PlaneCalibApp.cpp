@@ -154,7 +154,7 @@ void PlaneCalibApp::resetSystem()
 {
 	cv::Mat1b imageGray = mImageSrc->getImgGray();
 	cv::Mat3b imageColor = mImageSrc->getImgColor();
-	//mSystem->init(mImageSrc->getCaptureTime(), imageColor, imageGray);
+	mSystem->init(mImageSrc->getCaptureTime(), imageColor, imageGray);
 
 	for(int i=0; i<(int)mWindows.size(); ++i)
 		mWindows[i]->requireInit();

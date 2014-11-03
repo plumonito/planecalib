@@ -46,7 +46,7 @@ protected:
 	PlaneCalibSystem *mSystem;
     PoseTracker *mTracker;
 
-	const Eigen::Matrix3f mTrackerPose;
+	Eigen::Matrix3fr mTrackerPose;
 
 	TextureHelper mRefTexture;
 

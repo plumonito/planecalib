@@ -47,6 +47,8 @@ void MainWindow::updateState()
 	mImageLines.clear();
 	mImageLineColors.clear();
 
+	mTrackerPose = mSystem->getTracker().getCurrentPose();
+
 	//Add features
 	//mTrackerPose = &mTracker->getCurrentPose();
 	for (auto &p : mSystem->getMap().getFeatures())
@@ -68,38 +70,52 @@ void MainWindow::updateState()
 		else
 			color = StaticColors::Green(0.7f);
 
-		mImagePoints.push_back(feature.getPosition());
-		mImagePointColors.push_back(color);
+		//mImagePoints.push_back(feature.getPosition());
+		//mImagePointColors.push_back(color);
 	}
-	auto &refPoints = mSystem->getTracker().refPoints;
-	auto &imgPoints = mSystem->getTracker().imgPoints;
-	for (int i = 0; i < refPoints.size(); i++)
-	{
-		mImageLines.push_back(eutils::FromCV(refPoints[i]));
-		mImageLines.push_back(eutils::FromCV(imgPoints[i]));
-		mImageLineColors.push_back(StaticColors::Yellow());
-		mImageLineColors.push_back(StaticColors::Blue());
-	}
+	//auto &refPoints = mSystem->getTracker().refPoints;
+	//auto &imgPoints = mSystem->getTracker().imgPoints;
+	//for (int i = 0; i < refPoints.size(); i++)
+	//{
+	//	mImageLines.push_back(eutils::FromCV(refPoints[i]));
+	//	mImageLines.push_back(eutils::FromCV(imgPoints[i]));
+	//	mImageLineColors.push_back(StaticColors::Yellow());
+	//	mImageLineColors.push_back(StaticColors::Blue());
+	//}
 
 	const float pointAlpha = 0.6f;
 }
 
 void MainWindow::resize()
 {
-    mTiler.configDevice(Eigen::Vector2i::Zero(),UserInterfaceInfo::Instance().getScreenSize(),1);
-	mTiler.fillTiles();
+    mTiler.configDevice(Eigen::Vector2i::Zero(),UserInterfaceInfo::Instance().getScreenSize(),2,3);
+	mTiler.addTile(0, 0, -1.0f, 2, 2);
+	mTiler.addTile(0, 2);
+	mTiler.addTile(1, 2);
 	mTiler.setImageMVP(0, mImageSize);
+	mTiler.setImageMVP(1, mImageSize);
+	mTiler.setImageMVP(2, mImageSize);
 }
 
 void MainWindow::draw()
 {
-    mTiler.setActiveTile(0);
+	mTiler.setActiveTile(1);
+	mShaders->getTexture().setMVPMatrix(mTiler.getMVP());
+	mShaders->getTexture().renderTexture(mRefTexture.getTarget(), mRefTexture.getId(), mImageSize, 1.0f);
+
+	mTiler.setActiveTile(2);
+	mShaders->getTexture().setMVPMatrix(mTiler.getMVP());
+	mShaders->getTexture().renderTexture(mCurrentImageTextureTarget, mCurrentImageTextureId, mImageSize, 1.0f);
+
+	
+	mTiler.setActiveTile(0);
     mShaders->getTexture().setMVPMatrix(mTiler.getMVP());
+	mShaders->getTextureWarp().setMVPMatrix(mTiler.getMVP());
 	mShaders->getColor().setMVPMatrix(mTiler.getMVP());
 
 	//Draw textures
 	mShaders->getTexture().renderTexture(mRefTexture.getTarget(), mRefTexture.getId(), mImageSize, 1.0f);
-	mShaders->getTexture().renderTexture(mCurrentImageTextureTarget, mCurrentImageTextureId, mImageSize, 0.5f);
+	mShaders->getTextureWarp().renderTexture(mCurrentImageTextureTarget, mCurrentImageTextureId, mTrackerPose, 0.5f, mImageSize);
 
 	//Draw image lines
 	mShaders->getColor().drawVertices(GL_LINES, mImageLines.data(), mImageLineColors.data(), mImageLines.size());

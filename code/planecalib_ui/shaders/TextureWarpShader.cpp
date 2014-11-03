@@ -36,51 +36,52 @@ bool TextureWarpShader::init()
     return res;
 }
 
-void TextureWarpShader::setMVPMatrix(const cv::Matx44f &mvp)
+void TextureWarpShader::setMVPMatrix(const Eigen::Matrix4f &mvp)
 {
 	//Transpose to opengl column-major format
-	cv::Matx44f mvpt = mvp.t();
     glUseProgram(mProgram.getId());
-    glUniformMatrix4fv(mUniformMVPMatrix, 1, false, mvpt.val);
+    glUniformMatrix4fv(mUniformMVPMatrix, 1, false, mvp.data());
 
     glUseProgram(mProgram_Alpha.getId());
-    glUniformMatrix4fv(mUniformMVPMatrix_Alpha, 1, false, mvpt.val);
+    glUniformMatrix4fv(mUniformMVPMatrix_Alpha, 1, false, mvp.data());
 }
 
-void TextureWarpShader::renderTexture(GLuint target, GLuint id, const cv::Matx33f &homography, const cv::Size &imageSize,
-                                    const cv::Point2f &screenOrigin)
+void TextureWarpShader::renderTexture(GLuint target, GLuint id, const Eigen::Matrix3fr &homography, const Eigen::Vector2i &imageSize,
+	const Eigen::Vector2i &screenOrigin)
 {
     const float kDepth = 1.0f;
-    cv::Vec4f const vertices[] =
-    { cv::Vec4f(screenOrigin.x + (float)imageSize.width - 1, screenOrigin.y, kDepth, 1.0f), cv::Vec4f(screenOrigin.x,
-                                                                                                      screenOrigin.y,
-                                                                                                      kDepth, 1.0f),
-      cv::Vec4f(screenOrigin.x + (float)imageSize.width - 1, screenOrigin.y + (float)imageSize.height - 1, kDepth,
-                1.0f),
-      cv::Vec4f(screenOrigin.x, screenOrigin.y + (float)imageSize.height - 1, kDepth, 1.0f) };
-    cv::Vec2f const textureCoords[] =
-    { cv::Vec2f(1, 0), cv::Vec2f(0, 0), cv::Vec2f(1, 1), cv::Vec2f(0, 1) };
-    renderTexture(GL_TRIANGLE_STRIP, target, id, homography, imageSize, vertices, textureCoords, 4);
+	std::vector<Eigen::Vector4f> vertices;
+	vertices.push_back(Eigen::Vector4f(screenOrigin.x() + (float)imageSize.x() - 1, screenOrigin.y(), kDepth, 1.0f));
+	vertices.push_back(Eigen::Vector4f(screenOrigin.x(), screenOrigin.y(), kDepth, 1.0f));
+	vertices.push_back(Eigen::Vector4f(screenOrigin.x() + (float)imageSize.x() - 1, screenOrigin.y() + (float)imageSize.y() - 1, kDepth, 1.0f));
+	vertices.push_back(Eigen::Vector4f(screenOrigin.x(), screenOrigin.y() + (float)imageSize.y() - 1, kDepth, 1.0f));
+    
+	std::vector<Eigen::Vector2f> textureCoords;
+	textureCoords.emplace_back(1, 0);
+	textureCoords.emplace_back(0, 0);
+	textureCoords.emplace_back(1, 1);
+	textureCoords.emplace_back(0, 1);
+    renderTexture(GL_TRIANGLE_STRIP, target, id, homography, imageSize, vertices.data(), textureCoords.data(), 4);
 }
 
-void TextureWarpShader::renderTexture(GLenum mode, GLuint target, GLuint id, const cv::Matx33f &homography, const cv::Size2i &imageSize, const cv::Vec4f *vertices,
-                                    const cv::Vec2f *textureCoords, int count)
+void TextureWarpShader::renderTexture(GLenum mode, GLuint target, GLuint id, const Eigen::Matrix3fr &homography, const Eigen::Vector2i &imageSize, const Eigen::Vector4f *vertices,
+	const Eigen::Vector2f *textureCoords, int count)
 {
     assert(target == GL_TEXTURE_2D);
 
     glUseProgram(mProgram.getId());
 
-    cv::Matx33f finalH;
-    cv::Matx33f normHR = cv::Matx33f::eye();
-	normHR(0, 0) = (float)(imageSize.width - 1);
-	normHR(1, 1) = (float)(imageSize.height - 1);
-    cv::Matx33f normHL = cv::Matx33f::eye();
-    normHL(0, 0) = 1.0f / (imageSize.width - 1);
-    normHL(1, 1) = 1.0f / (imageSize.height - 1);
+	Eigen::Matrix3fr finalH;
+	Eigen::Matrix3fr normHR = Eigen::Matrix3fr::Identity();
+	normHR(0, 0) = (float)(imageSize.x() - 1);
+	normHR(1, 1) = (float)(imageSize.y() - 1);
+	Eigen::Matrix3fr normHL = Eigen::Matrix3fr::Identity();
+    normHL(0, 0) = 1.0f / (imageSize.x() - 1);
+    normHL(1, 1) = 1.0f / (imageSize.y() - 1);
 
-    cv::Matx33f finalH_t = (normHL * homography * normHR).t();
+	Eigen::Matrix3fr finalH_t = (normHL * homography * normHR).transpose();
 
-    glUniformMatrix3fv(mUniformHomographyMatrix, 1, false, finalH_t.val);
+    glUniformMatrix3fv(mUniformHomographyMatrix, 1, false, finalH_t.data());
 
     // setup uniforms
     glActiveTexture(GL_TEXTURE0);
@@ -98,40 +99,43 @@ void TextureWarpShader::renderTexture(GLenum mode, GLuint target, GLuint id, con
 }
 
 
-void TextureWarpShader::renderTexture(GLuint target, GLuint id, const cv::Matx33f &homography, float alpha, const cv::Size &imageSize,
-                                    const cv::Point2f &screenOrigin)
+void TextureWarpShader::renderTexture(GLuint target, GLuint id, const Eigen::Matrix3fr &homography, float alpha, const Eigen::Vector2i &imageSize,
+	const Eigen::Vector2i &screenOrigin)
 {
     const float kDepth = 1.0f;
-    cv::Vec4f const vertices[] =
-    { cv::Vec4f(screenOrigin.x + (float)imageSize.width - 1, screenOrigin.y, kDepth, 1.0f), cv::Vec4f(screenOrigin.x,
-                                                                                                      screenOrigin.y,
-                                                                                                      kDepth, 1.0f),
-      cv::Vec4f(screenOrigin.x + (float)imageSize.width - 1, screenOrigin.y + (float)imageSize.height - 1, kDepth,
-                1.0f),
-      cv::Vec4f(screenOrigin.x, screenOrigin.y + (float)imageSize.height - 1, kDepth, 1.0f) };
-    cv::Vec2f const textureCoords[] =
-    { cv::Vec2f(1, 0), cv::Vec2f(0, 0), cv::Vec2f(1, 1), cv::Vec2f(0, 1) };
-    renderTexture(GL_TRIANGLE_STRIP, target, id, homography, alpha, imageSize, vertices, textureCoords, 4);
+	std::vector<Eigen::Vector4f> vertices;
+	vertices.push_back(Eigen::Vector4f(screenOrigin.x() + (float)imageSize.x() - 1, screenOrigin.y(), kDepth, 1.0f));
+	vertices.push_back(Eigen::Vector4f(screenOrigin.x(), screenOrigin.y(), kDepth, 1.0f));
+	vertices.push_back(Eigen::Vector4f(screenOrigin.x() + (float)imageSize.x() - 1, screenOrigin.y() + (float)imageSize.y() - 1, kDepth, 1.0f));
+	vertices.push_back(Eigen::Vector4f(screenOrigin.x(), screenOrigin.y() + (float)imageSize.y() - 1, kDepth, 1.0f));
+
+	std::vector<Eigen::Vector2f> textureCoords;
+	textureCoords.emplace_back(1, 0);
+	textureCoords.emplace_back(0, 0);
+	textureCoords.emplace_back(1, 1);
+	textureCoords.emplace_back(0, 1);
+
+	renderTexture(GL_TRIANGLE_STRIP, target, id, homography, alpha, imageSize, vertices.data(), textureCoords.data(), 4);
 }
 
-void TextureWarpShader::renderTexture(GLenum mode, GLuint target, GLuint id, const cv::Matx33f &homography, float alpha, const cv::Size2i &imageSize, const cv::Vec4f *vertices,
-                                    const cv::Vec2f *textureCoords, int count)
+void TextureWarpShader::renderTexture(GLenum mode, GLuint target, GLuint id, const Eigen::Matrix3fr &homography, float alpha, const Eigen::Vector2i &imageSize, const Eigen::Vector4f *vertices,
+	const Eigen::Vector2f *textureCoords, int count)
 {
     assert(target == GL_TEXTURE_2D);
 
     glUseProgram(mProgram_Alpha.getId());
 
-    cv::Matx33f finalH;
-    cv::Matx33f normHR = cv::Matx33f::eye();
-	normHR(0, 0) = (float)(imageSize.width - 1);
-	normHR(1, 1) = (float)(imageSize.height - 1);
-    cv::Matx33f normHL = cv::Matx33f::eye();
-    normHL(0, 0) = 1.0f / (imageSize.width - 1);
-    normHL(1, 1) = 1.0f / (imageSize.height - 1);
+	Eigen::Matrix3fr finalH;
+	Eigen::Matrix3fr normHR = Eigen::Matrix3fr::Identity();
+	normHR(0, 0) = (float)(imageSize.x() - 1);
+	normHR(1, 1) = (float)(imageSize.y() - 1);
+	Eigen::Matrix3fr normHL = Eigen::Matrix3fr::Identity();
+    normHL(0, 0) = 1.0f / (imageSize.x() - 1);
+    normHL(1, 1) = 1.0f / (imageSize.y() - 1);
 
-    cv::Matx33f finalH_t = (normHL * homography * normHR).t();
+    Eigen::Matrix3fr finalH_t = (normHL * homography * normHR).transpose();
 
-    glUniformMatrix3fv(mUniformHomographyMatrix_Alpha, 1, false, finalH_t.val);
+    glUniformMatrix3fv(mUniformHomographyMatrix_Alpha, 1, false, finalH_t.data());
 
     glUniform1f(mUniformAlpha_Alpha, alpha);
 

@@ -17,6 +17,18 @@ namespace planecalib
 class cvutils
 {
 public:
+	static cv::Matx23f AffineAffine(const cv::Matx23f &aff1, const cv::Matx23f &aff2)
+	{
+		const float a00 = aff1(0, 0)*aff2(0, 0) + aff1(0, 1)*aff2(1, 0);
+		const float a01 = aff1(0, 0)*aff2(0, 1) + aff1(0, 1)*aff2(1, 1);
+		const float a10 = aff1(1, 0)*aff2(0, 0) + aff1(1, 1)*aff2(1, 0);
+		const float a11 = aff1(1, 0)*aff2(0, 1) + aff1(1, 1)*aff2(1, 1);
+		const float a02 = aff1(0, 0)*aff2(0, 2) + aff1(0, 1)*aff2(1, 2) + aff1(0, 2);
+		const float a12 = aff1(1, 0)*aff2(0, 2) + aff1(1, 1)*aff2(1, 2) + aff1(1, 2);
+
+		return cv::Matx23f(a00, a01, a02, a10, a11, a12);
+	}
+
 	static void CalculateDerivatives(const cv::Mat1b &img, cv::Mat1s &dx, cv::Mat1s &dy);
 
 	//static cv::Matx33f SkewSymmetric(const cv::Vec3f &t)
