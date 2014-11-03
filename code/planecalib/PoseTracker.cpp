@@ -143,7 +143,7 @@ bool PoseTracker::trackFrame(std::unique_ptr<Keyframe> frame_)
 
 	//Match
 	//for (int octave = mOctaveCount - 1; octave >= 0; octave--)
-	int octave = 0;// mOctaveCount - 1;
+	int octave = 1;// mOctaveCount - 1;
 	{
 		//const int scale = 1 << octave;
 		//auto &keypoints = mFrame->getKeypoints(octave);
@@ -203,10 +203,19 @@ bool PoseTracker::trackFrame(std::unique_ptr<Keyframe> frame_)
 		//auto &imgKeypoints = mFrame->getKeypoints(octave);
 		//auto &imgDesc = mFrame->getDescriptors(octave);
 
-		cv::BFMatcher matcher(cv::NORM_HAMMING, true);
+		cv::BFMatcher matcher(cv::NORM_HAMMING, false);
 		refPoints.clear();
 		imgPoints.clear();
-		matcher.match(imgDesc, refDesc, mCvmatches);
+		std::vector<std::vector<cv::DMatch>> mmm;
+		matcher.knnMatch(imgDesc, refDesc, mmm, 2);
+		mCvmatches.clear();
+		for (auto &cvmatch : mmm)
+		{
+			auto &m1 = cvmatch[0];
+			auto &m2 = cvmatch[1];
+			if (m1.distance < 0.8f * m2.distance)
+				mCvmatches.push_back(m1);
+		}
 		for (auto &cvmatch : mCvmatches)
 		{
 			auto &imgPos = imgKeypoints[cvmatch.queryIdx].pt;
@@ -226,7 +235,7 @@ bool PoseTracker::trackFrame(std::unique_ptr<Keyframe> frame_)
 			Eigen::Matrix<uchar,Eigen::Dynamic,1> mask(refPoints.size());
 			cv::Mat1b mask_cv(refPoints.size(), 1, mask.data());
 
-			cv::Mat H = cv::findHomography(refPoints, imgPoints, mask_cv, cv::RANSAC);
+			cv::Mat H = cv::findHomography(refPoints, imgPoints, cv::RANSAC, 2.5, mask_cv);
 			MYAPP_LOG << "Inliers=" << (int)mask.sum() << "\n";
 			if (H.empty())
 				MYAPP_LOG << "H  failed \n";
@@ -234,6 +243,14 @@ bool PoseTracker::trackFrame(std::unique_ptr<Keyframe> frame_)
 			{
 				cv::Matx33f cvH = H;
 				mCurrentPose = eutils::FromCV(cvH);
+
+				//const int scale = mImageSize.x() / img.cols;
+				const int scale = 1<<octave;
+
+				mCurrentPose(0, 2) *= scale;
+				mCurrentPose(1, 2) *= scale;
+				mCurrentPose(2, 0) /= scale;
+				mCurrentPose(2, 1) /= scale;
 				MYAPP_LOG << "H = " << H << "\n";
 			}
 		}
