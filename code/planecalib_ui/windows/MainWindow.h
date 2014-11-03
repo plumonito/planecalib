@@ -53,6 +53,9 @@ protected:
 	//Draw data
 	std::vector<Eigen::Vector2f> mImagePoints;
 	std::vector<Eigen::Vector4f> mImagePointColors;
+
+	std::vector<Eigen::Vector2f> mImageLines;
+	std::vector<Eigen::Vector4f> mImageLineColors;
 };
 
 } /* namespace dtslam */

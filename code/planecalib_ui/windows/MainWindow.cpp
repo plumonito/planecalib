@@ -44,18 +44,42 @@ void MainWindow::updateState()
 	//Clear all
 	mImagePoints.clear();
 	mImagePointColors.clear();
+	mImageLines.clear();
+	mImageLineColors.clear();
 
 	//Add features
 	//mTrackerPose = &mTracker->getCurrentPose();
 	for (auto &p : mSystem->getMap().getFeatures())
 	{
 		const Feature &feature = *p;
-		Eigen::Vector4f color = StaticColors::Green();
+		
+		Eigen::Vector4f color;
+		auto match = mSystem->getTracker().getMatch(&feature);
+		if (match)
+		{
+			color = StaticColors::Blue();
+
+			//Add line
+			mImageLines.push_back(feature.getPosition());
+			mImageLines.push_back(match->getPosition());
+			mImageLineColors.push_back(StaticColors::Yellow());
+			mImageLineColors.push_back(StaticColors::Blue());
+		}
+		else
+			color = StaticColors::Green(0.7f);
 
 		mImagePoints.push_back(feature.getPosition());
 		mImagePointColors.push_back(color);
 	}
-	//for ()
+	auto &refPoints = mSystem->getTracker().refPoints;
+	auto &imgPoints = mSystem->getTracker().imgPoints;
+	for (int i = 0; i < refPoints.size(); i++)
+	{
+		mImageLines.push_back(eutils::FromCV(refPoints[i]));
+		mImageLines.push_back(eutils::FromCV(imgPoints[i]));
+		mImageLineColors.push_back(StaticColors::Yellow());
+		mImageLineColors.push_back(StaticColors::Blue());
+	}
 
 	const float pointAlpha = 0.6f;
 }
@@ -76,6 +100,9 @@ void MainWindow::draw()
 	//Draw textures
 	mShaders->getTexture().renderTexture(mRefTexture.getTarget(), mRefTexture.getId(), mImageSize, 1.0f);
 	mShaders->getTexture().renderTexture(mCurrentImageTextureTarget, mCurrentImageTextureId, mImageSize, 0.5f);
+
+	//Draw image lines
+	mShaders->getColor().drawVertices(GL_LINES, mImageLines.data(), mImageLineColors.data(), mImageLines.size());
 
 	//Draw image points
 	glPointSize(8);

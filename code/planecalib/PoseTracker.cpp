@@ -9,6 +9,7 @@
 
 #include <limits>
 #include <opencv2/features2d.hpp>
+#include <opencv2/calib3d.hpp>
 #include "Profiler.h"
 #include "log.h"
 
@@ -83,7 +84,7 @@ bool PoseTracker::trackFrame(std::unique_ptr<Keyframe> frame_)
 			if (mReprojectionErrors[i].isInlier)
 			{
 				mLastMatches.push_back(mMatches[i]);
-				featuresToIgnore.insert(&mMatches[i].getFeature());
+				//featuresToIgnore.insert(&mMatches[i].getFeature());
 			}
 		}
 	}
@@ -93,45 +94,116 @@ bool PoseTracker::trackFrame(std::unique_ptr<Keyframe> frame_)
 	mFeaturesInView.clear();
 	mFeaturesInView.resize(mOctaveCount);
 	mMatches.clear();
+	mMatchMap.clear();
 	mReprojectionErrors.clear();
 	
 	//Get features in view
-	mMap->getFeaturesInView(mCurrentPose, mImageSize, mOctaveCount, featuresToIgnore, mFeaturesInView);
+	//mMap->getFeaturesInView(mCurrentPose, mImageSize, mOctaveCount, featuresToIgnore, mFeaturesInView);
 
 	//Match
-	for (int octave = mOctaveCount - 1; octave >= 0; octave--)
+	//for (int octave = mOctaveCount - 1; octave >= 0; octave--)
+	int octave = 0;// mOctaveCount - 1;
 	{
-		auto &keypoints = mFrame->getKeypoints(octave);
+		//const int scale = 1 << octave;
+		//auto &keypoints = mFrame->getKeypoints(octave);
+		//std::vector<cv::Point2f> refPoints, imgPoints;
 
-		for (auto &projection : mFeaturesInView[octave])
+		//for (auto &projection : mFeaturesInView[octave])
+		//{
+		//	cv::BFMatcher matcher(cv::NORM_HAMMING, false);
+		//	std::vector<cv::KeyPoint *> candidateFeatures;
+		//	std::vector<cv::Matx<float,1,32>> candidateDescriptors;
+
+		//	//Find candidates
+		//	for (int i = 0; i < (int)keypoints.size(); i++)
+		//	{
+		//		auto &kp = keypoints[i];
+		//		//if ((eutils::FromCV(kp.pt) - projection.getPosition()).squaredNorm() < (10 * 10))
+		//		{
+		//			candidateFeatures.push_back(&kp);
+		//			candidateDescriptors.push_back(mFrame->getDescriptor(octave, i));
+		//			//matcher.add(mFrame->getDescriptor(octave, i));
+		//		}
+		//	}
+
+		//	if (candidateDescriptors.empty())
+		//		continue;
+
+		//	//Match
+		//	std::vector<cv::DMatch> matches;
+		//	cv::Mat_<uchar> descMat(candidateDescriptors.size(), 32, (uchar*)candidateDescriptors.data());
+		//	matcher.match(projection.getSourceMeasurement()->getDescriptor(), descMat, matches);
+
+		//	if (!matches.empty())
+		//	{
+		//		cv::DMatch &cvmatch = matches.front();
+		//		auto &imgPos = keypoints[cvmatch.trainIdx].pt;
+		//		
+		//		mMatches.emplace_back(projection.getSourceMeasurement(), octave, eutils::FromCV(imgPos), 0);
+
+		//		refPoints.push_back(eutils::ToCVPoint(projection.getFeature().getPosition()));
+		//		imgPoints.push_back(imgPos);
+		//	}
+		//}
+
+		//cv::ORB orb(500, 2, 1);
+		//cv::SURF sf;
+		cv::AKAZE featDet;
+		
+		std::vector<cv::KeyPoint> refKeypoints;
+		cv::Mat1b refDesc;
+		featDet(mMap->getKeyframes().front()->getImage(octave), cv::noArray(), refKeypoints, refDesc);
+
+		std::vector<cv::KeyPoint> imgKeypoints;
+		cv::Mat1b imgDesc;
+		featDet(mFrame->getImage(octave), cv::noArray(), imgKeypoints, imgDesc);
+
+		//auto &refKeypoints = mMap->getKeyframes().front()->getKeypoints(octave);
+		//auto &refDesc = mMap->getKeyframes().front()->getDescriptors(octave);
+
+		//auto &imgKeypoints = mFrame->getKeypoints(octave);
+		//auto &imgDesc = mFrame->getDescriptors(octave);
+
+		cv::BFMatcher matcher(cv::NORM_HAMMING, true);
+		refPoints.clear();
+		imgPoints.clear();
+		matcher.match(imgDesc, refDesc, mCvmatches);
+		for (auto &cvmatch : mCvmatches)
 		{
-			cv::BFMatcher matcher(cv::NORM_HAMMING, true);
-			std::vector<cv::KeyPoint *> candidateFeatures;
-			std::vector<cv::Matx<float,1,32>> candidateDescriptors;
+			auto &imgPos = imgKeypoints[cvmatch.queryIdx].pt;
+			auto &refPos = refKeypoints[cvmatch.trainIdx].pt;
+			//mMatches.emplace_back(projection.getSourceMeasurement(), octave, eutils::FromCV(imgPos), 0);
 
-			//Find candidates
-			for (int i = 0; i < (int)keypoints.size(); i++)
+			//refPoints.push_back(eutils::ToCVPoint(projection.getFeature().getPosition()));
+			refPoints.push_back(refPos);
+			imgPoints.push_back(imgPos);
+		}
+
+		//Homography
+		if (mMatches.size() >= 4)
+		{
+			cv::Mat H = cv::findHomography(refPoints, imgPoints);
+			if (H.empty())
+				MYAPP_LOG << "H  failed \n";
+			else
 			{
-				auto &kp = keypoints[i];
-				if ((eutils::FromCV(kp.pt) - projection.getPosition()).squaredNorm() < 10 * 10)
-				{
-					candidateFeatures.push_back(&kp);
-					candidateDescriptors.push_back(mFrame->getDescriptor(octave, i));
-					matcher.add(mFrame->getDescriptor(octave, i));
-				}
+				//mCurrentPose = eutils::FromCV(H);
+				MYAPP_LOG << "H = " << H << "\n";
 			}
-
-			if (candidateDescriptors.empty())
-				continue;
-
-			//Match
-			std::vector<cv::DMatch> matches;
-			cv::Mat_<uchar> descMat(candidateDescriptors.size(), 32, (uchar*)candidateDescriptors.data());
-			matcher.match(projection.getSourceMeasurement()->getDescriptor(), matches);
-
-			//matches[0].
 		}
 	}
+
+	//Eval
+	int matchCount = mMatches.size();
+	mReprojectionErrors.resize(matchCount);
+	for (int i = 0; i < matchCount; i++)
+	{
+		mReprojectionErrors[i].isInlier = true;
+	}
+
+	//Build match map
+	for (auto &match : mMatches)
+		mMatchMap.insert(std::make_pair(&match.getFeature(), &match));
 
 	return true;
 }

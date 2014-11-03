@@ -53,7 +53,7 @@ FeatureProjectionInfo Map::projectFeature(const Eigen::Matrix3fr &pose, Feature 
 		return FeatureProjectionInfo();
 
 	int octave = 0;
-	while (distSq > 0)
+	while (distSq > 1)
 	{
 		distSq /= 2;
 		octave++;

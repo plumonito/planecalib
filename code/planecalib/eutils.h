@@ -65,11 +65,17 @@ public:
 	template <class T, int m, int n>
 	static Eigen::Matrix<T, m, n> FromCV(const cv::Matx<T, m, n> &mat)
 	{
-		Eigen::Matrix<T, crows, ccols> res;
+		Eigen::Matrix<T, m, n> res;
 		for (int x = 0; x < n; x++)
 			for (int y = 0; y < m; y++)
 				res(y, x) = mat(y, x);
 		return res;
+	}
+
+	template <class T>
+	static cv::Point_<T> ToCVPoint(const Eigen::Matrix<T, 2, 1> &p)
+	{
+		return cv::Point_<T>(p.x(), p.y());
 	}
 };
 

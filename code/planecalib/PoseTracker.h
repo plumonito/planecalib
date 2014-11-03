@@ -43,11 +43,20 @@ public:
 	//const cv::Matx23f &getFrameToLastSimilarity() const { return mSimilarityInv; }
 	//const cv::Matx23f &getLastToFrameSimilarity() const { return mSimilarity; }
 
-	const FeatureMatch *getMatch(const Feature *feature) const;
 	const std::vector<FeatureMatch> &getMatches() const { return mMatches; }
+	const std::unordered_map<const Feature*, FeatureMatch*> &getMatchMap() const { return mMatchMap; }
+	const FeatureMatch *getMatch(const Feature *feature) const
+	{
+		auto it = mMatchMap.find(feature);
+		return (it == mMatchMap.end()) ? NULL : it->second;
+	}
 
 	int getMatchInlierCount() const { return mMatchInlierCount; }
 	const std::vector<MatchReprojectionErrors> &getReprojectionErrors() const { return mReprojectionErrors; }
+
+	//Debug
+	std::vector<cv::DMatch> mCvmatches;
+	std::vector<cv::Point2f> refPoints,	imgPoints;
 
 protected:
 	/////////////////////////////////////////////////////
@@ -76,6 +85,7 @@ protected:
 	std::vector<std::vector<FeatureProjectionInfo>> mFeaturesInView; //Outer vector is of octaves, inner of projections
 
 	std::vector<FeatureMatch> mMatches;
+	std::unordered_map<const Feature*, FeatureMatch *> mMatchMap; //Second is pointer into mMatches
 
 	int mMatchInlierCount;
 	std::vector<MatchReprojectionErrors> mReprojectionErrors;	//Same index as mMatches

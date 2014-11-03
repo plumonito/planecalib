@@ -25,7 +25,7 @@ public:
 	bool isExpanderRunning() {return mExpanderFuture.valid() && !mExpanderFinished;}
 
 	Map &getMap() {return *mMap;}
-	//PoseTracker &getTracker() {return *mTracker;}
+	PoseTracker &getTracker() {return *mTracker;}
 	//SlamMapExpander &getMapExpander() {return *mMapExpander;}
 
 	void processImage(double timestamp, cv::Mat3b &imgColor, cv::Mat1b &imgGray);
