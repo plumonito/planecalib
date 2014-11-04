@@ -44,8 +44,10 @@ protected:
     ViewportTiler mTiler;
 
 	PlaneCalibSystem *mSystem;
+	Map *mMap;
     PoseTracker *mTracker;
 
+	bool mIsLost;
 	Eigen::Matrix3fr mTrackerPose;
 
 	TextureHelper mRefTexture;

@@ -25,7 +25,8 @@ bool MainWindow::init(PlaneCalibApp *app, const Eigen::Vector2i &imageSize)
 	BaseWindow::init(app, imageSize);
 
 	mSystem = &app->getSystem();
-	//mTracker = &app->getSystem().getTracker();
+	mTracker = &mSystem->getTracker();
+	mMap = &mSystem->getMap();
 
 	resize();
 
@@ -47,16 +48,17 @@ void MainWindow::updateState()
 	mImageLines.clear();
 	mImageLineColors.clear();
 
-	mTrackerPose = mSystem->getTracker().getCurrentPose();
+	mTrackerPose = mTracker->getCurrentPose();
+	mIsLost = mTracker->isLost();
 
 	//Add features
 	//mTrackerPose = &mTracker->getCurrentPose();
-	for (auto &p : mSystem->getMap().getFeatures())
+	for (auto &p : mMap->getFeatures())
 	{
 		const Feature &feature = *p;
 		
 		Eigen::Vector4f color;
-		auto match = mSystem->getTracker().getMatch(&feature);
+		auto match = mTracker->getMatch(&feature);
 		if (match)
 		{
 			color = StaticColors::Blue();
@@ -115,7 +117,8 @@ void MainWindow::draw()
 
 	//Draw textures
 	mShaders->getTexture().renderTexture(mRefTexture.getTarget(), mRefTexture.getId(), mImageSize, 1.0f);
-	mShaders->getTextureWarp().renderTexture(mCurrentImageTextureTarget, mCurrentImageTextureId, mTrackerPose, 0.5f, mImageSize);
+	if (!mIsLost)
+		mShaders->getTextureWarp().renderTexture(mCurrentImageTextureTarget, mCurrentImageTextureId, mTrackerPose, 0.5f, mImageSize);
 
 	//Draw image lines
 	mShaders->getColor().drawVertices(GL_LINES, mImageLines.data(), mImageLineColors.data(), mImageLines.size());

@@ -15,6 +15,7 @@
 #include "cvutils.h"
 #include "log.h"
 #include "HomographyEstimation.h"
+#include "HomographyCalibration.h"
 #include "flags.h"
 
 namespace planecalib {
@@ -188,7 +189,7 @@ bool PoseTracker::trackFrame(std::unique_ptr<Keyframe> frame_)
 		//	}
 		//}
 
-		cv::ORB featDet(1000, 2, 1);
+		//cv::ORB featDet(1000, 2, 1);
 		
 		std::vector<cv::KeyPoint> &refKeypoints = mMap->getKeyframes().front()->getKeypoints(octave);
 		const cv::Mat1b &refDesc = mMap->getKeyframes().front()->getDescriptors(octave);
@@ -210,62 +211,65 @@ bool PoseTracker::trackFrame(std::unique_ptr<Keyframe> frame_)
 		mCvmatches.clear();
 
 		cv::Matx33f initialPose = eutils::ToCV(mCurrentPose);
-		for (int i = 0; i < (int)refKeypoints.size(); i++)
 		{
-			std::vector<cv::KeyPoint> refKeypoints_i;
-			refKeypoints_i.push_back(refKeypoints[i]);
-
-			cv::Mat1b refDesc_i(1, 32);
-			for (int c = 0; c < 32; c++)
-				refDesc_i(0, c) = refDesc(i, c);
-
-			std::vector<int> validImgIndices;
-			cv::Point2f refPosTransf = cvutils::HomographyPoint(initialPose, refKeypoints_i[0].pt);
-			for (int j = 0; j < (int)imgKeypoints.size(); j++)
+			ProfileSection s("matching");
+			for (int i = 0; i < (int)refKeypoints.size(); i++)
 			{
-				//auto diff = refKeypoints_i[0].pt - imgKeypoints[j].pt;
-				auto diff = refPosTransf - imgKeypoints[j].pt;
-				if (diff.dot(diff) < 20 * 20 || mIsLost)
-				{
-					validImgIndices.push_back(j);
-				}
-			}
+				std::vector<cv::KeyPoint> refKeypoints_i;
+				refKeypoints_i.push_back(refKeypoints[i]);
 
-			std::vector<cv::KeyPoint> imgKeypoints_i(validImgIndices.size());
-			cv::Mat1b imgDesc_i(validImgIndices.size(), 32);
-			for (int j = 0; j < (int)validImgIndices.size(); j++)
-			{
-				imgKeypoints_i[j] = imgKeypoints[validImgIndices[j]];
+				cv::Mat1b refDesc_i(1, 32);
 				for (int c = 0; c < 32; c++)
-					imgDesc_i(j, c) = imgDesc(validImgIndices[j], c);
-			}
+					refDesc_i(0, c) = refDesc(i, c);
 
-			//imgDesc_i = imgDesc;
-			//imgKeypoints_i = imgKeypoints;
-			std::vector<std::vector<cv::DMatch>> mmm;
-			matcher.knnMatch(refDesc_i, imgDesc_i, mmm, 2);
-			bool add = false;
+				std::vector<int> validImgIndices;
+				cv::Point2f refPosTransf = cvutils::HomographyPoint(initialPose, refKeypoints_i[0].pt);
+				for (int j = 0; j < (int)imgKeypoints.size(); j++)
+				{
+					//auto diff = refKeypoints_i[0].pt - imgKeypoints[j].pt;
+					auto diff = refPosTransf - imgKeypoints[j].pt;
+					if (diff.dot(diff) < 20 * 20 || mIsLost)
+					{
+						validImgIndices.push_back(j);
+					}
+				}
+
+				std::vector<cv::KeyPoint> imgKeypoints_i(validImgIndices.size());
+				cv::Mat1b imgDesc_i(validImgIndices.size(), 32);
+				for (int j = 0; j < (int)validImgIndices.size(); j++)
+				{
+					imgKeypoints_i[j] = imgKeypoints[validImgIndices[j]];
+					for (int c = 0; c < 32; c++)
+						imgDesc_i(j, c) = imgDesc(validImgIndices[j], c);
+				}
+
+				//imgDesc_i = imgDesc;
+				//imgKeypoints_i = imgKeypoints;
+				std::vector<std::vector<cv::DMatch>> mmm;
+				matcher.knnMatch(refDesc_i, imgDesc_i, mmm, 2);
+				bool add = false;
 			
-			if (!mmm.empty() && !mmm[0].empty())
-			{
-				if (mmm[0].size() == 1)
-					add = true;
-				else
+				if (!mmm.empty() && !mmm[0].empty())
+				{
+					if (mmm[0].size() == 1)
+						add = true;
+					else
+					{
+						auto &m1 = mmm[0][0];
+						auto &m2 = mmm[0][1];
+						if (m1.distance < 0.8f * m2.distance)
+							add = true;
+					}
+				}
+
+				if (add)
 				{
 					auto &m1 = mmm[0][0];
-					auto &m2 = mmm[0][1];
-					if (m1.distance < 0.8f * m2.distance)
-						add = true;
+					auto &imgPos = imgKeypoints_i[m1.trainIdx].pt;
+					auto &refPos = refKeypoints_i[m1.queryIdx].pt;
+					refPoints.push_back(refPos);
+					imgPoints.push_back(imgPos);
 				}
-			}
-
-			if (add)
-			{
-				auto &m1 = mmm[0][0];
-				auto &imgPos = imgKeypoints_i[m1.trainIdx].pt;
-				auto &refPos = refKeypoints_i[m1.queryIdx].pt;
-				refPoints.push_back(refPos);
-				imgPoints.push_back(imgPos);
 			}
 		}
 
@@ -277,7 +281,12 @@ bool PoseTracker::trackFrame(std::unique_ptr<Keyframe> frame_)
 			Eigen::Matrix<uchar,Eigen::Dynamic,1> mask(refPoints.size());
 			cv::Mat1b mask_cv(refPoints.size(), 1, mask.data());
 
-			cv::Mat H = cv::findHomography(refPoints, imgPoints, cv::RANSAC, 2.5, mask_cv);
+
+			cv::Mat H;
+			{
+				ProfileSection s("findHomography");
+				H = cv::findHomography(refPoints, imgPoints, cv::RANSAC, 2.5, mask_cv);
+			}
 
 			cv::Matx33f cvH;
 			if (H.empty())
@@ -299,8 +308,10 @@ bool PoseTracker::trackFrame(std::unique_ptr<Keyframe> frame_)
 			HomographyEstimation hest;
 			std::vector<bool> inliersVec;
 			std::vector<int> octaveVec(imgPoints.size(), 0);
-			cvH = hest.estimateCeres(cvH, imgPoints, refPoints, octaveVec, 2.5, inliersVec);
-			
+			{
+				ProfileSection s("refineHomography");
+				cvH = hest.estimateCeres(cvH, imgPoints, refPoints, octaveVec, 2.5, inliersVec);
+			}
 			int inlierCountBefore = mask.sum();
 			int inlierCountAfter = 0;
 			for (auto &inlier : inliersVec)
@@ -321,11 +332,19 @@ bool PoseTracker::trackFrame(std::unique_ptr<Keyframe> frame_)
 				mCurrentPose(2, 1) /= scale;
 				MYAPP_LOG << "H = " << H << "\n";
 				mIsLost = false;
+
+				mAllH.push_back(mCurrentPose);
 			}
 			else
 				mIsLost = true;
 		}
 	}
+
+	//Calibrate
+	HomographyCalibration hcal;
+	Eigen::Matrix3fr K;
+	K = hcal.calibrate(mAllH, mImageSize);
+	MYAPP_LOG << "K=" << K << "\n";
 
 	//Eval
 	int matchCount = mMatches.size();

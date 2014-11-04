@@ -57,6 +57,7 @@ public:
 	//Debug
 	std::vector<cv::DMatch> mCvmatches;
 	std::vector<cv::Point2f> refPoints,	imgPoints;
+	std::vector<Eigen::Matrix3fr> mAllH;
 
 protected:
 	/////////////////////////////////////////////////////

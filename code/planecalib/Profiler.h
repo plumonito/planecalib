@@ -20,7 +20,7 @@
 #include <ostream>
 #include <cassert>
 
-//#define ENABLE_PROFILER
+#define ENABLE_PROFILER
 
 namespace planecalib
 {
