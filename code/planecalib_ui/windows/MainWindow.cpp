@@ -90,13 +90,18 @@ void MainWindow::updateState()
 
 void MainWindow::resize()
 {
-    mTiler.configDevice(Eigen::Vector2i::Zero(),UserInterfaceInfo::Instance().getScreenSize(),2,3);
-	mTiler.addTile(0, 0, -1.0f, 2, 2);
-	mTiler.addTile(0, 2);
-	mTiler.addTile(1, 2);
+    mTiler.configDevice(Eigen::Vector2i::Zero(),UserInterfaceInfo::Instance().getScreenSize(),3,3);
+
+	mTiler.addTile(0, 0, -1.0f, 3, 2);
 	mTiler.setImageMVP(0, mImageSize);
+
+	mTiler.addTile(0, 2);
 	mTiler.setImageMVP(1, mImageSize);
+	mTiler.addTile(1, 2);
 	mTiler.setImageMVP(2, mImageSize);
+
+	mTiler.addTile(2, 2);
+	mTiler.setImageMVP(3, Eigen::Vector2i(100,100));
 }
 
 void MainWindow::draw()
@@ -109,7 +114,6 @@ void MainWindow::draw()
 	mShaders->getTexture().setMVPMatrix(mTiler.getMVP());
 	mShaders->getTexture().renderTexture(mCurrentImageTextureTarget, mCurrentImageTextureId, mImageSize, 1.0f);
 
-	
 	mTiler.setActiveTile(0);
     mShaders->getTexture().setMVPMatrix(mTiler.getMVP());
 	mShaders->getTextureWarp().setMVPMatrix(mTiler.getMVP());
@@ -126,6 +130,18 @@ void MainWindow::draw()
 	//Draw image points
 	glPointSize(8);
 	mShaders->getColor().drawVertices(GL_POINTS, mImagePoints.data(), mImagePointColors.data(), mImagePoints.size());
+
+	//K
+	mTiler.setActiveTile(3);
+	mShaders->getText().setMVPMatrix(mTiler.getMVP());
+	mShaders->getText().setActiveFontSmall();
+	mShaders->getText().setRenderCharHeight(4);
+	mShaders->getText().setCaret(Eigen::Vector2f(0, 0));
+	mShaders->getText().setColor(StaticColors::Green());
+	{
+		TextRendererStream ts(mShaders->getText());
+		ts << "K=" << mSystem->mK << "\nNormal=" << mSystem->mNormal;
+	}
 }
 
 } /* namespace dtslam */

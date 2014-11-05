@@ -33,6 +33,11 @@ public:
 	//Handles thread creation and other maintenance. This should be called when idle and after processImage().
 	void idle();
 
+	//Debug
+	std::vector<Eigen::Matrix3fr> mAllH;
+	Eigen::Matrix3fr mK;
+	Eigen::Vector3d mNormal;
+
 protected:
 	////////////////////////////////////////////////////////
 	// Members

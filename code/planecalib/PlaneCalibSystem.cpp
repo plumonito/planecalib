@@ -6,6 +6,7 @@
 
 #include "Keyframe.h"
 #include "Profiler.h"
+#include "HomographyCalibration.h"
 //#include "BundleAdjuster.h"
 //#include "CeresUtils.h"
 //#include "FeatureGridIndexer.h"
@@ -76,6 +77,8 @@ bool PlaneCalibSystem::init(double timestamp, cv::Mat3b &imgColor, cv::Mat1b &im
 
 	mTracker->resetTracking(mMap.get(), mMap->getKeyframes().back()->getPose());
 
+	mAllH.clear();
+
 	return true;
 }
 
@@ -141,7 +144,18 @@ void PlaneCalibSystem::processImage(double timestamp, cv::Mat3b &imgColor, cv::M
 	}
 
 	if (trackingSuccesful)
+	{
 		mExpanderCheckPending = true;
+
+		mAllH.push_back(mTracker->getCurrentPose());
+
+		//Calibrate
+		HomographyCalibration hcal;
+		hcal.calibrate(mAllH, mTracker->getImageSize());
+		mK = hcal.getK();
+		mNormal = hcal.getNormal();
+		//MYAPP_LOG << "K=" << K << "\n";
+	}
 }
 
 //void SlamSystem::idle()

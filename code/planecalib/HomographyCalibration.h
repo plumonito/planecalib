@@ -13,7 +13,14 @@ public:
 	{
 	}
 
-	Eigen::Matrix3fr calibrate(const std::vector<Eigen::Matrix3fr> &H, const Eigen::Vector2i &imageSize);
+	const Eigen::Matrix3fr &getK() const { return mK; }
+	const Eigen::Vector3d &getNormal() const { return mNormal; }
+
+	void calibrate(const std::vector<Eigen::Matrix3fr> &H, const Eigen::Vector2i &imageSize);
+
+protected:
+	Eigen::Matrix3fr mK;
+	Eigen::Vector3d mNormal;
 };
 
 }

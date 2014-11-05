@@ -15,7 +15,6 @@
 #include "cvutils.h"
 #include "log.h"
 #include "HomographyEstimation.h"
-#include "HomographyCalibration.h"
 #include "flags.h"
 
 namespace planecalib {
@@ -274,9 +273,13 @@ bool PoseTracker::trackFrame(std::unique_ptr<Keyframe> frame_)
 		}
 
 		//Homography
-		MYAPP_LOG << "Matches=" << refPoints.size() << "\n";
+		//MYAPP_LOG << "Matches=" << refPoints.size() << "\n";
 		//if (mMatches.size() >= 4)
-		if (refPoints.size() >= 4)
+		if (refPoints.size() < 50)
+		{
+			mIsLost = true;
+		}
+		else
 		{
 			Eigen::Matrix<uchar,Eigen::Dynamic,1> mask(refPoints.size());
 			cv::Mat1b mask_cv(refPoints.size(), 1, mask.data());
@@ -317,7 +320,7 @@ bool PoseTracker::trackFrame(std::unique_ptr<Keyframe> frame_)
 			for (auto &inlier : inliersVec)
 			if (inlier)
 				inlierCountAfter++;
-			MYAPP_LOG << "Inliers before=" << inlierCountBefore << ", inliers after=" << inlierCountAfter << "\n";
+			//MYAPP_LOG << "Inliers before=" << inlierCountBefore << ", inliers after=" << inlierCountAfter << "\n";
 
 			if (inlierCountAfter > 50)
 			{
@@ -330,21 +333,13 @@ bool PoseTracker::trackFrame(std::unique_ptr<Keyframe> frame_)
 				mCurrentPose(1, 2) *= scale;
 				mCurrentPose(2, 0) /= scale;
 				mCurrentPose(2, 1) /= scale;
-				MYAPP_LOG << "H = " << H << "\n";
+				//MYAPP_LOG << "H = " << H << "\n";
 				mIsLost = false;
-
-				mAllH.push_back(mCurrentPose);
 			}
 			else
 				mIsLost = true;
 		}
 	}
-
-	//Calibrate
-	HomographyCalibration hcal;
-	Eigen::Matrix3fr K;
-	K = hcal.calibrate(mAllH, mImageSize);
-	MYAPP_LOG << "K=" << K << "\n";
 
 	//Eval
 	int matchCount = mMatches.size();
@@ -358,7 +353,7 @@ bool PoseTracker::trackFrame(std::unique_ptr<Keyframe> frame_)
 	for (auto &match : mMatches)
 		mMatchMap.insert(std::make_pair(&match.getFeature(), &match));
 
-	return true;
+	return !mIsLost;
 }
 
 //bool PoseTracker::trackFrame(std::unique_ptr<SlamKeyFrame> frame_)
