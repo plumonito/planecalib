@@ -21,12 +21,50 @@ public:
     {
     }
 
+	static const int kResidualCount = 2;
+
 	template<typename T>
 	void homographyPoint(const Eigen::Matrix<T, 3, 1> &C, Eigen::Matrix<T, 3, 1> &HC) const
 	{
 		HC[0] = T(mH(0, 0))*C[0] + T(mH(0, 1))*C[1] + T(mH(0, 2))*C[2];
 		HC[1] = T(mH(1, 0))*C[0] + T(mH(1, 1))*C[1] + T(mH(1, 2))*C[2];
 		HC[2] = T(mH(2, 0))*C[0] + T(mH(2, 1))*C[1] + T(mH(2, 2))*C[2];
+	}
+
+	template<typename T>
+	void getBasis(const T * const x, Eigen::Matrix<T, 3, 1> &basis1, Eigen::Matrix<T, 3, 1> &basis2) const
+	{
+		const double kThreshold = 0.1;
+
+		//basis1 = cross(x,C)
+		//basis2 = cross(x,basis1)
+		//Check that the point we use is not colinear with x
+		const double x1val = CeresUtils::ToDouble(x[1]);
+		const double x2val = CeresUtils::ToDouble(x[2]);
+		if (x1val > kThreshold || x1val < -kThreshold || x2val > kThreshold || x2val < -kThreshold)
+		{
+			//Use C=[1,0,0]
+			basis1[0] = T(0);
+			basis1[1] = x[2];
+			basis1[2] = -x[1];
+
+			basis2[0] = -(x[1] * x[1] + x[2] * x[2]);
+			basis2[1] = x[0] * x[1];
+			basis2[2] = x[0] * x[2];
+		}
+		else
+		{
+			//Use C=[0,1,0]
+			basis1[0] = -x[2];
+			basis1[1] = T(0);
+			basis1[2] = x[0];
+
+			basis2[0] = x[0] * x[1];
+			basis2[1] = -(x[0] * x[0] + x[2] * x[2]);
+			basis2[2] = x[1] * x[2];
+		}
+		basis1.normalize();
+		basis2.normalize();
 	}
 
 	//Homography is in row-major order
@@ -39,6 +77,8 @@ public:
 		const T &nx = normal[0];
 		const T &ny = normal[1];
 		const T &nz = normal[2];
+		Eigen::Map<Eigen::Matrix<T, 3, 1>> normalVec(const_cast<T*>(normal));
+
 		Eigen::Matrix<T, 3, 3> skewN;
 		skewN << T(0), -nz, ny, nz, T(0), -nx, -ny, nx, T(0);
 		Eigen::Matrix<T, 3, 3> skewNsq = skewN*skewN;
@@ -56,53 +96,31 @@ public:
 			T(0.0), alphaInv, -v0*alphaInv,
 			T(0.0), T(0.0), T(1.0);
 
-		for (int k = 0; k < 3; k++)
+		Eigen::Matrix<T, 3, 3> W = Kinv.transpose()*Kinv;
+
+		//for (int k = 0; k < 3; k++)
 		{
+			//Eigen::Matrix<T, 3, 1> v = Kinv.transpose()*normalMat;
+			//Eigen::Matrix<T, 3, 3> skewV;
+			//skewV << T(0), -v[2], v[1], v[2], T(0), -v[0], -v[1], v[0], T(0);
+
+			//Eigen::Matrix<T, 3, 1> ee(T(0),T(0),T(0));
+			//ee[k] = T(1.0);
+
 			Eigen::Matrix<T, 3, 1> C1;
 			Eigen::Matrix<T, 3, 1> C2;
-			//if (k == 0)
-			//{
-			//	C1 <<
-			//		-ny*u0,
-			//		alpha*nz - ny*v0,
-			//		-ny;
-			//	C2 <<
-			//		nx*nz*u0 - alpha*(ny*ny + nz*nz),
-			//		nx*nz*v0 + alpha*nx*ny,
-			//		nx*nz;
-			//}
-			//else if (k==1)
-			//{
-			//	C1 <<
-			//		nx*u0 - alpha*nz,
-			//		nx*v0,
-			//		nx;
-			//	C2 <<
-			//		ny*nz*u0 + alpha*nx*ny,
-			//		ny*nz*v0 - alpha*(nx*nx + nz*nz),
-			//		ny*nz;
-			//}
-			//else
-			//{
-			//	C1 <<
-			//		alpha*ny,
-			//		-alpha*nx,
-			//		0;
-			//	C2 <<
-			//		alpha*nx*nz - u0*(nx*nx+ny*ny),
-			//		alpha*ny*nz - v0*(nx*nx + ny*ny),
-			//		-(nx*nx + ny*ny);
-			//}
-			
-			Eigen::Matrix<T, 3, 1> ee(T(0),T(0),T(0));
-			ee[k] = T(1.0);
+			//C1 = K*skewN*ee;
+			//C2 = K*skewNsq*ee;
 
-			C1 = K*skewN*ee;
-			C2 = K*skewNsq*ee;
+			//C1 = skewV*ee;
+			//C2 = alpha*alpha*skewV*W*skewV*ee;
+
+			getBasis(normal, C1, C2);
+			C1 = K*C1;
+			C2 = K*C2;
 
 			Eigen::Matrix<T, 3, 1> HC1;
 			homographyPoint(C1, HC1);
-			//HC1 /= HC1.norm();
 
 			Eigen::Matrix<T, 3, 1> KiHC1;
 			KiHC1 = Kinv*HC1;
@@ -116,8 +134,10 @@ public:
 
 			//T WHC2
 			//Residuals
+			int k = 0;
 			residuals[2*k+0] = KiHC1.dot(KiHC2);
 			residuals[2*k+1] = KiHC1.dot(KiHC1) - KiHC2.dot(KiHC2);
+			//residuals[2 * k + 1] = T(0);
 		}
         return true;
     }
@@ -132,14 +152,16 @@ void HomographyCalibration::calibrate(const std::vector<Eigen::Matrix3fr> &H, co
 
 	//Adjust for principal point
 	Eigen::Matrix3fr T, Ti;
-	T << 1, 0, -imageSize.x() / 2, 0, 1, -imageSize.y()/2, 0, 0, 1;
-	Ti << 1, 0, +imageSize.x() / 2, 0, 1, +imageSize.y()/2, 0, 0, 1;
-	
+	float halfWidth = (float)imageSize.x()/2;
+	float halfHeight = (float)imageSize.y() / 2;
+	T << 1, 0, -halfWidth, 0, 1, -halfHeight, 0, 0, 1;
+	Ti << 1, 0, +halfWidth / 2, 0, 1, +halfHeight / 2, 0, 0, 1;
+
 	std::vector<Eigen::Matrix3d> Ht(hcount);
 	for (int i = 0; i < hcount; i++)
 	{
 		Ht[i] = (T * H[i] * Ti).cast<double>();
-		//Ht[i] /= Ht[i].norm();
+		//Ht[i] /= 10;//;Ht[i].norm();
 	}
 
 	//Assume normal is [0,0,1] and find focal length
@@ -173,7 +195,7 @@ void HomographyCalibration::calibrate(const std::vector<Eigen::Matrix3fr> &H, co
 	for (int i = 0; i<hcount; i++)
 	{
 		problem.AddResidualBlock(
-			new ceres::AutoDiffCostFunction<HomographyCalibrationError, 6, 1,2,3>(
+			new ceres::AutoDiffCostFunction<HomographyCalibrationError, HomographyCalibrationError::kResidualCount, 1, 2, 3>(
 			new HomographyCalibrationError(Ht[i])),
 			lossFunc, &alpha,pp.data(),mNormal.data());
 	}
@@ -190,8 +212,12 @@ void HomographyCalibration::calibrate(const std::vector<Eigen::Matrix3fr> &H, co
 	ceres::Solve(options, &problem, &summary);
 	MYAPP_LOG << summary.FullReport();
 
+	HomographyCalibrationError err(Ht.back());
+	double residuals[6];
+	err(&alpha, pp.data(), mNormal.data(), residuals);
+
 	//Build final K
-	mK << alpha, 0, pp.x(), 0, alpha, pp.y(), 0, 0, 1;
+	mK << (float)alpha, 0, (float)pp.x(), 0, (float)alpha, (float)pp.y(), 0, 0, 1;
 }
 
 } 
