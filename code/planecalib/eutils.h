@@ -35,16 +35,9 @@ public:
 			return true;
 	}
 
-	static Eigen::Vector2f NormalizePoint(const Eigen::Vector3f &p)
-	{
-		
-		return Eigen::Vector2f(p.x() / p.z(), p.y() / p.z());
-	}
-
 	static Eigen::Vector2f HomographyPoint(const Eigen::Matrix3f &H, const Eigen::Vector2f &p)
 	{
-		
-		return NormalizePoint(H*Eigen::Vector3f(p.x(), p.y(), 1.0f));
+		return (H*p.homogeneous()).eval().hnormalized();
 	}
 
 	static Eigen::Vector2i FromSize(const cv::Size2i &sz) 

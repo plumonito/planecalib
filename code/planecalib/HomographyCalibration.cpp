@@ -63,8 +63,8 @@ public:
 			basis2[1] = -(x[0] * x[0] + x[2] * x[2]);
 			basis2[2] = x[1] * x[2];
 		}
-		basis1.normalize();
-		basis2.normalize();
+		//basis1.normalize();
+		//basis2.normalize();
 	}
 
 	//Homography is in row-major order
@@ -100,16 +100,19 @@ public:
 
 		Eigen::Matrix<T, 3, 1> KiHC1;
 		KiHC1 = Kinv*HC1;
-
+		
 		Eigen::Matrix<T, 3, 1> HC2;
 		homographyPoint(C2, HC2);
 
 		Eigen::Matrix<T, 3, 1> KiHC2;
 		KiHC2 = Kinv*HC2;
 
+		T norm1 = KiHC1.norm();
+		T norm2 = KiHC2.norm();
+
 		//Residuals
-		residuals[0] = KiHC1.dot(KiHC2);
-		residuals[1] = KiHC1.dot(KiHC1) - KiHC2.dot(KiHC2);
+		residuals[0] = KiHC1.dot(KiHC2) / (norm1*norm2);
+		residuals[1] = T(1)-norm2/norm1;
         return true;
     }
 
@@ -132,7 +135,7 @@ void HomographyCalibration::calibrate(const std::vector<Eigen::Matrix3fr> &H, co
 	for (int i = 0; i < hcount; i++)
 	{
 		Ht[i] = (T * H[i] * Ti).cast<double>();
-		//Ht[i] /= 10;//;Ht[i].norm();
+		//Ht[i] /= Ht[i].determinant();
 	}
 
 	//Assume normal is [0,0,1] and find focal length
@@ -149,7 +152,7 @@ void HomographyCalibration::calibrate(const std::vector<Eigen::Matrix3fr> &H, co
 	}
 
 	double alpha = sqrt(A.dot(b) / (A.dot(A))); //alpha = (pinv(A)*b)^0.5;
-	MYAPP_LOG << "Initial alpha=" << alpha << "\n";
+	mInitialAlpha = alpha;
 
 	//Non-linear minimization
 	ceres::Problem problem;
@@ -183,9 +186,7 @@ void HomographyCalibration::calibrate(const std::vector<Eigen::Matrix3fr> &H, co
 	ceres::Solve(options, &problem, &summary);
 	MYAPP_LOG << summary.FullReport();
 
-	HomographyCalibrationError err(Ht.back());
-	double residuals[6];
-	err(&alpha, pp.data(), mNormal.data(), residuals);
+	MYAPP_LOG << "Initial alpha=" << alpha << ", final=" << alpha << "\n";
 
 	//Build final K
 	mK << (float)alpha, 0, (float)pp.x(), 0, (float)alpha, (float)pp.y(), 0, 0, 1;

@@ -6,16 +6,18 @@
 #include <future>
 #include "stdutils.h"
 #include "Map.h"
-#include "PoseTracker.h"
-//#include "SlamMapExpander.h"
 
 namespace planecalib
 {
+
+class PoseTracker;
+class HomographyCalibration;
 
 class PlaneCalibSystem
 {
 public:
 	PlaneCalibSystem() : mSingleThreaded(false) {}
+	~PlaneCalibSystem();
 
 	bool init(double timestamp, cv::Mat3b &imgColor, cv::Mat1b &imgGray);
 
@@ -26,6 +28,7 @@ public:
 
 	Map &getMap() {return *mMap;}
 	PoseTracker &getTracker() {return *mTracker;}
+	HomographyCalibration &getCalib() { return *mCalib; }
 	//SlamMapExpander &getMapExpander() {return *mMapExpander;}
 
 	void processImage(double timestamp, cv::Mat3b &imgColor, cv::Mat1b &imgGray);
@@ -33,11 +36,7 @@ public:
 	//Handles thread creation and other maintenance. This should be called when idle and after processImage().
 	void idle();
 
-	//Debug
-	std::vector<Eigen::Matrix3fr> mAllH;
-	Eigen::Matrix3fr mK;
-	Eigen::Vector3d mNormal;
-
+	
 protected:
 	////////////////////////////////////////////////////////
 	// Members
@@ -47,6 +46,7 @@ protected:
 
 	std::unique_ptr<PoseTracker> mTracker;
 	//std::unique_ptr<SlamMapExpander> mMapExpander;
+	std::unique_ptr<HomographyCalibration> mCalib;
 
 	std::atomic<bool> mExpanderCheckPending;
 

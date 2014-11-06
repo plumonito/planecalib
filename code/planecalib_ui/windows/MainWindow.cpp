@@ -8,7 +8,8 @@
 #include "MainWindow.h"
 #include "planecalib/PlaneCalibSystem.h"
 #include "planecalib/Map.h"
-//#include "planecalib/PoseTracker.h"
+#include "planecalib/PoseTracker.h"
+#include "planecalib/HomographyCalibration.h"
 #include "../PlaneCalibApp.h"
 
 namespace planecalib
@@ -140,7 +141,8 @@ void MainWindow::draw()
 	mShaders->getText().setColor(StaticColors::Green());
 	{
 		TextRendererStream ts(mShaders->getText());
-		ts << "K=" << mSystem->mK << "\nNormal=" << mSystem->mNormal;
+		ts << "Alpha0=" << mSystem->getCalib().getInitialAlpha() << "\n";
+		ts << "K=" << mSystem->getCalib().getK() << "\nNormal=" << mSystem->getCalib().getNormal();
 	}
 }
 

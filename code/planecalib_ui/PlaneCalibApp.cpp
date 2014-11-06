@@ -28,6 +28,8 @@
 
 //#include "planecalib/flags.h"
 #include "planecalib/PlaneCalibSystem.h"
+#include "planecalib/PoseTracker.h"
+#include "planecalib/HomographyCalibration.h"
 
 #include "OpenCVDataSource.h"
 #include "SequenceDataSource.h"
@@ -125,6 +127,7 @@ bool PlaneCalibApp::init(void)
 	mKeyBindings.addBinding(false, 'p', static_cast<KeyBindingHandler<PlaneCalibApp>::SimpleBindingFunc>(&PlaneCalibApp::toggleProfilerMode), "Toggle profiler mode.");
 	mKeyBindings.addBinding(false, 'P', static_cast<KeyBindingHandler<PlaneCalibApp>::SimpleBindingFunc>(&PlaneCalibApp::resetProfiler), "Reset profiler counts.");
 	mKeyBindings.addBinding(false, 'r', static_cast<KeyBindingHandler<PlaneCalibApp>::SimpleBindingFunc>(&PlaneCalibApp::resetSystem), "Reset the slam system.");
+	mKeyBindings.addBinding(false, 'c', static_cast<KeyBindingHandler<PlaneCalibApp>::SimpleBindingFunc>(&PlaneCalibApp::recordOneFrame), "Record a single frame.");
 	mKeyBindings.addBinding(false, 'R', static_cast<KeyBindingHandler<PlaneCalibApp>::SimpleBindingFunc>(&PlaneCalibApp::startRecording), "Reset and start recording.");
 
 	for(int i=0; i<(int)mWindows.size(); ++i)
@@ -145,6 +148,10 @@ bool PlaneCalibApp::init(void)
 	mFPSUpdateDuration = std::chrono::duration_cast<std::chrono::high_resolution_clock::duration>(std::chrono::seconds(1));
 	mFPSSampleAccum = std::chrono::high_resolution_clock::duration(0);
 	mFPSSampleCount = 0;
+
+	//Record vars
+	mRecordId = 0;
+	mRecordFileFormat = FLAGS_DriverRecordPath + "frame%.4d.jpg";
 
 	mInitialized = true;
     return true;
@@ -358,8 +365,11 @@ void PlaneCalibApp::draw(void)
 			cv::Mat3b imageColor = mImageSrc->getImgColor();
 
 			//Record
-			if(mRecordFrames)
+			if (mRecordFrames || mRecordOneFrame)
+			{
+				mRecordOneFrame = false;
 				recordFrame(imageColor);
+			}
 
 			//Process new frame
 			auto tic = std::chrono::high_resolution_clock::now();
@@ -408,24 +418,26 @@ void PlaneCalibApp::draw(void)
 	    mShaders.getText().renderText(ss);
 
 	    //Map stats in the bottom
-		//const float kMapStatsFontHeight = 10.0f;
-		//cv::Point2f corners[] = { cv::Point2f(0.0f, (float)screenSize.height - 2 * kMapStatsFontHeight), cv::Point2f((float)screenSize.width, (float)screenSize.height - 2 * kMapStatsFontHeight),
-		//	cv::Point2f(0.0f, (float)screenSize.height), cv::Point2f((float)screenSize.width, (float)screenSize.height) };
-	 //   mShaders.getColor().setMVPMatrix(ViewportTiler::GetImageSpaceMvp(viewportAspect, screenSize));
-	 //   mShaders.getColor().drawVertices(GL_TRIANGLE_STRIP, corners, 4, StaticColors::Black(0.5f));
+		const float kMapStatsFontHeight = 10.0f;
+		std::vector<Eigen::Vector2f> corners;
+		corners.push_back(Eigen::Vector2f(0.0f, (float)screenSize.y() - 2 * kMapStatsFontHeight));
+		corners.push_back(Eigen::Vector2f((float)screenSize.x(), (float)screenSize.y() - 2 * kMapStatsFontHeight));
+		corners.push_back(Eigen::Vector2f(0.0f, (float)screenSize.y()));
+		corners.push_back(Eigen::Vector2f((float)screenSize.x(), (float)screenSize.y()));
+	    mShaders.getColor().setMVPMatrix(ViewportTiler::GetImageSpaceMvp(viewportAspect, screenSize));
+	    mShaders.getColor().drawVertices(GL_TRIANGLE_STRIP, corners.data(), 4, StaticColors::Black(0.5f));
 
-		//mShaders.getText().setRenderCharHeight(kMapStatsFontHeight);
-		//mShaders.getText().setCaret(corners[0] + cv::Point2f(kMapStatsFontHeight/2, kMapStatsFontHeight/2));
-		//mShaders.getText().setColor(StaticColors::White());
-		//{
-		//	TextRendererStream ts(mShaders.getText());
+		mShaders.getText().setRenderCharHeight(kMapStatsFontHeight);
+		mShaders.getText().setCaret((corners[0] + Eigen::Vector2f(kMapStatsFontHeight / 2, kMapStatsFontHeight / 2)).eval());
+		mShaders.getText().setColor(StaticColors::White());
+		{
+			TextRendererStream ts(mShaders.getText());
 
-		//	int frameCount = mSlam.getMap().getTotalFrameCount();
-		//	int count3D = mSlam.getMap().getTotalFeature3DCount();
-		//	int count2D = mSlam.getMap().getTotalFeature2DCount();
+			int frameCount = mSystem->getMap().getKeyframes().size();
+			int count3D = mSystem->getMap().getFeatures().size();
 		//	if (!FLAGS_DisableRegions)
 		//		ts << "Regions: " << mSlam.getMap().getRegions().size() << ", ";
-		//	ts << "Keyframes: " << frameCount << ", Features (2D: " << count2D << ", 3D : " << count3D << ")";
+			ts << "Keyframes: " << frameCount << ", Features: " << count3D << "";
 
 		//	switch (mSlam.getTracker().getPoseType() )
 		//	{
@@ -480,7 +492,7 @@ void PlaneCalibApp::draw(void)
 		//		ts << "BA pending";
 		//		ts.setColor(StaticColors::White());
 		//	}
-		//}
+		}
     }
 
 	//Update FPS

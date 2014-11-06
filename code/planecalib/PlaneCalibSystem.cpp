@@ -6,6 +6,7 @@
 
 #include "Keyframe.h"
 #include "Profiler.h"
+#include "PoseTracker.h"
 #include "HomographyCalibration.h"
 //#include "BundleAdjuster.h"
 //#include "CeresUtils.h"
@@ -16,6 +17,11 @@
 namespace planecalib
 {
 
+PlaneCalibSystem::~PlaneCalibSystem()
+{
+
+}
+	
 bool PlaneCalibSystem::init(double timestamp, cv::Mat3b &imgColor, cv::Mat1b &imgGray)
 {
 	//Wait for other threads
@@ -51,6 +57,8 @@ bool PlaneCalibSystem::init(double timestamp, cv::Mat3b &imgColor, cv::Mat1b &im
 	//mMapExpander->init(camera, this);
 	//mExpanderCheckPending = false;
 
+	mCalib.reset(new HomographyCalibration());
+
 	//Start map
 	//Add keyframe
 	Keyframe *pkeyframe = keyframe.get();
@@ -76,8 +84,6 @@ bool PlaneCalibSystem::init(double timestamp, cv::Mat3b &imgColor, cv::Mat1b &im
 	}
 
 	mTracker->resetTracking(mMap.get(), mMap->getKeyframes().back()->getPose());
-
-	mAllH.clear();
 
 	return true;
 }
@@ -147,14 +153,52 @@ void PlaneCalibSystem::processImage(double timestamp, cv::Mat3b &imgColor, cv::M
 	{
 		mExpanderCheckPending = true;
 
-		mAllH.push_back(mTracker->getCurrentPose());
+		//Check distance
+		const float kThreshold = 50 * 50;
+		std::vector<Eigen::Vector2f> cornersOriginal;
+		cornersOriginal.push_back(Eigen::Vector2f(0, 0));
+		cornersOriginal.push_back(Eigen::Vector2f(0, mTracker->getImageSize().y()));
+		cornersOriginal.push_back(Eigen::Vector2f(mTracker->getImageSize().x(), 0));
+		cornersOriginal.push_back(Eigen::Vector2f(mTracker->getImageSize().x(), mTracker->getImageSize().y()));
 
-		//Calibrate
-		HomographyCalibration hcal;
-		hcal.calibrate(mAllH, mTracker->getImageSize());
-		mK = hcal.getK();
-		mNormal = hcal.getNormal();
-		//MYAPP_LOG << "K=" << K << "\n";
+		std::vector<std::pair<Eigen::Vector2f, Eigen::Vector2f>> corners;
+		Eigen::Matrix3fr poseInv = mTracker->getCurrentPose().inverse();
+		for (auto &p : cornersOriginal)
+			corners.emplace_back(p, eutils::HomographyPoint(poseInv, p));
+
+		bool add = true;
+		for (auto &frame_ : mMap->getKeyframes())
+		{
+			auto &frame = *frame_;
+			float distSq = 0;
+			for (auto &p : corners)
+			{
+				auto pp = eutils::HomographyPoint(frame.getPose(), p.second);
+				distSq += (p.first - pp).squaredNorm();
+			}
+
+			if (distSq < kThreshold)
+			{
+				add = false;
+				break;
+			}
+		}
+
+		if (add)
+		{
+			mMap->addKeyframe(std::make_unique<Keyframe>(*mTracker->getFrame()));
+
+			std::vector<Eigen::Matrix3fr> allPoses;
+			for (auto &frame : mMap->getKeyframes())
+			{
+				allPoses.push_back(frame->getPose());
+			}
+			//mAllH.push_back(mTracker->getCurrentPose());
+
+			//Calibrate
+			mCalib->calibrate(allPoses, mTracker->getImageSize());
+			//MYAPP_LOG << "K=" << K << "\n";
+		}
 	}
 }
 

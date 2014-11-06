@@ -333,6 +333,7 @@ bool PoseTracker::trackFrame(std::unique_ptr<Keyframe> frame_)
 				mCurrentPose(1, 2) *= scale;
 				mCurrentPose(2, 0) /= scale;
 				mCurrentPose(2, 1) /= scale;
+				mFrame->setPose(mCurrentPose);
 				//MYAPP_LOG << "H = " << H << "\n";
 				mIsLost = false;
 			}

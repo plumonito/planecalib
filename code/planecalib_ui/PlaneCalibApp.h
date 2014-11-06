@@ -45,6 +45,7 @@ private:
     bool mRecordFrames;
     int mRecordId;
     std::string mRecordFileFormat;
+	bool mRecordOneFrame;
 
     bool mShowProfiler;
     bool mShowProfilerTotals;
@@ -96,6 +97,7 @@ private:
     void changeWindowKey(bool isSpecial, unsigned char key);
     void resetSystem();
     void startRecording();
+	void recordOneFrame() { mRecordOneFrame = true; }
     void recordFrame(cv::Mat3b &im);
 
 	void saveMap();
