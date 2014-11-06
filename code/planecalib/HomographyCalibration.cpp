@@ -74,14 +74,6 @@ public:
 		const T &alpha = *alpha_;
 		const T &u0 = pp[0];
 		const T &v0 = pp[1];
-		const T &nx = normal[0];
-		const T &ny = normal[1];
-		const T &nz = normal[2];
-		Eigen::Map<Eigen::Matrix<T, 3, 1>> normalVec(const_cast<T*>(normal));
-
-		Eigen::Matrix<T, 3, 3> skewN;
-		skewN << T(0), -nz, ny, nz, T(0), -nx, -ny, nx, T(0);
-		Eigen::Matrix<T, 3, 3> skewNsq = skewN*skewN;
 
 		Eigen::Matrix<T, 3, 3> K;
 		K <<
@@ -96,49 +88,28 @@ public:
 			T(0.0), alphaInv, -v0*alphaInv,
 			T(0.0), T(0.0), T(1.0);
 
-		Eigen::Matrix<T, 3, 3> W = Kinv.transpose()*Kinv;
+		Eigen::Matrix<T, 3, 1> C1;
+		Eigen::Matrix<T, 3, 1> C2;
 
-		//for (int k = 0; k < 3; k++)
-		{
-			//Eigen::Matrix<T, 3, 1> v = Kinv.transpose()*normalMat;
-			//Eigen::Matrix<T, 3, 3> skewV;
-			//skewV << T(0), -v[2], v[1], v[2], T(0), -v[0], -v[1], v[0], T(0);
+		getBasis(normal, C1, C2);
+		C1 = K*C1;
+		C2 = K*C2;
 
-			//Eigen::Matrix<T, 3, 1> ee(T(0),T(0),T(0));
-			//ee[k] = T(1.0);
+		Eigen::Matrix<T, 3, 1> HC1;
+		homographyPoint(C1, HC1);
 
-			Eigen::Matrix<T, 3, 1> C1;
-			Eigen::Matrix<T, 3, 1> C2;
-			//C1 = K*skewN*ee;
-			//C2 = K*skewNsq*ee;
+		Eigen::Matrix<T, 3, 1> KiHC1;
+		KiHC1 = Kinv*HC1;
 
-			//C1 = skewV*ee;
-			//C2 = alpha*alpha*skewV*W*skewV*ee;
+		Eigen::Matrix<T, 3, 1> HC2;
+		homographyPoint(C2, HC2);
 
-			getBasis(normal, C1, C2);
-			C1 = K*C1;
-			C2 = K*C2;
+		Eigen::Matrix<T, 3, 1> KiHC2;
+		KiHC2 = Kinv*HC2;
 
-			Eigen::Matrix<T, 3, 1> HC1;
-			homographyPoint(C1, HC1);
-
-			Eigen::Matrix<T, 3, 1> KiHC1;
-			KiHC1 = Kinv*HC1;
-
-			Eigen::Matrix<T, 3, 1> HC2;
-			homographyPoint(C2, HC2);
-			//HC2 /= HC2.norm();
-
-			Eigen::Matrix<T, 3, 1> KiHC2;
-			KiHC2 = Kinv*HC2;
-
-			//T WHC2
-			//Residuals
-			int k = 0;
-			residuals[2*k+0] = KiHC1.dot(KiHC2);
-			residuals[2*k+1] = KiHC1.dot(KiHC1) - KiHC2.dot(KiHC2);
-			//residuals[2 * k + 1] = T(0);
-		}
+		//Residuals
+		residuals[0] = KiHC1.dot(KiHC2);
+		residuals[1] = KiHC1.dot(KiHC1) - KiHC2.dot(KiHC2);
         return true;
     }
 
