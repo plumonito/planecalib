@@ -32,8 +32,26 @@ add_custom_command(TARGET planecalib_desktop POST_BUILD
 	
 
 if(WIN32)
-    add_custom_command(TARGET planecalib_desktop POST_BUILD
-        COMMAND ${CMAKE_COMMAND} -E copy_directory ${PROJECT_SOURCE_DIR}/planecalib/assets ${CMAKE_CURRENT_BINARY_DIR}/assets)
-    add_custom_command(TARGET planecalib_desktop POST_BUILD
-        COMMAND ${CMAKE_COMMAND} -E copy_directory ${PROJECT_SOURCE_DIR}/planecalib_ui/assets ${CMAKE_CURRENT_BINARY_DIR}/assets)
+    # assets must be copied also to current_binary_dir in MSVC so that it can be run
+    # by the IDE
+    if(MSVC)
+        add_custom_command(TARGET planecalib_desktop POST_BUILD
+                    COMMAND ${CMAKE_COMMAND} -E copy_directory ${PROJECT_SOURCE_DIR}/planecalib/assets ${CMAKE_CURRENT_BINARY_DIR}/assets)
+
+        add_custom_command(TARGET planecalib_desktop POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E copy_directory ${PROJECT_SOURCE_DIR}/planecalib_ui/assets ${CMAKE_CURRENT_BINARY_DIR}/assets)
+    endif()
+
+    make_directory(${CMAKE_CURRENT_BINARY_DIR}/Debug)
+    make_directory(${CMAKE_CURRENT_BINARY_DIR}/Release)
+
+    foreach(dll ${DEBUG_DLL_LIBRARIES})
+        execute_process(
+            COMMAND ${CMAKE_COMMAND} -E copy ${dll} ${CMAKE_CURRENT_BINARY_DIR}/Debug)
+    endforeach()
+
+    foreach(dll ${RELEASE_DLL_LIBRARIES})
+        execute_process(
+            COMMAND ${CMAKE_COMMAND} -E copy ${dll} ${CMAKE_CURRENT_BINARY_DIR}/Release)
+    endforeach()
 endif()
