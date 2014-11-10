@@ -37,7 +37,7 @@ public:
 	void getFeaturesInView(const Eigen::Matrix3fr &pose, const Eigen::Vector2i &imageSize, int octaveCount, std::unordered_set<const Feature*> &featuresToIgnore, std::vector<std::vector<FeatureProjectionInfo>> &featuresInView);
 	FeatureProjectionInfo projectFeature(const Eigen::Matrix3fr &pose, Feature &feature);
 
-	Feature *createFeature(Keyframe &keyframe, const Eigen::Matrix3fr &poseInv, const Eigen::Vector2f &position, int octave, const cv::Matx<uchar, 1, 32> &descriptor);
+	Feature *createFeature(Keyframe &keyframe, const Eigen::Matrix3fr &poseInv, const Eigen::Vector2f &position, int octave, const Eigen::Ref<Eigen::Matrix<uchar, 1, 32>> &descriptor);
 
 	void moveToGarbage(Feature &feature);
 
@@ -79,7 +79,7 @@ public:
 	FeatureMeasurement()
 	{}
 
-	FeatureMeasurement(Feature *feature, Keyframe *keyframe, const Eigen::Vector2f &position, int octave, const cv::Matx<uchar,1,32> &descriptor) :
+	FeatureMeasurement(Feature *feature, Keyframe *keyframe, const Eigen::Vector2f &position, int octave, const Eigen::Ref<Eigen::Matrix<uchar, 1, 32>> &descriptor) :
 		mFeature(feature), mKeyframe(keyframe), mPosition(position), mOctave(octave), mDescriptor(descriptor)
 	{
 	}
@@ -92,7 +92,9 @@ public:
 	int getOctave() const {return mOctave;}
 	const cv::Mat1b &getImage() const {return mKeyframe->getImage(mOctave);}
 
-	const cv::Matx<uchar, 1, 32> &getDescriptor() const { return mDescriptor; }
+	const Eigen::Matrix<uchar,1,32> &getDescriptor() const { return mDescriptor; }
+
+	EIGEN_MAKE_ALIGNED_OPERATOR_NEW
 
 protected:
 	Feature *mFeature;
@@ -101,7 +103,7 @@ protected:
 	Eigen::Vector2f mPosition;
 	int mOctave;
 
-	cv::Matx<uchar, 1, 32> mDescriptor;
+	Eigen::Matrix<uchar, 1, 32> mDescriptor;
 };
 
 

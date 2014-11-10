@@ -88,23 +88,23 @@ std::unique_ptr<Keyframe> Keyframe::copyWithoutFeatures() const
 	return newFrame;
 }
 
-cv::Matx<uchar, 1, 32> Keyframe::getDescriptor(int octave, int idx)
-{
-	assert(octave < (int)mDescriptors.size());
-	auto &desc = mDescriptors[octave];
-
-	assert(idx < desc.rows);
-	assert(32 == desc.cols);
-	uchar *row = desc.ptr(idx);
-
-	cv::Matx<uchar, 1, 32> res;
-	for (int i = 0; i < 32; i++)
-	{
-		res(0,i) = row[i];
-	}
-	
-	return res;
-}
+//cv::Matx<uchar, 1, 32> Keyframe::getDescriptor(int octave, int idx)
+//{
+//	assert(octave < (int)mDescriptors.size());
+//	auto &desc = mDescriptors[octave];
+//
+//	assert(idx < desc.rows);
+//	assert(32 == desc.cols);
+//	uchar *row = desc.ptr(idx);
+//
+//	cv::Matx<uchar, 1, 32> res;
+//	for (int i = 0; i < 32; i++)
+//	{
+//		res(0,i) = row[i];
+//	}
+//	
+//	return res;
+//}
 
 void Keyframe::removeMeasurement(FeatureMeasurement *m)
 {

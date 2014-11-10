@@ -26,6 +26,8 @@ public:
 	Keyframe(const Keyframe &copyFrom);
 	~Keyframe();
 
+	EIGEN_MAKE_ALIGNED_OPERATOR_NEW
+
 	void init(const cv::Mat3b &imageColor, const cv::Mat1b &imageGray);
 	std::unique_ptr<Keyframe> copyWithoutFeatures() const;
 
@@ -47,8 +49,15 @@ public:
 	std::vector<cv::KeyPoint> &getKeypoints(int octave) const {return (*mKeypoints)[octave];}
 	
 	//Note: descriptors are shared between all copies of the frame
-	const cv::Mat1b &getDescriptors(int octave) const { return mDescriptors[octave]; }
-	cv::Matx<uchar, 1, 32> getDescriptor(int octave, int idx);
+	Eigen::Map<Eigen::Matrix<uchar, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>> getDescriptors(int octave) const
+	{ 
+		auto &cvMat = mDescriptors[octave];
+		return Eigen::Map<Eigen::Matrix<uchar, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>>(cvMat.data, cvMat.rows, cvMat.cols);
+	}
+	Eigen::Map<Eigen::Matrix<uchar, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>>::RowXpr getDescriptor(int octave, int idx)
+	{
+		return getDescriptors(octave).row(idx);
+	}
 
 	const Eigen::Matrix3fr &getPose() const {return mPose;}
 	Eigen::Matrix3fr &getPose() { return mPose; }

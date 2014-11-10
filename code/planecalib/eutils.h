@@ -12,6 +12,8 @@
 #include <Eigen/StdVector>
 
 EIGEN_DEFINE_STL_VECTOR_SPECIALIZATION(Eigen::Vector4f);
+EIGEN_DEFINE_STL_VECTOR_SPECIALIZATION(Eigen::Matrix<unsigned char,1,32>);
+
 namespace Eigen
 {
 	typedef Eigen::Matrix<float, 3, 3, Eigen::RowMajor> Matrix3fr;
