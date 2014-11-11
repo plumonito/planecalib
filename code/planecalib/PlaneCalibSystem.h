@@ -60,6 +60,7 @@ protected:
 	////////////////////////////////////////////////////////
 	// Methods
 
+	void createKeyframe();
 	//std::unique_ptr<SlamMapExpander::CheckData> createDataForExpander();
 
 	//static Keyframe *ExpanderTask(PlaneCalibSystem *system, MapExpander::CheckData *dataPtr, bool useLocks);

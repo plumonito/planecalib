@@ -18,6 +18,8 @@ namespace Eigen
 {
 	typedef Eigen::Matrix<float, 3, 3, Eigen::RowMajor> Matrix3fr;
 	typedef Eigen::Matrix<float, 4, 4, Eigen::RowMajor> Matrix4fr;
+
+	typedef Eigen::Matrix<double, 3, 3, Eigen::RowMajor> Matrix3dr;
 }
 
 #include <cassert>

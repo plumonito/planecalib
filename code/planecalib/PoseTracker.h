@@ -54,10 +54,6 @@ public:
 	int getMatchInlierCount() const { return mMatchInlierCount; }
 	const std::vector<MatchReprojectionErrors> &getReprojectionErrors() const { return mReprojectionErrors; }
 
-	//Debug
-	std::vector<cv::DMatch> mCvmatches;
-	std::vector<cv::Point2f> refPoints,	imgPoints;
-
 protected:
 	/////////////////////////////////////////////////////
 	// Protected members

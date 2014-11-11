@@ -142,11 +142,6 @@ bool PoseTracker::trackFrame(std::unique_ptr<Keyframe> frame_)
 	//Get features in view
 	mMap->getFeaturesInView(mCurrentPose, mImageSize, mOctaveCount, featuresToIgnore, mFeaturesInView);
 
-	cv::BFMatcher matcher(cv::NORM_HAMMING, false);
-	refPoints.clear();
-	imgPoints.clear();
-	mCvmatches.clear();
-
 	//Match
 	//for (int octave = mOctaveCount - 1; octave >= 0; octave--)
 	int octave = 0;// mOctaveCount - 1;
@@ -168,19 +163,22 @@ bool PoseTracker::trackFrame(std::unique_ptr<Keyframe> frame_)
 
 				//Find best match
 				int bestScore = std::numeric_limits<int>::max();
-				cv::Point2f bestPosition;
+				Eigen::Vector2f bestPosition;
+				const uchar *bestDescriptor;
 				int secondScore = std::numeric_limits<int>::max();
 				for (int j = 0; j < (int)imgKeypoints.size(); j++)
 				{
 					auto diff = projection.getPosition() - eutils::FromCV(imgKeypoints[j].pt);
 					if (diff.dot(diff) < 20 * 20 || mIsLost)
 					{
-						int score = cv::normHamming(refDesc_i.data(), &imgDesc(j,0), 32);
+						const uchar *imgDesc_j = &imgDesc(j, 0);
+						int score = cv::normHamming(refDesc_i.data(), imgDesc_j, 32);
 						if (score < bestScore)
 						{
 							secondScore = bestScore;
 							bestScore = score;
-							bestPosition = imgKeypoints[j].pt;
+							bestPosition = eutils::FromCV(imgKeypoints[j].pt);
+							bestDescriptor = imgDesc_j;
 						}
 						else if (score < secondScore)
 						{
@@ -199,8 +197,7 @@ bool PoseTracker::trackFrame(std::unique_ptr<Keyframe> frame_)
 
 				if (add)
 				{
-					refPoints.push_back(eutils::ToCVPoint(feature.getPosition()));
-					imgPoints.push_back(bestPosition);
+					mMatches.push_back(FeatureMatch(&m, octave, bestPosition, bestDescriptor, 0));
 				}
 			}
 		}
@@ -208,15 +205,22 @@ bool PoseTracker::trackFrame(std::unique_ptr<Keyframe> frame_)
 		//Homography
 		//MYAPP_LOG << "Matches=" << refPoints.size() << "\n";
 		//if (mMatches.size() >= 4)
-		if (refPoints.size() < 50)
+		if (mMatches.size() < 50)
 		{
 			mIsLost = true;
 		}
 		else
 		{
+			//Create cv vectors
+			std::vector<cv::Point2f> refPoints, imgPoints;
+			for (auto &match : mMatches)
+			{
+				refPoints.push_back(eutils::ToCVPoint(match.getFeature().getPosition()));
+				imgPoints.push_back(eutils::ToCVPoint(match.getPosition()));
+			}
+
 			Eigen::Matrix<uchar,Eigen::Dynamic,1> mask(refPoints.size());
 			cv::Mat1b mask_cv(refPoints.size(), 1, mask.data());
-
 
 			cv::Mat H;
 			{
@@ -276,16 +280,16 @@ bool PoseTracker::trackFrame(std::unique_ptr<Keyframe> frame_)
 	}
 
 	//Eval
-	//int matchCount = mMatches.size();
-	//mReprojectionErrors.resize(matchCount);
-	//for (int i = 0; i < matchCount; i++)
-	//{
-	//	mReprojectionErrors[i].isInlier = true;
-	//}
+	int matchCount = mMatches.size();
+	mReprojectionErrors.resize(matchCount);
+	for (int i = 0; i < matchCount; i++)
+	{
+		mReprojectionErrors[i].isInlier = true;
+	}
 
 	//Build match map
-	//for (auto &match : mMatches)
-	//	mMatchMap.insert(std::make_pair(&match.getFeature(), &match));
+	for (auto &match : mMatches)
+		mMatchMap.insert(std::make_pair(&match.getFeature(), &match));
 
 	return !mIsLost;
 }
@@ -722,9 +726,9 @@ bool PoseTracker::trackFrame(std::unique_ptr<Keyframe> frame_)
 //		}
 //	}
 //}
-//
-//void PoseTracker::resync()
-//{
+
+void PoseTracker::resync()
+{
 //	if(!mFrame || mPoseType == EPoseEstimationType::Invalid)
 //		return;
 //
@@ -738,6 +742,6 @@ bool PoseTracker::trackFrame(std::unique_ptr<Keyframe> frame_)
 //	mMatchInlierCount = mPoseEstimator->getInlierCount();
 //	mReprojectionErrors = std::move(mPoseEstimator->getReprojectionErrors());
 //	mReprojectionErrorsForRotation = std::move(mPoseEstimator->getPureRotationReprojectionErrors());
-//}
+}
 
 } /* namespace dtslam */

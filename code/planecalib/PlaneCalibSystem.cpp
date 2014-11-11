@@ -8,7 +8,7 @@
 #include "Profiler.h"
 #include "PoseTracker.h"
 #include "HomographyCalibration.h"
-//#include "BundleAdjuster.h"
+#include "BundleAdjuster.h"
 //#include "CeresUtils.h"
 //#include "FeatureGridIndexer.h"
 
@@ -186,7 +186,7 @@ void PlaneCalibSystem::processImage(double timestamp, cv::Mat3b &imgColor, cv::M
 
 		if (add)
 		{
-			mMap->addKeyframe(std::make_unique<Keyframe>(*mTracker->getFrame()));
+			createKeyframe();
 
 			std::vector<Eigen::Matrix3fr> allPoses;
 			for (auto &frame : mMap->getKeyframes())
@@ -200,6 +200,35 @@ void PlaneCalibSystem::processImage(double timestamp, cv::Mat3b &imgColor, cv::M
 			//MYAPP_LOG << "K=" << K << "\n";
 		}
 	}
+}
+
+void PlaneCalibSystem::createKeyframe()
+{
+	auto frame_ = std::make_unique<Keyframe>(*mTracker->getFrame());
+	Keyframe *frame = frame_.get();
+	
+	//Add keyframe to map
+	mMap->addKeyframe(std::move(frame_));
+
+	//Create measurements
+	for (auto &match : mTracker->getMatches())
+	{
+		auto m = std::make_unique<FeatureMeasurement>(const_cast<Feature*>(&match.getFeature()), frame, match.getPosition(), match.getOctave(), match.getDescriptor());
+		frame->getMeasurements().push_back(m.get());
+		m->getFeature().getMeasurements().push_back(std::move(m));
+	}
+
+	//BA
+	BundleAdjuster ba;
+	ba.setMap(mMap.get());
+	ba.setOutlierThreshold(2.5f);
+	ba.setUseLocks(false);
+	for (auto &framePtr : mMap->getKeyframes())
+	{
+		ba.addFrameToAdjust(*framePtr);
+	}
+
+	ba.bundleAdjust();
 }
 
 //void SlamSystem::idle()
