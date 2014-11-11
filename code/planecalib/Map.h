@@ -108,7 +108,6 @@ protected:
 	Eigen::Matrix<uchar, 1, 32> mDescriptor;
 };
 
-
 class FeatureProjectionInfo
 {
 public:

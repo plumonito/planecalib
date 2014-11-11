@@ -2,13 +2,16 @@
 #include "PlaneCalibSystem.h"
 #include <chrono>
 #include <opencv2/imgproc.hpp>
+#include <opencv2/video.hpp>
 #include <ceres/rotation.h>
 
 #include "Keyframe.h"
 #include "Profiler.h"
 #include "PoseTracker.h"
 #include "HomographyCalibration.h"
+#include "HomographyEstimation.h"
 #include "BundleAdjuster.h"
+#include "CalibratedBundleAdjuster.h"
 //#include "CeresUtils.h"
 //#include "FeatureGridIndexer.h"
 
@@ -151,6 +154,19 @@ void PlaneCalibSystem::processImage(double timestamp, cv::Mat3b &imgColor, cv::M
 
 	if (trackingSuccesful)
 	{
+		/* 
+		// This replaces the feature-based homography with a direct estimation
+		HomographyEstimation hest;
+		cv::Matx33f t = eutils::ToCV(mTracker->getCurrentPose());
+		//hest.estimateHomographyDirect(mMap->getKeyframes()[0]->getImage(0), frame->getImage(0), t);
+
+		cv::Mat1f mm(3, 3, t.val);
+		cv::findTransformECC(mMap->getKeyframes()[0]->getImage(0), mTracker->getFrame()->getImage(0), mm, cv::MOTION_HOMOGRAPHY, cv::TermCriteria(cv::TermCriteria::COUNT + cv::TermCriteria::EPS, 100, 0.001));
+
+		//mTracker->getFrame()->setPose(eutils::FromCV(t));
+		mTracker->setCurrentPose(eutils::FromCV(t));
+		*/
+
 		mExpanderCheckPending = true;
 
 		//Check distance
@@ -198,6 +214,17 @@ void PlaneCalibSystem::processImage(double timestamp, cv::Mat3b &imgColor, cv::M
 			//Calibrate
 			mCalib->calibrate(allPoses, mTracker->getImageSize());
 			//MYAPP_LOG << "K=" << K << "\n";
+
+			CalibratedBundleAdjuster ba;
+			ba.setMap(mMap.get());
+			ba.setOutlierThreshold(2.5f);
+			ba.setUseLocks(false);
+			for (auto &framePtr : mMap->getKeyframes())
+			{
+				ba.addFrameToAdjust(*framePtr);
+			}
+			ba.setK(mCalib->getK().cast<double>().eval());
+			ba.bundleAdjust();
 		}
 	}
 }
@@ -206,7 +233,8 @@ void PlaneCalibSystem::createKeyframe()
 {
 	auto frame_ = std::make_unique<Keyframe>(*mTracker->getFrame());
 	Keyframe *frame = frame_.get();
-	
+	frame->setPose(mTracker->getCurrentPose());
+
 	//Add keyframe to map
 	mMap->addKeyframe(std::move(frame_));
 
@@ -228,7 +256,8 @@ void PlaneCalibSystem::createKeyframe()
 		ba.addFrameToAdjust(*framePtr);
 	}
 
-	ba.bundleAdjust();
+	//ba.bundleAdjust();
+	
 }
 
 //void SlamSystem::idle()

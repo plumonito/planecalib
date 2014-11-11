@@ -13,6 +13,8 @@
 
 EIGEN_DEFINE_STL_VECTOR_SPECIALIZATION(Eigen::Vector4f);
 EIGEN_DEFINE_STL_VECTOR_SPECIALIZATION(Eigen::Matrix<unsigned char,1,32>);
+EIGEN_DEFINE_STL_VECTOR_SPECIALIZATION(Eigen::Matrix<double, 1, 6 >);
+EIGEN_DEFINE_STL_VECTOR_SPECIALIZATION(Eigen::Vector3d);
 
 namespace Eigen
 {
@@ -20,6 +22,12 @@ namespace Eigen
 	typedef Eigen::Matrix<float, 4, 4, Eigen::RowMajor> Matrix4fr;
 
 	typedef Eigen::Matrix<double, 3, 3, Eigen::RowMajor> Matrix3dr;
+
+	typedef Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor> MatrixXdr;
+	typedef Eigen::Matrix<float , Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor> MatrixXfr;
+
+	typedef Eigen::Array<double, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor> ArrayXdr;
+	typedef Eigen::Array<float, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor> ArrayXfr;
 }
 
 #include <cassert>

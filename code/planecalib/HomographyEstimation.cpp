@@ -14,6 +14,7 @@
 #include <opencv2/highgui.hpp>
 
 #include "log.h"
+#include "Profiler.h"
 #include "cvutils.h"
 
 namespace planecalib {
@@ -828,6 +829,86 @@ bool HomographyEstimation::estimateHomographyDirect(const cv::Mat1b &imgRef, con
     //    LOG("Not converged!");
 
     return converged;
+}
+
+
+/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// estimateHomographyDirectCeres
+/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+class EstimateHomographyDirectCeres_Error: public ceres::CostFunction
+{
+public:
+	EstimateHomographyDirectCeres_Error(const cv::Mat1b &refImg, const cv::Mat1b &dstImg):
+		mRefImg(refImg), mDstImg(dstImg), mRefDx(NULL,0,0), mRefDy(NULL,0,0)
+	{
+		this->set_num_residuals(mRefImg.cols*mRefImg.rows);
+
+		cv::Sobel(mRefImg, mRefDx_cv, CV_32F, 1, 0, 1);
+		cv::Sobel(mRefImg, mRefDy_cv, CV_32F, 0, 1, 1);
+
+		//Placement new
+		new (&mRefDx) Eigen::Map < Eigen::ArrayXfr, 0, Eigen::OuterStride<Eigen::Dynamic> >((float*)mRefDx_cv.data, mRefDx_cv.rows, mRefDx_cv.cols, Eigen::OuterStride<Eigen::Dynamic>(mRefDx_cv.step[0]));
+		new (&mRefDy) Eigen::Map < Eigen::ArrayXfr, 0, Eigen::OuterStride<Eigen::Dynamic> >((float*)mRefDy_cv.data, mRefDy_cv.rows, mRefDy_cv.cols, Eigen::OuterStride<Eigen::Dynamic>(mRefDy_cv.step[0]));
+
+		mRefDmag = (mRefDx.square() * mRefDy.square()).sqrt();
+		mRefDx /= mRefDmag;
+		mRefDy /= mRefDmag;
+	}
+
+	bool Evaluate(double const* const* parameters,
+		double* residuals,
+		double** jacobians) const;
+
+protected:
+	cv::Mat1b mRefImg;
+	cv::Mat1f mRefDx_cv;
+	cv::Mat1f mRefDy_cv;
+
+	Eigen::Map < Eigen::ArrayXfr, 0, Eigen::OuterStride<Eigen::Dynamic> > mRefDx;
+	Eigen::Map < Eigen::ArrayXfr, 0, Eigen::OuterStride<Eigen::Dynamic> > mRefDy;
+	Eigen::ArrayXfr mRefDmag;
+
+	cv::Mat1b mDstImg;
+};
+
+bool EstimateHomographyDirectCeres_Error::Evaluate(double const* const* parameters,
+	double* residuals,
+	double** jacobians) const
+{
+	return false;
+}
+
+bool HomographyEstimation::estimateHomographyDirectCeres(const cv::Mat1b &imgRef, const cv::Mat1b &imgNew, Eigen::Matrix3fr &transform)
+{
+	ProfileSection s("estimateHomographyDirectCeres");
+
+	ceres::Solver::Options options;
+	options.linear_solver_type = ceres::DENSE_QR;
+	//options.dense_linear_algebra_library_type = ceres::LAPACK;
+
+	ceres::Problem problem;
+
+	//Homography
+	Eigen::Matrix3dr homography;
+	homography.setIdentity();
+	problem.AddParameterBlock(homography.data(), 9);
+
+	int residualCount = imgRef.rows*imgRef.cols;
+	problem.AddResidualBlock(
+		new EstimateHomographyDirectCeres_Error(imgRef, imgNew),
+		NULL, homography.data());
+
+	ceres::Solver::Summary summary;
+	{
+		//ProfileSection ssolve("solve");
+		ceres::Solve(options, &problem, &summary);
+	}
+	//ceres::CostFunctionToFunctor
+	MYAPP_LOG << "estimateHomographyDirectCeres report:\n" << summary.FullReport();
+
+	transform = homography.cast<float>();
+	return true;
 }
 
 } /* namespace dtslam */

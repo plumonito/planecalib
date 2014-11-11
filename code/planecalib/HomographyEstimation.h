@@ -8,6 +8,7 @@
 #ifndef HOMOGRAPHYREPROJECTIONERROR_H_
 #define HOMOGRAPHYREPROJECTIONERROR_H_
 
+#include "eutils.h"
 #include <opencv2/core.hpp>
 
 namespace planecalib {
@@ -61,6 +62,8 @@ public:
     bool estimateAffineDirect(const cv::Mat1b &imgRef, const cv::Mat1b &imgNew, cv::Matx33f &transform);
 
     bool estimateHomographyDirect(const cv::Mat1b &imgRef, const cv::Mat1b &imgNew, cv::Matx33f &transform);
+
+	bool estimateHomographyDirectCeres(const cv::Mat1b &imgRef, const cv::Mat1b &imgNew, Eigen::Matrix3fr &transform);
 
 private:
     int mMaxIterations;
