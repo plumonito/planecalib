@@ -37,7 +37,7 @@ public:
 	void getFeaturesInView(const Eigen::Matrix3fr &pose, const Eigen::Vector2i &imageSize, int octaveCount, std::unordered_set<const Feature*> &featuresToIgnore, std::vector<std::vector<FeatureProjectionInfo>> &featuresInView);
 	FeatureProjectionInfo projectFeature(const Eigen::Matrix3fr &pose, Feature &feature);
 
-	Feature *createFeature(Keyframe &keyframe, const Eigen::Matrix3fr &poseInv, const Eigen::Vector2f &position, int octave, const Eigen::Ref<Eigen::Matrix<uchar, 1, 32>> &descriptor);
+	Feature *createFeature(Keyframe &keyframe, const Eigen::Matrix3fr &poseInv, const Eigen::Vector2f &position, int octave, const uchar *descriptor);
 
 	void moveToGarbage(Feature &feature);
 
@@ -79,9 +79,11 @@ public:
 	FeatureMeasurement()
 	{}
 
-	FeatureMeasurement(Feature *feature, Keyframe *keyframe, const Eigen::Vector2f &position, int octave, const Eigen::Ref<Eigen::Matrix<uchar, 1, 32>> &descriptor) :
-		mFeature(feature), mKeyframe(keyframe), mPosition(position), mOctave(octave), mDescriptor(descriptor)
+	FeatureMeasurement(Feature *feature, Keyframe *keyframe, const Eigen::Vector2f &position, int octave, const uchar *descriptor) :
+		mFeature(feature), mKeyframe(keyframe), mPosition(position), mOctave(octave)
 	{
+		Eigen::Map<Eigen::Matrix<uchar, 1, 32>> descMap(const_cast<uchar *>(descriptor));
+		mDescriptor = descMap;
 	}
 
 	Feature &getFeature() const {return *mFeature;}

@@ -53,6 +53,7 @@ void Keyframe::init(const cv::Mat3b &imageColor, const cv::Mat1b &imageGray)
 	//Extract key points
 	mKeypoints->resize(mPyramid.getOctaveCount());
 	mDescriptors.resize(mPyramid.getOctaveCount());
+	mDescriptorsEigen.reserve(mPyramid.getOctaveCount());
 
 	for(int octave=0; octave<mPyramid.getOctaveCount(); octave++)
 	{
@@ -70,6 +71,9 @@ void Keyframe::init(const cv::Mat3b &imageColor, const cv::Mat1b &imageGray)
 			keypoint.pt = scale*keypoint.pt;
 			keypoint.size *= scale;
 	    }
+
+		//Eigen
+		mDescriptorsEigen.push_back(EigenDescriptorMap(mDescriptors[octave].data, mDescriptors[octave].rows, mDescriptors[octave].cols));
     }
 }
 

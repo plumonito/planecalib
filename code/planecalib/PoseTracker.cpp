@@ -154,7 +154,7 @@ bool PoseTracker::trackFrame(std::unique_ptr<Keyframe> frame_)
 		const int scale = 1 << octave;
 		{
 			ProfileSection sm("matching");
-
+			
 			auto &imgKeypoints = mFrame->getKeypoints(octave);
 			auto &imgDesc = mFrame->getDescriptors(octave);
 			//std::vector<cv::Point2f> refPoints, imgPoints;
@@ -166,132 +166,44 @@ bool PoseTracker::trackFrame(std::unique_ptr<Keyframe> frame_)
 
 				auto &refDesc_i = m.getDescriptor();
 
-				std::vector<cv::Point2f> imgKeypoints_i;
-				std::vector<Eigen::Matrix<uchar, 1, 32>> imgDesc_i;
-				{
-					ProfileSection ss("copydesc");
+				//Find best match
+				int bestScore = std::numeric_limits<int>::max();
+				cv::Point2f bestPosition;
+				int secondScore = std::numeric_limits<int>::max();
 				for (int j = 0; j < (int)imgKeypoints.size(); j++)
 				{
 					auto diff = projection.getPosition() - eutils::FromCV(imgKeypoints[j].pt);
 					if (diff.dot(diff) < 20 * 20 || mIsLost)
 					{
-						imgKeypoints_i.push_back(imgKeypoints[j].pt);
-						imgDesc_i.emplace_back();
-						imgDesc_i.back() = imgDesc.row(j);
+						int score = cv::normHamming(refDesc_i.data(), &imgDesc(j,0), 32);
+						if (score < bestScore)
+						{
+							secondScore = bestScore;
+							bestScore = score;
+							bestPosition = imgKeypoints[j].pt;
+						}
+						else if (score < secondScore)
+						{
+							secondScore = score;
+						}
 					}
-				}
 				}
 
-				cv::Mat1b refDescMat(1,32,(uchar)refDesc_i.data());
-				cv::Mat1b imgDescMat(imgDesc_i.size(),32,(uchar*)imgDesc_i.data());
-				std::vector<std::vector<cv::DMatch>> mmm;
-				{
-				ProfileSection ss("knn");
-				matcher.knnMatch(refDescMat, imgDescMat, mmm, 2);
-				}
+				//Is match good enough?
 				bool add = false;
-		
-				if (!mmm.empty() && !mmm[0].empty())
+				if (bestScore < std::numeric_limits<int>::max())
 				{
-					if (mmm[0].size() == 1)
+					if (bestScore < 0.8f * secondScore)
 						add = true;
-					else
-					{
-						auto &m1 = mmm[0][0];
-						auto &m2 = mmm[0][1];
-						if (m1.distance < 0.8f * m2.distance)
-							add = true;
-					}
 				}
 
 				if (add)
 				{
-					auto &m1 = mmm[0][0];
-					auto &imgPos = imgKeypoints_i[m1.trainIdx];
 					refPoints.push_back(eutils::ToCVPoint(feature.getPosition()));
-					imgPoints.push_back(imgPos);
+					imgPoints.push_back(bestPosition);
 				}
 			}
 		}
-
-		//cv::ORB featDet(1000, 2, 1);
-		
-		//std::vector<cv::KeyPoint> &refKeypoints = mMap->getKeyframes().front()->getKeypoints(octave);
-		//const cv::Mat1b &refDesc = mMap->getKeyframes().front()->getDescriptors(octave);
-		//featDet(mMap->getKeyframes().front()->getImage(octave), cv::noArray(), refKeypoints, refDesc);
-		
-		//std::vector<cv::KeyPoint> &imgKeypoints = mFrame->getKeypoints(octave);
-		//const cv::Mat1b &imgDesc = mFrame->getDescriptors(octave);
-		////featDet(mFrame->getImage(octave), cv::noArray(), imgKeypoints, imgDesc);
-
-		////auto &refKeypoints = mMap->getKeyframes().front()->getKeypoints(octave);
-		////auto &refDesc = mMap->getKeyframes().front()->getDescriptors(octave);
-
-		////auto &imgKeypoints = mFrame->getKeypoints(octave);
-		////auto &imgDesc = mFrame->getDescriptors(octave);
-
-		//cv::Matx33f initialPose = eutils::ToCV(mCurrentPose);
-		//{
-		//	ProfileSection s("matching");
-		//	for (int i = 0; i < (int)refKeypoints.size(); i++)
-		//	{
-		//		std::vector<cv::KeyPoint> refKeypoints_i;
-		//		refKeypoints_i.push_back(refKeypoints[i]);
-
-		//		cv::Mat1b refDesc_i(1, 32);
-		//		for (int c = 0; c < 32; c++)
-		//			refDesc_i(0, c) = refDesc(i, c);
-
-		//		std::vector<int> validImgIndices;
-		//		cv::Point2f refPosTransf = cvutils::HomographyPoint(initialPose, refKeypoints_i[0].pt);
-		//		for (int j = 0; j < (int)imgKeypoints.size(); j++)
-		//		{
-		//			//auto diff = refKeypoints_i[0].pt - imgKeypoints[j].pt;
-		//			auto diff = refPosTransf - imgKeypoints[j].pt;
-		//			if (diff.dot(diff) < 20 * 20 || mIsLost)
-		//			{
-		//				validImgIndices.push_back(j);
-		//			}
-		//		}
-
-		//		std::vector<cv::KeyPoint> imgKeypoints_i(validImgIndices.size());
-		//		cv::Mat1b imgDesc_i(validImgIndices.size(), 32);
-		//		for (int j = 0; j < (int)validImgIndices.size(); j++)
-		//		{
-		//			imgKeypoints_i[j] = imgKeypoints[validImgIndices[j]];
-		//			for (int c = 0; c < 32; c++)
-		//				imgDesc_i(j, c) = imgDesc(validImgIndices[j], c);
-		//		}
-
-		//		//imgDesc_i = imgDesc;
-		//		//imgKeypoints_i = imgKeypoints;
-		//		std::vector<std::vector<cv::DMatch>> mmm;
-		//		matcher.knnMatch(refDesc_i, imgDesc_i, mmm, 2);
-		//		bool add = false;
-		//	
-		//		if (!mmm.empty() && !mmm[0].empty())
-		//		{
-		//			if (mmm[0].size() == 1)
-		//				add = true;
-		//			else
-		//			{
-		//				auto &m1 = mmm[0][0];
-		//				auto &m2 = mmm[0][1];
-		//				if (m1.distance < 0.8f * m2.distance)
-		//					add = true;
-		//			}
-		//		}
-
-		//		if (add)
-		//		{
-		//			auto &m1 = mmm[0][0];
-		//			auto &imgPos = imgKeypoints_i[m1.trainIdx].pt;
-		//			auto &refPos = refKeypoints_i[m1.queryIdx].pt;
-		//			refPoints.push_back(refPos);
-		//			imgPoints.push_back(imgPos);
-		//		}
-		//	}
-		//}
 
 		//Homography
 		//MYAPP_LOG << "Matches=" << refPoints.size() << "\n";

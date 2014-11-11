@@ -22,6 +22,9 @@ class FeatureMeasurement;
 class Keyframe
 {
 public:
+	typedef Eigen::Matrix<uchar, Eigen::Dynamic, 32, Eigen::RowMajor> EigenDescriptorMatrix;
+	typedef Eigen::Map<EigenDescriptorMatrix> EigenDescriptorMap;
+
 	Keyframe();
 	Keyframe(const Keyframe &copyFrom);
 	~Keyframe();
@@ -49,14 +52,9 @@ public:
 	std::vector<cv::KeyPoint> &getKeypoints(int octave) const {return (*mKeypoints)[octave];}
 	
 	//Note: descriptors are shared between all copies of the frame
-	Eigen::Map<Eigen::Matrix<uchar, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>> getDescriptors(int octave) const
+	const EigenDescriptorMap &getDescriptors(int octave) const
 	{ 
-		auto &cvMat = mDescriptors[octave];
-		return Eigen::Map<Eigen::Matrix<uchar, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>>(cvMat.data, cvMat.rows, cvMat.cols);
-	}
-	Eigen::Map<Eigen::Matrix<uchar, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>>::RowXpr getDescriptor(int octave, int idx)
-	{
-		return getDescriptors(octave).row(idx);
+		return mDescriptorsEigen[octave];
 	}
 
 	const Eigen::Matrix3fr &getPose() const {return mPose;}
@@ -84,6 +82,7 @@ protected:
 	std::shared_ptr<std::vector<std::vector<cv::KeyPoint>>> mKeypoints;
 
 	std::vector<cv::Mat1b> mDescriptors;
+	std::vector<EigenDescriptorMap> mDescriptorsEigen;
 
 	Eigen::Matrix3fr mPose;
 

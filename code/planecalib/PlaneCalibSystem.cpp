@@ -77,7 +77,7 @@ bool PlaneCalibSystem::init(double timestamp, cv::Mat3b &imgColor, cv::Mat1b &im
 		for (uint i = 0; i < keypoints.size(); i++)
 		{
 			auto &kp = keypoints[i];
-			mMap->createFeature(*pkeyframe, poseInv, Eigen::Vector2f(kp.pt.x, kp.pt.y), octave, pkeyframe->getDescriptor(octave,i));
+			mMap->createFeature(*pkeyframe, poseInv, Eigen::Vector2f(kp.pt.x, kp.pt.y), octave, &pkeyframe->getDescriptors(octave)(i,0));
 		}
 
 		MYAPP_LOG << "Created " << keypoints.size() << " features in octave " << octave << "\n";
