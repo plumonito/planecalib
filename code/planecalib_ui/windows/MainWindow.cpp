@@ -32,6 +32,7 @@ bool MainWindow::init(PlaneCalibApp *app, const Eigen::Vector2i &imageSize)
 	resize();
 
 	//mKeyBindings.addBinding(false, 't', static_cast<KeyBindingHandler<BaseWindow>::SimpleBindingFunc>(&ARWindow::toggleDisplayType), "Toggle display mode.");
+	mKeyBindings.addBinding(false, 'l', static_cast<KeyBindingHandler<BaseWindow>::SimpleBindingFunc>(&MainWindow::logData), "Log data.");
 
 	mRefTexture.create(GL_RGB, eutils::ToSize(imageSize));
 	mRefTexture.update(mSystem->getMap().getKeyframes()[0]->getColorImage());
@@ -143,6 +144,28 @@ void MainWindow::draw()
 		TextRendererStream ts(mShaders->getText());
 		ts << "Alpha0=" << mSystem->getCalib().getInitialAlpha() << "\n";
 		ts << "K=" << mSystem->getCalib().getK() << "\nNormal=" << mSystem->getCalib().getNormal();
+	}
+}
+
+void MainWindow::logData()
+{
+	MatlabDataLog::Instance().SetValue("K", mSystem->getCalib().getK());
+	MatlabDataLog::Instance().SetValue("n", mSystem->getCalib().getNormal());
+
+	//Add features
+	std::unordered_map<Feature *, int> featureMap;
+	int id=0;
+	for each (auto &feature in mSystem->getMap().getFeatures())
+	{
+		featureMap.insert(std::make_pair(feature.get(), ++id));
+		MatlabDataLog::Instance().AddValue("features", feature->getPosition());
+	}
+
+	//Add keyframes
+	for each (auto &frame in mSystem->getMap().getKeyframes())
+	{
+		MatlabDataLog::Instance().AddCell("H", frame->getPose());
+		MatlabDataLog::Instance().AddCell("H", frame->getPose());
 	}
 }
 

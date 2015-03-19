@@ -1,6 +1,9 @@
 #include "log.h"
 #include <iostream>
 #include <opencv2/core.hpp>
+#include <chrono>
+#include <ctime>
+#include "stdutils.h"
 
 namespace planecalib
 {
@@ -23,4 +26,20 @@ namespace planecalib
 	{
 		mStream.flush();
 	}
+
+	//Matlab
+	MatlabDataLog &MatlabDataLog::Instance()
+	{
+		if (!gInstance)
+		{
+			gInstance.reset(new MatlabDataLog());
+			gInstance->mStream.open(gInstance->mLogPath + "/" + gInstance->mLogFilename);
+
+			std::string nows = stdutils::TimePointToStr(std::chrono::system_clock::now());
+			gInstance->SetValue("varsTime", nows);
+		}
+
+		return *gInstance;
+	}
+
 }

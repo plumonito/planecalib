@@ -40,6 +40,7 @@ public:
 
     void draw();
 
+	void logData();
 protected:
     ViewportTiler mTiler;
 

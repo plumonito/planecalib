@@ -52,16 +52,8 @@ namespace planecalib
 class MatlabDataLog
 {
 public:
-	static MatlabDataLog &Instance()
-	{
-		if(!gInstance)
-		{
-			gInstance.reset(new MatlabDataLog());
-			gInstance->mStream.open(gInstance->mLogPath + "/" + gInstance->mLogFilename);
-		}
+	static MatlabDataLog &Instance();
 
-		return *gInstance;
-	}
 	static std::ofstream &Stream()
 	{
 		return Instance().mStream;
@@ -79,13 +71,27 @@ public:
 		Instance().mVariables.insert(varName);
 		Stream() << varName << "=[" << value << "];\n" << std::flush;
 	}
+	template<>
+	static void SetValue(const std::string &varName, const std::string &value)
+	{
+		Instance().mVariables.insert(varName);
+		Stream() << varName << "=['" << value << "'];\n" << std::flush;
+	}
 
 	template<class T>
-	static void AddValue(const std::string &varName, const T &value)
+	static void AddValue(const std::string &varName, const T &value, bool newRow=false)
 	{
-		if(Instance().mVariables.find(varName)==Instance().mVariables.end())
-			ClearVar(varName);
-		Stream() << varName << "=[" << varName << "," << value << "];\n" << std::flush;
+		if (Instance().mVariables.find(varName) == Instance().mVariables.end())
+		{
+			//ClearVar(varName);
+			Instance().mVariables.insert(varName);
+			Stream() << varName << "=[" << value << "];\n" << std::flush;
+		}
+		else
+		{
+			char sep = newRow ? ';' : ',';
+			Stream() << varName << "=[" << varName << sep << '[' << value << "]];\n" << std::flush;
+		}
 	}
 
 	template<class T>
@@ -127,7 +133,7 @@ private:
     std::unordered_map<std::string, int> mCellArrays;
 
     MatlabDataLog():
-    	mLogPath("C:/code/dslam/code/matlab"),
+    	mLogPath("."),
     	mLogFilename("vars.m")
     {}
 };

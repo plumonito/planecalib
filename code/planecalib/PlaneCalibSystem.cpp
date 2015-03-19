@@ -215,16 +215,17 @@ void PlaneCalibSystem::processImage(double timestamp, cv::Mat3b &imgColor, cv::M
 			mCalib->calibrate(allPoses, mTracker->getImageSize());
 			//MYAPP_LOG << "K=" << K << "\n";
 
-			CalibratedBundleAdjuster ba;
-			ba.setMap(mMap.get());
-			ba.setOutlierThreshold(2.5f);
-			ba.setUseLocks(false);
-			for (auto &framePtr : mMap->getKeyframes())
-			{
-				ba.addFrameToAdjust(*framePtr);
-			}
-			ba.setK(mCalib->getK().cast<double>().eval());
-			ba.bundleAdjust();
+			// THIS DOESN'T WORK YET!!!
+			//CalibratedBundleAdjuster ba;
+			//ba.setMap(mMap.get());
+			//ba.setOutlierThreshold(2.5f);
+			//ba.setUseLocks(false);
+			//for (auto &framePtr : mMap->getKeyframes())
+			//{
+			//	ba.addFrameToAdjust(*framePtr);
+			//}
+			//ba.setK(mCalib->getK().cast<double>().eval());
+			//ba.bundleAdjust();
 		}
 	}
 }

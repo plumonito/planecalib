@@ -107,13 +107,16 @@ public:
 		Eigen::Matrix<T, 3, 1> KiHC2;
 		KiHC2 = Kinv*HC2;
 
-		T norm1 = KiHC1.norm();
-		T norm2 = KiHC2.norm();
+		T norm1Sq = KiHC1.squaredNorm();
+		T norm1 = sqrt(norm1Sq);
+		T norm2Sq = KiHC2.squaredNorm();
+		T norm2 = sqrt(norm2Sq);
 
 		//Residuals
 		residuals[0] = KiHC1.dot(KiHC2) / (norm1*norm2);
-		residuals[1] = T(1)-norm2/norm1;
+		residuals[1] = T(1)-norm2Sq/norm1Sq;
         return true;
+		
     }
 
 private:
