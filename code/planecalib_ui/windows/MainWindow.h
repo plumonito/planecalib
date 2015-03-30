@@ -40,7 +40,9 @@ public:
 
     void draw();
 
+	void doFullBA();
 	void logData();
+
 protected:
     ViewportTiler mTiler;
 

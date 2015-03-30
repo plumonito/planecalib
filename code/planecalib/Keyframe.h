@@ -87,6 +87,10 @@ protected:
 	Eigen::Matrix3fr mPose;
 
 	std::vector<FeatureMeasurement *> mMeasurements;
+
+public:
+	Eigen::Matrix3fr mPose3DR;
+	Eigen::Vector3f mPose3DT;
 };
 
 } 

@@ -165,18 +165,18 @@ bool CalibratedBundleAdjuster::bundleAdjust()
 		cv::Matx33d R;
 		ceres::AngleAxisToRotationMatrix(&pose[0], ceres::RowMajorAdapter3x3<double>(R.val));
 		cv::Matx34f Rt;
-		Rt(0, 0) = R(0, 0);
-		Rt(0, 1) = R(0, 1);
-		Rt(0, 2) = R(0, 2);
-		Rt(1, 0) = R(1, 0);
-		Rt(1, 1) = R(1, 1);
-		Rt(1, 2) = R(1, 2);
-		Rt(2, 0) = R(2, 0);
-		Rt(2, 1) = R(2, 1);
-		Rt(2, 2) = R(2, 2);
-		Rt(0, 3) = pose[3];
-		Rt(1, 3) = pose[4];
-		Rt(2, 3) = pose[5];
+		Rt(0, 0) = (float)R(0, 0);
+		Rt(0, 1) = (float)R(0, 1);
+		Rt(0, 2) = (float)R(0, 2);
+		Rt(1, 0) = (float)R(1, 0);
+		Rt(1, 1) = (float)R(1, 1);
+		Rt(1, 2) = (float)R(1, 2);
+		Rt(2, 0) = (float)R(2, 0);
+		Rt(2, 1) = (float)R(2, 1);
+		Rt(2, 2) = (float)R(2, 2);
+		Rt(0, 3) = (float)pose[3];
+		Rt(1, 3) = (float)pose[4];
+		Rt(2, 3) = (float)pose[5];
 		P2 = cvK*Rt;
 	}
 

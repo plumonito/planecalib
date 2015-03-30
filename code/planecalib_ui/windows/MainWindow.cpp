@@ -33,6 +33,7 @@ bool MainWindow::init(PlaneCalibApp *app, const Eigen::Vector2i &imageSize)
 
 	//mKeyBindings.addBinding(false, 't', static_cast<KeyBindingHandler<BaseWindow>::SimpleBindingFunc>(&ARWindow::toggleDisplayType), "Toggle display mode.");
 	mKeyBindings.addBinding(false, 'l', static_cast<KeyBindingHandler<BaseWindow>::SimpleBindingFunc>(&MainWindow::logData), "Log data.");
+	mKeyBindings.addBinding(false, 'b', static_cast<KeyBindingHandler<BaseWindow>::SimpleBindingFunc>(&MainWindow::doFullBA), "Full BA.");
 
 	mRefTexture.create(GL_RGB, eutils::ToSize(imageSize));
 	mRefTexture.update(mSystem->getMap().getKeyframes()[0]->getColorImage());
@@ -167,6 +168,11 @@ void MainWindow::logData()
 		MatlabDataLog::Instance().AddCell("H", frame->getPose());
 		MatlabDataLog::Instance().AddCell("H", frame->getPose());
 	}
+}
+
+void MainWindow::doFullBA()
+{
+	mSystem->doFullBA();
 }
 
 } /* namespace dtslam */

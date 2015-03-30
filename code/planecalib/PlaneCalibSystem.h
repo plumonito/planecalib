@@ -36,7 +36,8 @@ public:
 	//Handles thread creation and other maintenance. This should be called when idle and after processImage().
 	void idle();
 
-	
+	void doFullBA();
+
 protected:
 	////////////////////////////////////////////////////////
 	// Members

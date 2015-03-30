@@ -71,6 +71,9 @@ protected:
 									//to match the feature.
 
 	std::vector<std::unique_ptr<FeatureMeasurement>> mMeasurements;
+
+public:
+	Eigen::Vector3f mPosition3D;
 };
 
 class FeatureMeasurement
