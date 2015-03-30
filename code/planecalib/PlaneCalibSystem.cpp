@@ -3,6 +3,7 @@
 #include <chrono>
 #include <opencv2/imgproc.hpp>
 #include <opencv2/video.hpp>
+#include <opencv2/calib3d.hpp>
 #include <ceres/rotation.h>
 
 #include "Keyframe.h"
@@ -261,6 +262,8 @@ void PlaneCalibSystem::createKeyframe()
 	
 }
 
+
+
 void PlaneCalibSystem::doFullBA()
 {
 	//Set pose for reference frame
@@ -269,6 +272,8 @@ void PlaneCalibSystem::doFullBA()
 	Eigen::Vector3f basis1, basis2, basis3;
 	basis3 = mCalib->getNormal().cast<float>();
 	HomographyCalibrationError::GetBasis(basis3.data(), basis1, basis2);
+	basis1.normalize();
+	basis2.normalize();
 
 	refFrame.mPose3DR(0, 0) = basis1[0];
 	refFrame.mPose3DR(1, 0) = basis1[1];
@@ -282,12 +287,138 @@ void PlaneCalibSystem::doFullBA()
 	refFrame.mPose3DR(1, 2) = basis3[1];
 	refFrame.mPose3DR(2, 2) = basis3[2];
 
-	refFrame.mPose3DT = -refFrame.mPose3DR*basis3; //RefCenter = -R'*t = Normal (exactly one unit away from plane center) => t = -R*normal
+	Eigen::Vector3f refCenter = basis3;
+	refFrame.mPose3DT = -refFrame.mPose3DR*refCenter; //RefCenter = -R'*t = Normal (exactly one unit away from plane center) => t = -R*normal
+
+	//Invert K
+	Eigen::Matrix3fr Kinv;
+	float fi = 1.0f / mCalib->getK()(0, 0);
+	Kinv << fi, 0, -fi*mCalib->getK()(0, 2), 0, fi, -fi*mCalib->getK()(1, 2), 0, 0, 1;
 
 	//Triangulate all features
-	for (auto &feature : mMap->getFeatures())
+	for (auto &pfeature : mMap->getFeatures())
 	{
+		auto &feature = *pfeature;
+		
+		Eigen::Vector3f m;
+		m << feature.getPosition()[0], feature.getPosition()[1], 1;
 
+		Eigen::Vector3f xn = Kinv * m;
+
+		Eigen::Vector3f xdir = refFrame.mPose3DR.transpose()*xn;
+		
+		//Intersect with plane
+		//If point in line is x=a*t + b
+		//and point in plane is dot(x,n)-d = 0
+		//then t=(d-dot(b,n))/dot(a,n)
+		//and x = a*(d-dot(b,n))/dot(a,n) + b
+		//
+		//Here b=refCenter, a=xdir, n=[0,0,1]', d=0
+		feature.mPosition3D = refCenter - (refCenter[2]/xdir[2])*xdir; 
+		feature.mPosition3D[2] = 0; //Just in case
+
+		//Check
+		//Eigen::Vector3f tl = xdir.cross(feature.mPosition3D-refCenter);
+		//float tp = feature.mPosition3D[2];
+		Eigen::Vector3f mm = mCalib->getK() * (refFrame.mPose3DR*feature.mPosition3D + refFrame.mPose3DT);
+		Eigen::Vector2f m2;
+		m2 << mm[0] / mm[2], mm[1] / mm[2];
+
+		float diff = (m2 - feature.getPosition()).norm();
+		MatlabDataLog::Instance().AddValue("diffTest", diff);
+	}
+
+	//Estimate frame positions
+	cv::Mat1f cvK(3,3,const_cast<float*>(mCalib->getK().data()));
+	for (auto &framep : mMap->getKeyframes())
+	{
+		auto &frame = *framep;
+		
+		//Skip ref frame
+		if (&frame == &refFrame)
+			continue;
+
+		//Build constraints
+		std::vector<cv::Point3f> cvWorldPoints;
+		std::vector<cv::Point2f> cvImagePoints;
+		for (auto &mp : frame.getMeasurements())
+		{
+			auto &m = *mp;
+			cvImagePoints.push_back(cv::Point2f(m.getPosition()[0], m.getPosition()[1]));
+			cvWorldPoints.push_back(cv::Point3f(m.getFeature().mPosition3D[0], m.getFeature().mPosition3D[1], m.getFeature().mPosition3D[2]));
+		}
+
+		//PnP
+		cv::Vec3d rvec, tvec;
+		cv::Matx33d cvR;
+		Eigen::Map<Eigen::Matrix3dr> mapR(cvR.val);
+
+		mapR = refFrame.mPose3DR.cast<double>();
+		cv::Rodrigues(cvR, rvec);
+		tvec[0] = refFrame.mPose3DT[0];
+		tvec[1] = refFrame.mPose3DT[1];
+		tvec[2] = refFrame.mPose3DT[2];
+
+		//cv::Vec4f dist(0, 0, 0, 0);
+		cv::solvePnP(cvWorldPoints, cvImagePoints, cvK, cv::noArray(), rvec, tvec, true, cv::SOLVEPNP_ITERATIVE);
+
+		//Save
+		cv::Rodrigues(rvec, cvR);
+		
+		frame.mPose3DR = mapR.cast<float>();
+		frame.mPose3DT[0] = (float)tvec[0];
+		frame.mPose3DT[1] = (float)tvec[1];
+		frame.mPose3DT[2] = (float)tvec[2];
+	}
+
+	//BAAAAA!!!
+	CalibratedBundleAdjuster ba;
+	ba.setUseLocks(false);
+	ba.setOutlierThreshold(3);
+	ba.setK(mCalib->getK().cast<double>());
+	ba.setMap(mMap.get());
+	for (auto &framep : mMap->getKeyframes())
+	{
+		ba.addFrameToAdjust(*framep);
+	}
+	//ba.addFrameToAdjust(**mMap->getKeyframes().begin());
+	ba.bundleAdjust();
+	MatlabDataLog::Instance().AddValue("K", ba.getK());
+
+	//Log
+	MatlabDataLog::Instance().AddValue("Kold", mCalib->getK());
+	MatlabDataLog::Instance().AddValue("Nold", mCalib->getNormal());
+	for (auto &framep : mMap->getKeyframes())
+	{
+		auto &frame = *framep;
+		MatlabDataLog::Instance().AddCell("poseR", frame.mPose3DR);
+		MatlabDataLog::Instance().AddCell("poseT", frame.mPose3DT);
+		MatlabDataLog::Instance().AddCell("poseH", frame.getPose());
+
+		MatlabDataLog::Instance().AddCell("posM");
+		MatlabDataLog::Instance().AddCell("posRt");
+		MatlabDataLog::Instance().AddCell("posH");
+		for (auto &mp : frame.getMeasurements())
+		{
+			auto &m = *mp;
+
+			MatlabDataLog::Instance().AddValueToCell("posM", m.getPosition());
+
+			Eigen::Vector3f mm;
+			Eigen::Vector2f m2;
+
+			mm = ba.getK().cast<float>() * (frame.mPose3DR*m.getFeature().mPosition3D + frame.mPose3DT);
+			m2 << mm[0] / mm[2], mm[1] / mm[2];
+
+			MatlabDataLog::Instance().AddValueToCell("posRt", m2);
+
+			Eigen::Vector3f p; p << m.getFeature().getPosition()[0], m.getFeature().getPosition()[1], 1;
+			mm = frame.getPose() * p;
+			m2 << mm[0] / mm[2], mm[1] / mm[2];
+
+			MatlabDataLog::Instance().AddValueToCell("posH", m2);
+
+		}
 	}
 }
 

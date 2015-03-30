@@ -15,6 +15,7 @@ public:
 	}
 
 	double getInitialAlpha() const { return mInitialAlpha; }
+	
 	const Eigen::Matrix3fr &getK() const { return mK; }
 	const Eigen::Vector3d &getNormal() const { return mNormal; }
 

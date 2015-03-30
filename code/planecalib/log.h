@@ -118,7 +118,7 @@ public:
 		if(it==Instance().mCellArrays.end())
 			AddCell(varName, value);
 		else
-			Stream() << varName << "{" << it->second << "}=[" << varName << "{" << it->second << "}," << value << "];\n" << std::flush;
+			Stream() << varName << "{" << it->second << "}=[" << varName << "{" << it->second << "},[" << value << "]];\n" << std::flush;
 	}
 
 private:
