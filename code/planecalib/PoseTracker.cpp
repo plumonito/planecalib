@@ -213,8 +213,9 @@ bool PoseTracker::trackFrame(std::unique_ptr<Keyframe> frame_)
 		{
 			//Create cv vectors
 			std::vector<cv::Point2f> refPoints, imgPoints;
-			for (auto &match : mMatches)
+			for (int i = 0; i < (int)mMatches.size(); i++)
 			{
+				auto &match = mMatches[i];
 				refPoints.push_back(eutils::ToCVPoint(match.getFeature().getPosition()));
 				imgPoints.push_back(eutils::ToCVPoint(match.getPosition()));
 			}
@@ -252,11 +253,16 @@ bool PoseTracker::trackFrame(std::unique_ptr<Keyframe> frame_)
 				ProfileSection s("refineHomography");
 				cvH = hest.estimateCeres(cvH, imgPoints, refPoints, octaveVec, 2.5, inliersVec);
 			}
+			std::vector<FeatureMatch> goodMatches;
 			int inlierCountBefore = mask.sum();
 			int inlierCountAfter = 0;
-			for (auto &inlier : inliersVec)
-			if (inlier)
-				inlierCountAfter++;
+			for (int i = 0; i<(int)mMatches.size(); i++)
+			{
+				if (inliersVec[i])
+					goodMatches.push_back(mMatches[i]);
+			}
+			inlierCountAfter = goodMatches.size();
+			mMatches = std::move(goodMatches);
 			//MYAPP_LOG << "Inliers before=" << inlierCountBefore << ", inliers after=" << inlierCountAfter << "\n";
 
 			if (inlierCountAfter > 50)
@@ -284,6 +290,8 @@ bool PoseTracker::trackFrame(std::unique_ptr<Keyframe> frame_)
 	mReprojectionErrors.resize(matchCount);
 	for (int i = 0; i < matchCount; i++)
 	{
+		auto &match = mMatches[i];
+		
 		mReprojectionErrors[i].isInlier = true;
 	}
 

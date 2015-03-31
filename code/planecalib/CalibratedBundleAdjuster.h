@@ -51,6 +51,18 @@ protected:
 	std::unordered_set<Feature *> mFeaturesToAdjust;
 
 	Eigen::Matrix3dr mK;
+
+	Eigen::Vector3d mParamsK;
+	std::unordered_map<Keyframe *, Eigen::Matrix<double, 1, 6>, std::hash<Keyframe*>, std::equal_to<Keyframe*>, Eigen::aligned_allocator<std::pair<Keyframe*,Eigen::Matrix<double,1,6>>>> mParamsPoses;
+	std::unordered_map<Feature *, Eigen::Vector2d, std::hash<Feature*>, std::equal_to<Feature*>, Eigen::aligned_allocator<std::pair<Feature*, Eigen::Vector2d>>> mParamsFeatures;
+	std::vector<FeatureMeasurement *> mMeasurementsInProblem;
+
+	Eigen::Matrix<double, 1, 6> &getPoseParams(Keyframe *framep);
+	Eigen::Vector2d &getFeatureParams(Feature *featurep);
+
+	bool isInlier(const FeatureMeasurement &measurement, Eigen::Matrix<double,1,6> &pose, const Eigen::Vector2d &position);
+
+	void getInliers(int &inlierCount);
 };
 
 }

@@ -27,7 +27,7 @@ public:
 	}
 
 	CalibratedReprojectionError(const int octave, const Eigen::Vector2f &imgPoint) :
-		mScale(1<<octave), mImgPoint(imgPoint) 
+		mScale(1 << octave), mImgPoint(imgPoint)
 	{
 	}
 
@@ -84,12 +84,71 @@ void CalibratedBundleAdjuster::addFrameToAdjust(Keyframe &newFrame)
 			Feature &feature = (*itM)->getFeature();
 
 			//We need at least two measurements to bundle adjust
-			if(feature.getMeasurements().size() > 1)
+			//if(feature.getMeasurements().size() > 1)
 			{
 				mFeaturesToAdjust.insert(&feature);
 			}
 		}
 	}
+}
+
+bool CalibratedBundleAdjuster::isInlier(const FeatureMeasurement &measurement, Eigen::Matrix<double, 1, 6> &pose, const Eigen::Vector2d &position)
+{
+	CalibratedReprojectionError err(measurement);
+	Eigen::Vector2d residuals;
+	err(mParamsK.data() , pose.data(), pose.data() + 3, position.data(), residuals.data());
+
+	if(residuals.squaredNorm() < mOutlierPixelThresholdSq)
+		return true;
+	else
+		return false;
+}
+
+void CalibratedBundleAdjuster::getInliers(int &inlierCount)
+{
+	inlierCount = 0;
+	for (auto &mp : mMeasurementsInProblem)
+	{
+		auto &m = *mp;
+		auto &poseParams = mParamsPoses.find(&m.getKeyframe())->second;
+		auto &featureParams = mParamsFeatures.find(&m.getFeature())->second;
+
+		if (isInlier(m, poseParams, featureParams))
+			inlierCount++;
+	}
+}
+
+Eigen::Matrix<double, 1, 6> &CalibratedBundleAdjuster::getPoseParams(Keyframe *framep)
+{
+	auto &frame = *framep;
+	auto itNew = mParamsPoses.emplace(&frame, Eigen::Matrix<double,1,6>());
+	auto &params = itNew.first->second;
+	if (itNew.second)
+	{
+		//Is new, create
+		Eigen::Matrix3dr Rd = frame.mPose3DR.cast<double>();
+		ceres::RotationMatrixToAngleAxis(CeresUtils::FixedRowMajorAdapter3x3<const double>(Rd.data()), &params[0]);
+		params[3] = frame.mPose3DT[0];
+		params[4] = frame.mPose3DT[1];
+		params[5] = frame.mPose3DT[2];
+	}
+
+	return params;
+}
+
+Eigen::Vector2d &CalibratedBundleAdjuster::getFeatureParams(Feature *featurep)
+{
+	auto &feature = *featurep;
+	auto itNew = mParamsFeatures.emplace(&feature, Eigen::Vector2d());
+	auto &params = itNew.first->second;
+	if (itNew.second)
+	{
+		//Is new, create
+		params[0] = feature.mPosition3D[0];
+		params[1] = feature.mPosition3D[1];
+	}
+
+	return params;
 }
 
 bool CalibratedBundleAdjuster::bundleAdjust()
@@ -98,44 +157,6 @@ bool CalibratedBundleAdjuster::bundleAdjust()
 
 	if(mFramesToAdjust.empty())
 		return true;
-
-	//Gather relevant measurements
-	Eigen::Vector3d kparams;
-	std::vector<Eigen::Matrix<double, 1, 6>> paramsPoses;
-	std::vector<Eigen::Vector2d> paramsFeatures;
-	std::unordered_map<Keyframe *, int> frameMap;
-	std::unordered_map<Feature *, int> featureMap;
-
-	//Store pose
-	paramsPoses.resize(mMap->getKeyframes().size());
-	for (int i = 0; i < (int)paramsPoses.size(); i++)
-	{
-		auto &frame = *mMap->getKeyframes()[i];
-
-		frameMap.insert(std::make_pair(&frame, i));
-
-		Eigen::Matrix<double, 1, 6> &params = paramsPoses[i];
-
-
-		Eigen::Matrix3dr Rd = frame.mPose3DR.cast<double>();
-		ceres::RotationMatrixToAngleAxis(CeresUtils::FixedRowMajorAdapter3x3<const double>(Rd.data()), &params[0]);
-		params[3] = frame.mPose3DT[0];
-		params[4] = frame.mPose3DT[1];
-		params[5] = frame.mPose3DT[2];
-	}
-
-	//Store positions
-	paramsFeatures.resize(mMap->getFeatures().size());
-	for (int i = 0; i < (int)paramsFeatures.size(); i++)
-	{
-		auto &feature = *mMap->getFeatures()[i];
-		
-		featureMap.insert(std::make_pair(&feature, i));
-
-		auto &params = paramsFeatures[i];
-		params[0] = feature.mPosition3D[0];
-		params[1] = feature.mPosition3D[1];
-	}
 
 	//BA ceres problem
 	ceres::Solver::Options options;
@@ -150,7 +171,7 @@ bool CalibratedBundleAdjuster::bundleAdjust()
 	
 	options.minimizer_progress_to_stdout = false;
 
-	options.linear_solver_ordering.reset(new ceres::ParameterBlockOrdering());
+	//options.linear_solver_ordering.reset(new ceres::ParameterBlockOrdering());
 
 	//Abort callback
 	//std::unique_ptr<BAIterationCallback> callback;
@@ -179,103 +200,105 @@ bool CalibratedBundleAdjuster::bundleAdjust()
 		assert(!mFeaturesToAdjust.empty());
 
 		//Prepare poses
-		for (auto &framePtr : mFramesToAdjust)
+		for (auto &framep : mFramesToAdjust)
 		{
-			Keyframe &frame = *framePtr;
-
-			//Add frame to params list
-			auto it = frameMap.find(&frame);
-			auto &params = paramsPoses[it->second];
+			auto &frame = *framep;
+			
+			//Create and init params
+			auto &params = getPoseParams(&frame);
 
 			//Add pose as parameter block
 			if (&frame == mMap->getKeyframes().begin()->get())
 			{
 				//First key frame in region, scale fixed
 				problem.AddParameterBlock(params.data(), 3);
-				problem.AddParameterBlock(params.data() + 3, 3, new Fixed3DNormParametrization(1));
+				//problem.AddParameterBlock(params.data() + 3, 3, new Fixed3DNormParametrization(1));
+				problem.AddParameterBlock(params.data() + 3, 3);
 			}
 			else
 			{
 				problem.AddParameterBlock(params.data(), 3);
 				problem.AddParameterBlock(params.data() + 3, 3);
 			}
-			options.linear_solver_ordering->AddElementToGroup(params.data(), 1);
-			options.linear_solver_ordering->AddElementToGroup(params.data()+3, 1);
+			//options.linear_solver_ordering->AddElementToGroup(params.data(), 1);
+			//options.linear_solver_ordering->AddElementToGroup(params.data()+3, 1);
 		}
 
 		//Prepare features
-		for (auto &featurePtr : mFeaturesToAdjust)
+		for (auto &featurep : mFeaturesToAdjust)
 		{
-			Feature &feature = *featurePtr;
+			auto &feature = *featurep;
 
-			if (feature.getMeasurements().size() <= 1)
-				continue; //Skip if only one measurement
+			//Create and init params
+			auto &params = getFeatureParams(&feature);
 
-			//Add feature to params list
-			auto it = featureMap.find(&feature);
-			auto &params = paramsFeatures[it->second];
-
-			//Add 3D feature as parameter block
+			//Add feature as parameter block
 			problem.AddParameterBlock(params.data(), 2);
-			problem.SetParameterBlockConstant(params.data());
-			options.linear_solver_ordering->AddElementToGroup(params.data(), 0);
+			//problem.SetParameterBlockConstant(params.data());
+			//options.linear_solver_ordering->AddElementToGroup(params.data(), 0);
 		}
 
 		//K params
-		kparams[0] = mK(0, 0);
-		kparams[1] = mK(0, 2);
-		kparams[2] = mK(1, 2);
-		problem.AddParameterBlock(kparams.data(), 3);
-		problem.SetParameterBlockConstant(kparams.data());
-		options.linear_solver_ordering->AddElementToGroup(kparams.data(), 1);
+		mParamsK[0] = mK(0, 0);
+		mParamsK[1] = mK(0, 2);
+		mParamsK[2] = mK(1, 2);
+		problem.AddParameterBlock(mParamsK.data(), 3);
+		//problem.SetParameterBlockConstant(mParamsK.data());
+		//options.linear_solver_ordering->AddElementToGroup(kparams.data(), 1);
 
-		//Add all 3D feautres to ceres problem
-		for (int i = 0; i < (int)paramsFeatures.size(); i++)
+		//Gather measurements
+		for (auto &featurep : mFeaturesToAdjust)
 		{
-			Feature &feature = *mMap->getFeatures()[i];
-			auto &featureParams = paramsFeatures[i];
+			auto &feature = *featurep;
 
-			if (feature.getMeasurements().size() <= 1)
-				continue; //Skip if only one measurement
+			//if (feature.getMeasurements().size() <= 1)
+			//	continue; //Skip if only one measurement
 
 			//Add all measurements as residual blocks
 			for (auto &mPtr : feature.getMeasurements())
 			{
 				FeatureMeasurement &m = *mPtr;
-				Keyframe &frame = m.getKeyframe();
-
-				//Get pose
-				auto itPose = frameMap.find(&frame);
-				auto &poseParams = paramsPoses[itPose->second];
-
-				//Is this frame outside of bundle adjustment?
-				if (mFramesToAdjust.find(&frame) == mFramesToAdjust.end())
-				{
-					problem.AddParameterBlock(poseParams.data(), 3);
-					problem.AddParameterBlock(poseParams.data()+3, 3);
-					problem.SetParameterBlockConstant(poseParams.data());
-					problem.SetParameterBlockConstant(poseParams.data()+3);
-					options.linear_solver_ordering->AddElementToGroup(poseParams.data(), 1);
-					options.linear_solver_ordering->AddElementToGroup(poseParams.data()+3, 1);
-				}
-
-				//const int scale = 1<<m.getOctave();
-				//const double costScale = (feature.getMeasurements().size() > 3) ? 1e6 : 1.0;
-				ceres::LossFunction *lossFunc_i = new ceres::CauchyLoss(mOutlierPixelThreshold);
-				//ceres::LossFunction *scaledLoss = new ceres::ScaledLoss(lossFunc_i, costScale, ceres::TAKE_OWNERSHIP);
-
-				problem.AddResidualBlock(
-					new ceres::AutoDiffCostFunction<CalibratedReprojectionError, CalibratedReprojectionError::kResidualCount, 3,3,3,2>(
-					new CalibratedReprojectionError(m)),
-					lossFunc_i, kparams.data(), poseParams.data(), poseParams.data()+3, featureParams.data());
+				mMeasurementsInProblem.push_back(&m);
 			}
+		}
+
+
+		//Add measurements to problem
+		for (auto mp : mMeasurementsInProblem)
+		{
+			auto &m = *mp;
+
+			Feature &feature = m.getFeature();
+			auto &featureParams = getFeatureParams(&feature);
+
+			Keyframe &frame = m.getKeyframe();
+			auto &poseParams = getPoseParams(&frame);
+
+			//Is this frame outside of bundle adjustment?
+			if (mFramesToAdjust.find(&frame) == mFramesToAdjust.end())
+			{
+				problem.AddParameterBlock(poseParams.data(), 3);
+				problem.AddParameterBlock(poseParams.data()+3, 3);
+				problem.SetParameterBlockConstant(poseParams.data());
+				problem.SetParameterBlockConstant(poseParams.data()+3);
+				//options.linear_solver_ordering->AddElementToGroup(poseParams.data(), 1);
+				//options.linear_solver_ordering->AddElementToGroup(poseParams.data()+3, 1);
+			}
+
+			//ceres::LossFunction *lossFunc_i = new ceres::CauchyLoss(mOutlierPixelThreshold);
+			ceres::LossFunction *lossFunc_i = NULL;
+
+			problem.AddResidualBlock(
+				new ceres::AutoDiffCostFunction<CalibratedReprojectionError, CalibratedReprojectionError::kResidualCount, 3,3,3,2>(
+				new CalibratedReprojectionError(m)),
+				lossFunc_i, mParamsK.data(), poseParams.data(), poseParams.data()+3, featureParams.data());
 		}
 	}
 
 	//Get inliers before
-	//int inlierCountBefore;
-	//getInliers(paramsPoses, paramsFeatures3D, measurements3D, measurements2D, inlierCountBefore);
-	//DTSLAM_LOG << "BA inlier count before: " << inlierCountBefore << "\n";
+	int inlierCount;
+	getInliers(inlierCount);
+	MYAPP_LOG << "BA inlier count: " << inlierCount << "\n";
 
 	//No locks while ceres runs
 	//Non-linear minimization!
@@ -286,7 +309,7 @@ bool CalibratedBundleAdjuster::bundleAdjust()
 	}
 
 	MYAPP_LOG << "Calibrated BA report:\n" << summary.FullReport();
-	MYAPP_LOG << "Calibrated BA K: " << kparams << "\n";
+	MYAPP_LOG << "Calibrated BA K: " << mParamsK << "\n";
 	//if (summary.termination_type == ceres::USER_FAILURE || (!mIsExpanderBA && mMap->getAbortBA()))
 	//{
 	//	DTSLAM_LOG << "\n\nBA aborted due to new key frame in map!!!\n\n";
@@ -298,33 +321,43 @@ bool CalibratedBundleAdjuster::bundleAdjust()
 		return false;
 	}
 
+	getInliers(inlierCount);
+	MYAPP_LOG << "BA inlier count: " << inlierCount << "\n";
+
+	//Again
+	//problem.SetParameterBlockVariable(mParamsK.data());
+	//ceres::Solve(options, &problem, &summary);
+
+	//MYAPP_LOG << "Calibrated BA report 2:\n" << summary.FullReport();
+	//MYAPP_LOG << "Calibrated BA K: " << mParamsK << "\n";
+
+
 	//Update K
-	mK(0, 0) = kparams[0];
-	mK(0, 2) = kparams[1];
-	mK(1, 2) = kparams[2];
+	mK(0, 0) = mParamsK[0];
+	mK(1, 1) = mParamsK[0];
+	mK(0, 2) = mParamsK[1];
+	mK(1, 2) = mParamsK[2];
 
 	//Update pose
-	for (int i = 0; i < (int)paramsPoses.size(); i++)
+	for (auto &p : mParamsPoses)
 	{
-		auto &frame = *mMap->getKeyframes()[i];
-
-		Eigen::Matrix<double, 1, 6> &params = paramsPoses[i];
-
+		auto &frame = *p.first;
+		auto &params = p.second;
 
 		Eigen::Matrix3dr Rd;
 		ceres::AngleAxisToRotationMatrix(&params[0], CeresUtils::FixedRowMajorAdapter3x3<double>(Rd.data()));
 		frame.mPose3DR = Rd.cast<float>();
-		frame.mPose3DT[3] = (float)params[0];
-		frame.mPose3DT[4] = (float)params[1];
-		frame.mPose3DT[5] = (float)params[2];
+		frame.mPose3DT[0] = (float)params[3];
+		frame.mPose3DT[1] = (float)params[4];
+		frame.mPose3DT[2] = (float)params[5];
 	}
 
 	//Update positions
-	for (int i = 0; i < (int)paramsFeatures.size(); i++)
+	for (auto &p : mParamsFeatures)
 	{
-		auto &feature = *mMap->getFeatures()[i];
+		auto &feature = *p.first;
+		auto &params = p.second;
 
-		auto &params = paramsFeatures[i];
 		feature.mPosition3D[0] = (float)params[0];
 		feature.mPosition3D[1] = (float)params[1];
 		feature.mPosition3D[2] = 0;

@@ -82,7 +82,7 @@ void HomographyCalibration::calibrate(const std::vector<Eigen::Matrix3fr> &H, co
 	MYAPP_LOG << "Initial alpha=" << alpha << ", final=" << alpha << "\n";
 
 	//Build final K
-	mK << (float)alpha, 0, (float)pp.x(), 0, (float)alpha, (float)pp.y(), 0, 0, 1;
+	mK << (float)alpha, 0, (float)pp.x()+halfWidth, 0, (float)alpha, (float)pp.y()+halfHeight, 0, 0, 1;
 }
 
 } 
