@@ -92,43 +92,23 @@ bool PlaneCalibSystem::init(double timestamp, cv::Mat3b &imgColor, cv::Mat1b &im
 	return true;
 }
 
-//bool SlamSystem::init(const CameraModel *camera, std::unique_ptr<SlamMap> map)
-//{
-//	//Wait for other threads
-//	if (mBAFuture.valid())
-//		mBAFuture.get();
-//	if (mExpanderFuture.valid())
-//		mExpanderFuture.get();
-//
-//	//Reset map
-//	mMap = std::move(map);
-//	mPoseLog.clear();
-//
-//	//Get a reference keyframe
-//	if (mMap->getRegions().empty())
-//		throw std::runtime_error("Cannot init system with a map without regions.");
-//	mActiveRegion = mMap->getRegions().front().get();
-//	if (mActiveRegion->getKeyFrames().empty())
-//		throw std::runtime_error("Cannot init system with a map without keyframes.");
-//	
-//	SlamKeyFrame *keyFrame = mMap->getRegions().front()->getKeyFrames().front().get();
-//
-//	//Reset tracker
-//	mTracker.reset(new PoseTracker());
-//	mTracker->init(camera, keyFrame->getImage(0).size(), keyFrame->getPyramid().getOctaveCount());
-//	mTracker->setActiveRegion(mActiveRegion);
-//	//mTracker->resetTracking(mActiveRegion->getKeyFrames().back()->getPose());
-//	mTracker->resetTracking(mActiveRegion->getKeyFrames().front()->getPose());
-//
-//	//Prepare map expander
-//	mMapExpander.reset(new SlamMapExpander());
-//	mMapExpander->init(camera, this);
-//	mMapExpander->setRegion(mActiveRegion);
-//
-//	return true;
-//}
-//
+void PlaneCalibSystem::setMap(std::unique_ptr<Map> map)
+{
+	mMap = std::move(map);
+	
+	auto &frame = *mMap->getKeyframes().back();
+	mTracker->init(frame.getImageSize(), frame.getOctaveCount());
+	mTracker->resetTracking(mMap.get(), frame.getPose());
 
+	std::vector<Eigen::Matrix3fr> allPoses;
+	for (auto &frame : mMap->getKeyframes())
+	{
+		allPoses.push_back(frame->getPose());
+	}
+
+	//Calibrate
+	mCalib->calibrate(allPoses, mTracker->getImageSize());
+}
 
 void PlaneCalibSystem::processImage(double timestamp, cv::Mat3b &imgColor, cv::Mat1b &imgGray)
 {

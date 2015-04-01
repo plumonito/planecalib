@@ -41,7 +41,7 @@ public:
     void draw();
 
 	void doFullBA();
-	void logData();
+	void loadBouguetCalib();
 
 protected:
     ViewportTiler mTiler;

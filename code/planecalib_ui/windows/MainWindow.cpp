@@ -11,6 +11,7 @@
 #include "planecalib/PoseTracker.h"
 #include "planecalib/HomographyCalibration.h"
 #include "../PlaneCalibApp.h"
+#include "matio.h"
 
 namespace planecalib
 {
@@ -32,7 +33,7 @@ bool MainWindow::init(PlaneCalibApp *app, const Eigen::Vector2i &imageSize)
 	resize();
 
 	//mKeyBindings.addBinding(false, 't', static_cast<KeyBindingHandler<BaseWindow>::SimpleBindingFunc>(&ARWindow::toggleDisplayType), "Toggle display mode.");
-	mKeyBindings.addBinding(false, 'l', static_cast<KeyBindingHandler<BaseWindow>::SimpleBindingFunc>(&MainWindow::logData), "Log data.");
+	mKeyBindings.addBinding(false, 'l', static_cast<KeyBindingHandler<BaseWindow>::SimpleBindingFunc>(&MainWindow::loadBouguetCalib), "Load bouguet calibration data.");
 	mKeyBindings.addBinding(false, 'b', static_cast<KeyBindingHandler<BaseWindow>::SimpleBindingFunc>(&MainWindow::doFullBA), "Full BA.");
 
 	mRefTexture.create(GL_RGB, eutils::ToSize(imageSize));
@@ -148,26 +149,129 @@ void MainWindow::draw()
 	}
 }
 
-void MainWindow::logData()
+void MainWindow::loadBouguetCalib()
 {
-	MatlabDataLog::Instance().SetValue("K", mSystem->getCalib().getK());
-	MatlabDataLog::Instance().SetValue("n", mSystem->getCalib().getNormal());
+	//Vars to read
+	int imageCount;
+	Eigen::Vector2i imageSize;
+	std::vector<Eigen::Matrix2Xf> imagePoints;
+	std::vector<Eigen::Matrix3f> homographies;
 
-	//Add features
-	std::unordered_map<Feature *, int> featureMap;
-	int id=0;
-	for each (auto &feature in mSystem->getMap().getFeatures())
+	std::string filename("Calib_results.mat");
+
+	mat_t *matFile;
+	matFile = Mat_Open(filename.c_str(), MAT_ACC_RDONLY);
+	if (!matFile)
 	{
-		featureMap.insert(std::make_pair(feature.get(), ++id));
-		MatlabDataLog::Instance().AddValue("features", feature->getPosition());
+		MYAPP_LOG << "Error opening mat file: " << filename << "\n";
+		return;
 	}
 
-	//Add keyframes
-	for each (auto &frame in mSystem->getMap().getKeyframes())
+	matvar_t *matVar;
+
+	//Read number of images
+	matVar = Mat_VarRead(matFile,"n_ima");
+	if (!matVar)
+		throw std::runtime_error("Variable not found in mat file.");
+	imageCount = (int)(*static_cast<double*>(matVar->data));
+	MYAPP_LOG << "Reading calib info for " << imageCount << " images...";
+	Mat_VarFree(matVar);
+
+
+	//Read image width
+	matVar = Mat_VarRead(matFile, "nx");
+	if (!matVar)
+		throw std::runtime_error("Variable not found in mat file.");
+	imageSize[0] = (int)(*static_cast<double*>(matVar->data));
+	Mat_VarFree(matVar);
+
+	//Read image height
+	matVar = Mat_VarRead(matFile, "ny");
+	if (!matVar)
+		throw std::runtime_error("Variable not found in mat file.");
+	imageSize[1] = (int)(*static_cast<double*>(matVar->data));
+	Mat_VarFree(matVar);
+
+	//Read image data
+	imagePoints.resize(imageCount);
+	homographies.resize(imageCount);
+	for (int i = 0; i < imageCount; i++)
 	{
-		MatlabDataLog::Instance().AddCell("H", frame->getPose());
-		MatlabDataLog::Instance().AddCell("H", frame->getPose());
+		//Image points
+		{
+			std::stringstream ss;
+			ss << "x_" << (i + 1);
+			matVar = Mat_VarRead(matFile, ss.str().c_str());
+			if (!matVar)
+				throw std::runtime_error("Variable not found in mat file.");
+			assert(matVar->rank == 2);
+			assert(matVar->dims[0] == 2);
+			assert(matVar->data_type == MAT_T_DOUBLE);
+			assert(matVar->class_type == MAT_C_DOUBLE);
+			
+			Eigen::Matrix2Xd points;
+			points.resize(2, matVar->dims[1]);
+			memcpy(points.data(), matVar->data, matVar->nbytes);
+			imagePoints[i] = points.cast<float>();
+			Mat_VarFree(matVar);
+		}
+
+		//Homography
+		{
+			std::stringstream ss;
+			ss << "H_" << (i + 1);
+			matVar = Mat_VarRead(matFile, ss.str().c_str());
+			if (!matVar)
+				throw std::runtime_error("Variable not found in mat file.");
+			assert(matVar->rank == 2);
+			assert(matVar->dims[0] == 3 && matVar->dims[1] == 3);
+			assert(matVar->data_type == MAT_T_DOUBLE);
+			assert(matVar->class_type == MAT_C_DOUBLE);
+			Eigen::Matrix3d h;
+			memcpy(h.data(), matVar->data, matVar->nbytes);
+			homographies[i] = h.cast<float>();
+			Mat_VarFree(matVar);
+		}
 	}
+	
+	Mat_Close(matFile);
+
+	//Create map
+	int featureCount = imagePoints[0].cols();
+	std::unique_ptr<Map> map(new Map);
+	
+	//Create features
+	for (int i = 0; i < featureCount; i++)
+	{
+		std::unique_ptr<Feature> feature(new Feature);
+		feature->setPosition(imagePoints[0].col(i));
+		map->addFeature(std::move(feature));
+	}
+
+	//Create keyframes
+	cv::Mat3b nullImg3(imageSize[1],imageSize[0]);
+	cv::Mat1b nullImg1(imageSize[1], imageSize[0]);
+	Eigen::Matrix<uchar, 1, 32> nullDescr;
+	nullDescr.setZero();
+	Eigen::Matrix3f refHinv = homographies[0].inverse();
+	for (int k = 0; k< imageCount; k++)
+	{
+		std::unique_ptr<Keyframe> frame(new Keyframe);
+		
+		frame->init(nullImg3, nullImg1);
+		frame->setPose(homographies[k]*refHinv);
+
+		for (int i = 0; i < featureCount; i++)
+		{
+			std::unique_ptr<FeatureMeasurement> m(new FeatureMeasurement(map->getFeatures()[i].get(), frame.get(), imagePoints[k].col(i), 0, nullDescr.data()));
+			frame->getMeasurements().push_back(m.get());
+			map->getFeatures()[i]->getMeasurements().push_back(std::move(m));
+		}
+
+		map->addKeyframe(std::move(frame));
+	}
+
+	mSystem->setMap(std::move(map));
 }
 
 void MainWindow::doFullBA()

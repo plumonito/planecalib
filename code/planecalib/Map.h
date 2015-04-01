@@ -38,6 +38,7 @@ public:
 	FeatureProjectionInfo projectFeature(const Eigen::Matrix3fr &pose, Feature &feature);
 
 	Feature *createFeature(Keyframe &keyframe, const Eigen::Matrix3fr &poseInv, const Eigen::Vector2f &position, int octave, const uchar *descriptor);
+	void addFeature(std::unique_ptr<Feature> newFeature);
 
 	void moveToGarbage(Feature &feature);
 

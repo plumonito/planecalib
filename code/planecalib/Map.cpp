@@ -67,6 +67,11 @@ void Map::addKeyframe(std::unique_ptr<Keyframe> newKeyframe)
 	mKeyframes.push_back(std::move(newKeyframe));
 }
 
+void Map::addFeature(std::unique_ptr<Feature> newFeature)
+{
+	mFeatures.push_back(std::move(newFeature));
+}
+
 Feature *Map::createFeature(Keyframe &keyframe, const Eigen::Matrix3fr &poseInv, const Eigen::Vector2f &position, int octave, const uchar *descriptor)
 {
 	int scale = 1 << octave;

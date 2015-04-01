@@ -84,7 +84,7 @@ protected:
 	std::vector<cv::Mat1b> mDescriptors;
 	std::vector<EigenDescriptorMap> mDescriptorsEigen;
 
-	Eigen::Matrix3fr mPose;
+	Eigen::Matrix3fr mPose; //image = mPose * world
 
 	std::vector<FeatureMeasurement *> mMeasurements;
 

@@ -72,6 +72,9 @@ void Keyframe::init(const cv::Mat3b &imageColor, const cv::Mat1b &imageGray)
 			keypoint.size *= scale;
 	    }
 
+		if (mDescriptors[octave].empty())
+			mDescriptors[octave].create(1, 32);
+
 		//Eigen
 		mDescriptorsEigen.push_back(EigenDescriptorMap(mDescriptors[octave].data, mDescriptors[octave].rows, mDescriptors[octave].cols));
     }
