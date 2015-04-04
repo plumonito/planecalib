@@ -38,9 +38,14 @@ class RadialCameraDistortionModel
 public:
 	RadialCameraDistortionModel() {}
 
+	static float MaxRadiusSqFromImageSize(const Eigen::Vector2i imageSize)
+	{
+		return static_cast<float>(imageSize.squaredNorm() / 4);
+	}
+
 	void init(const Eigen::Vector2f &coeff, const Eigen::Vector2i imageSize)
 	{
-		init(coeff, imageSize.squaredNorm() / 4);
+		init(coeff, MaxRadiusSqFromImageSize(imageSize));
 	}
 	void init(const Eigen::Vector2f &coeff, float maxRadiusSq = 1e10)
 	{
@@ -65,15 +70,21 @@ public:
 		return res;
 	}
 	
-	template <typename TScalar>
-	void distortPoint(const Eigen::MatrixBase<Eigen::Matrix<TScalar, 2, 1>> &x, Eigen::MatrixBase<Eigen::Matrix<TScalar, 2, 1>> &xd) const
+	template <class TPointMatA, class TPointMatB>
+	void distortPoint(const Eigen::MatrixBase<TPointMatA> &x, Eigen::MatrixBase<TPointMatB> &xd) const
 	{
 		DistortPoint(mMaxRadiusSq, mCoefficients, x, xd);
 	}
 
-	template <typename TCoeff, typename TScalar>
-	static void DistortPoint(double maxRadiusSq, const Eigen::MatrixBase<Eigen::Matrix<TCoeff, 2, 1>> &coeff, const Eigen::MatrixBase<Eigen::Matrix<TScalar, 2, 1>> &x, Eigen::MatrixBase<Eigen::Matrix<TScalar, 2, 1>> &xd)
+	template <class TCoeffMat, class TPointMatA, class TPointMatB>
+	static void DistortPoint(double maxRadiusSq, const Eigen::MatrixBase<TCoeffMat> &coeff, const Eigen::MatrixBase<TPointMatA> &x, Eigen::MatrixBase<TPointMatB> &xd)
 	{
+		static_assert(TCoeffMat::SizeAtCompileTime==2, "Param coeff must be of size 2");
+		static_assert(TPointMatA::SizeAtCompileTime == 2, "Param x must be of size 2");
+		static_assert(TPointMatB::SizeAtCompileTime == 2, "Param xd must be of size 2");
+
+		typedef typename TPointMatA::Scalar TScalar;
+
 		TScalar r2 = x.squaredNorm();
 		if (CeresUtils::ToDouble(r2) > maxRadiusSq)
 			r2 = TScalar(maxRadiusSq);

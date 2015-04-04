@@ -27,8 +27,6 @@ bool MainWindow::init(PlaneCalibApp *app, const Eigen::Vector2i &imageSize)
 	BaseWindow::init(app, imageSize);
 
 	mSystem = &app->getSystem();
-	mTracker = &mSystem->getTracker();
-	mMap = &mSystem->getMap();
 
 	resize();
 
@@ -46,6 +44,9 @@ bool MainWindow::init(PlaneCalibApp *app, const Eigen::Vector2i &imageSize)
 void MainWindow::updateState()
 {
 	shared_lock<shared_mutex> lockRead(mSystem->getMap().getMutex());
+
+	mTracker = &mSystem->getTracker();
+	mMap = &mSystem->getMap();
 
 	//Clear all
 	mImagePoints.clear();
@@ -304,6 +305,7 @@ void MainWindow::loadBouguetCalib()
 	}
 
 	mSystem->setMap(std::move(map));
+	updateState();
 }
 
 void MainWindow::doHomographyBA()

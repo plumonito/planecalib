@@ -16,6 +16,7 @@
 #include "Profiler.h"
 #include "CeresParametrization.h"
 #include "PoseTracker.h"
+#include "CameraDistortionModel.h"
 
 namespace planecalib
 {
@@ -24,41 +25,46 @@ namespace planecalib
 class ReprojectionError
 {
 public:
-	ReprojectionError(const FeatureMeasurement &m):
-		ReprojectionError(m.getOctave(), m.getPosition())
+	ReprojectionError(const Eigen::Vector2i &imageSize, const FeatureMeasurement &m):
+		ReprojectionError(imageSize, m.getOctave(), m.getPosition())
 	{
 	}
 
-	ReprojectionError(const int octave, const Eigen::Vector2f &imgPoint):
-		mScale(1<<octave), mImgPoint(imgPoint) 
+	ReprojectionError(const Eigen::Vector2i &imageSize, const int octave, const Eigen::Vector2f &imgPoint) :
+		mMaxRadiusSq(RadialCameraDistortionModel::MaxRadiusSqFromImageSize(imageSize)), mScale(1<<octave), mImgPoint(imgPoint) 
 	{
 	}
 
 	static const int kResidualCount = 2;
 
 	template<class T>
-	bool operator() (const T * const homography, const T * const x, T *residuals) const;
+	bool operator() (const T * const _distortion, const T * const _homography, const T * const _x, T *residuals) const;
 
-	void evalToErrors(const Eigen::Matrix3dr &homography, const Eigen::Vector2d &x, const float errorThreshold, MatchReprojectionErrors &errors) const;
+	void evalToErrors(const Eigen::Vector2d &distortion, const Eigen::Matrix3dr &homography, const Eigen::Vector2d &x, const float errorThreshold, MatchReprojectionErrors &errors) const;
 
 protected:
+	const double mMaxRadiusSq;
 	const int mScale;
 	const Eigen::Vector2f mImgPoint;
 };
 
-template<class T>
-bool ReprojectionError::operator () (const T * const _homography, const T * const _x, T *residuals) const
+template<typename Derived>
+struct ble
 {
+	typedef Eigen::MatrixBase<Derived> type;
+};
+
+template<class T>
+bool ReprojectionError::operator () (const T * const _distortion, const T * const _homography, const T * const _x, T *residuals) const
+{
+	Eigen::Map<Eigen::Matrix<T, 2, 1>> distortion((T*)_distortion);
 	Eigen::Map<Eigen::Matrix<T, 3, 3, Eigen::RowMajor>> homography((T*)_homography);
 	Eigen::Map<Eigen::Matrix<T, 2, 1>> x((T*)_x);
 
 
-	//Translate
+	//Homography
 	const Eigen::Matrix<T, 3, 1> x3(x[0], x[1], T(1));
 	const Eigen::Matrix<T, 3, 1> p = homography*x3;
-	//p[0] = homography(0,0) * x[0] + homography[1] * x[1] + homography[2];
-	//p[1] = homography[3] * x[0] + homography[4] * x[1] + homography[5];
-	//p[2] = homography[6] * x[0] + homography[7] * x[1] + homography[8];
 	//p[0] = homography[0] * x[0] + homography[1] * x[1] + homography[2];
 	//p[1] = homography[3] * x[0] + homography[4] * x[1] + homography[5];
 	//p[2] = homography[6] * x[0] + homography[7] * x[1] + homography[8];
@@ -66,18 +72,22 @@ bool ReprojectionError::operator () (const T * const _homography, const T * cons
 	//Normalize
 	const Eigen::Matrix<T, 2, 1> pn = p.hnormalized();
 
+	//Distort
+	Eigen::Matrix<T, 2, 1> pd;
+	RadialCameraDistortionModel::DistortPoint(mMaxRadiusSq, distortion, pn, pd);
+
 	//Residuals
-	residuals[0] = (T(mImgPoint.x()) - pn[0]) / T(mScale);
-	residuals[1] = (T(mImgPoint.y()) - pn[1]) / T(mScale);
+	residuals[0] = (T(mImgPoint.x()) - pd[0]) / T(mScale);
+	residuals[1] = (T(mImgPoint.y()) - pd[1]) / T(mScale);
 	return true;
 }
 
-void ReprojectionError::evalToErrors(const Eigen::Matrix3dr &homography, const Eigen::Vector2d &x, const float errorThresholdSq, MatchReprojectionErrors &errors) const
+void ReprojectionError::evalToErrors(const Eigen::Vector2d &distortion, const Eigen::Matrix3dr &homography, const Eigen::Vector2d &x, const float errorThresholdSq, MatchReprojectionErrors &errors) const
 {
 	assert(kResidualCount == 2);
 	
 	Eigen::Vector2d residuals;
-	this->operator()(homography.data(), x.data(), residuals.data());
+	this->operator()(distortion.data(), homography.data(), x.data(), residuals.data());
 	
 	errors.reprojectionErrorsSq = (float)residuals.squaredNorm();
 	errors.isInlier = errors.reprojectionErrorsSq < errorThresholdSq;
@@ -112,8 +122,8 @@ bool BundleAdjuster::isInlier(const FeatureMeasurement &measurement, const Eigen
 {
 	MatchReprojectionErrors errors;
 
-	ReprojectionError err(measurement);
-	err.evalToErrors(pose, position, mOutlierPixelThresholdSq, errors);
+	ReprojectionError err(mImageSize, measurement);
+	err.evalToErrors(mParamsDistortion, pose, position, mOutlierPixelThresholdSq, errors);
 	return errors.isInlier;
 }
 
@@ -231,6 +241,11 @@ bool BundleAdjuster::bundleAdjust()
 			//options.linear_solver_ordering->AddElementToGroup(params.data(), 0);
 		}
 
+		//Distortion params
+		mImageSize = (**mFramesToAdjust.begin()).getImageSize();
+		mParamsDistortion = Eigen::Vector2d::Zero();
+		problem.AddParameterBlock(mParamsDistortion.data(), mParamsDistortion.rows());
+
 		//Gather measurements
 		for (auto &featurep : mFeaturesToAdjust)
 		{
@@ -271,9 +286,9 @@ bool BundleAdjuster::bundleAdjust()
 			//lossFunc_i = new ceres::CauchyLoss(mOutlierPixelThreshold);
 
 			problem.AddResidualBlock(
-				new ceres::AutoDiffCostFunction<ReprojectionError, ReprojectionError::kResidualCount, 9, 2>(
-				new ReprojectionError(m)),
-				lossFunc_i, poseParams.data(), featureParams.data());
+				new ceres::AutoDiffCostFunction<ReprojectionError, ReprojectionError::kResidualCount, 2, 9, 2>(
+				new ReprojectionError(mImageSize, m)),
+				lossFunc_i, mParamsDistortion.data(), poseParams.data(), featureParams.data());
 		}
 	}
 
@@ -291,6 +306,7 @@ bool BundleAdjuster::bundleAdjust()
 	}
 
 	MYAPP_LOG << "BA report:\n" << summary.FullReport();
+	MYAPP_LOG << "Distortion coefficients: " << mParamsDistortion.transpose() << "\n";
 	//if (summary.termination_type == ceres::USER_FAILURE || (!mIsExpanderBA && mMap->getAbortBA()))
 	//{
 	//	DTSLAM_LOG << "\n\nBA aborted due to new key frame in map!!!\n\n";

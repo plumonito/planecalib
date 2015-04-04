@@ -11,7 +11,7 @@
 #include "Profiler.h"
 #include "CeresParametrization.h"
 //#include "ReprojectionError3D.h"
-//#include "EpipolarSegmentError.h"
+#include "CameraDistortionModel.h"
 #include "PoseTracker.h"
 
 namespace planecalib
@@ -21,29 +21,32 @@ namespace planecalib
 class CalibratedReprojectionError
 {
 public:
-	CalibratedReprojectionError(const FeatureMeasurement &m) :
-		CalibratedReprojectionError(m.getOctave(), m.getPosition())
+	CalibratedReprojectionError(const Eigen::Vector2i &imageSize, const FeatureMeasurement &m) :
+		CalibratedReprojectionError(imageSize, m.getOctave(), m.getPosition())
 	{
 	}
 
-	CalibratedReprojectionError(const int octave, const Eigen::Vector2f &imgPoint) :
-		mScale(1 << octave), mImgPoint(imgPoint)
+	CalibratedReprojectionError(const Eigen::Vector2i &imageSize, const int octave, const Eigen::Vector2f &imgPoint) :
+		mMaxRadiusSq(RadialCameraDistortionModel::MaxRadiusSqFromImageSize(imageSize)), mScale(1 << octave), mImgPoint(imgPoint)
 	{
 	}
 
 	static const int kResidualCount = 2;
 
 	template<class T>
-	bool operator() (const T * const kparams, const T * const rparams, const T * const tparams, const T * const x, T *residuals) const;
+	bool operator() (const T * const _distortion, const T * const kparams, const T * const rparams, const T * const tparams, const T * const x, T *residuals) const;
 
 protected:
+	const double mMaxRadiusSq;
 	const int mScale;
 	const Eigen::Vector2f mImgPoint;
 };
 
 template<class T>
-bool CalibratedReprojectionError::operator () (const T * const kparams, const T * const rparams, const T * const tparams, const T * const x, T *residuals) const
+bool CalibratedReprojectionError::operator () (const T * const _distortion, const T * const kparams, const T * const rparams, const T * const tparams, const T * const x, T *residuals) const
 {
+	Eigen::Map<Eigen::Matrix<T, 2, 1>> distortion((T*)_distortion);
+
 	T xw[3];
 	xw[0] = x[0];
 	xw[1] = x[1];
@@ -57,14 +60,22 @@ bool CalibratedReprojectionError::operator () (const T * const kparams, const T 
 	xc[1] += tparams[1];
 	xc[2] += tparams[2];
 
-	//Normalize + K
-	T p[2];
-	p[0] = kparams[0] * xc[0] / xc[2] + kparams[1];
-	p[1] = kparams[0] * xc[1] / xc[2] + kparams[2];
+	//Normalize + focal
+	Eigen::Matrix<T, 2, 1> p;
+	p[0] = kparams[0] * xc[0] / xc[2];
+	p[1] = kparams[0] * xc[1] / xc[2];
+
+	//Distort
+	Eigen::Matrix<T, 2, 1> pd;
+	RadialCameraDistortionModel::DistortPoint(mMaxRadiusSq, distortion, p, pd);
+
+	//Center
+	pd[0] += kparams[1];
+	pd[1] += kparams[2];
 
 	//Residuals
-	residuals[0] = (T(mImgPoint.x()) - p[0]) / T(mScale);
-	residuals[1] = (T(mImgPoint.y()) - p[1]) / T(mScale);
+	residuals[0] = (T(mImgPoint.x()) - pd[0]) / T(mScale);
+	residuals[1] = (T(mImgPoint.y()) - pd[1]) / T(mScale);
 	return true;
 }
 
@@ -94,9 +105,9 @@ void CalibratedBundleAdjuster::addFrameToAdjust(Keyframe &newFrame)
 
 bool CalibratedBundleAdjuster::isInlier(const FeatureMeasurement &measurement, const Eigen::Matrix<double, 1, 6> &pose, const Eigen::Vector2d &position)
 {
-	CalibratedReprojectionError err(measurement);
+	CalibratedReprojectionError err(mImageSize, measurement);
 	Eigen::Vector2d residuals;
-	err(mParamsK.data() , pose.data(), pose.data() + 3, position.data(), residuals.data());
+	err(mParamsDistortion.data(), mParamsK.data() , pose.data(), pose.data() + 3, position.data(), residuals.data());
 
 	if(residuals.squaredNorm() < mOutlierPixelThresholdSq)
 		return true;
@@ -144,7 +155,8 @@ Eigen::Vector2d &CalibratedBundleAdjuster::getFeatureParams(Feature *featurep)
 	if (itNew.second)
 	{
 		//Is new, create
-		params = feature.getPosition().cast<double>();
+		params[0] = feature.mPosition3D[0];
+		params[1] = feature.mPosition3D[1];
 	}
 
 	return params;
@@ -154,7 +166,7 @@ bool CalibratedBundleAdjuster::bundleAdjust()
 {
 	ProfileSection s("calibratedBundleAdjust");
 
-	if(mFramesToAdjust.empty())
+	if (mFramesToAdjust.empty())
 		return true;
 
 	//BA ceres problem
@@ -167,7 +179,7 @@ bool CalibratedBundleAdjuster::bundleAdjust()
 	options.num_threads = 4;
 	options.num_linear_solver_threads = 4;
 	options.logging_type = ceres::SILENT;
-	
+
 	options.minimizer_progress_to_stdout = false;
 
 	//options.linear_solver_ordering.reset(new ceres::ParameterBlockOrdering());
@@ -190,7 +202,7 @@ bool CalibratedBundleAdjuster::bundleAdjust()
 		for (auto &framep : mFramesToAdjust)
 		{
 			auto &frame = *framep;
-			
+
 			//Create and init params
 			auto &params = getPoseParams(&frame);
 
@@ -198,8 +210,8 @@ bool CalibratedBundleAdjuster::bundleAdjust()
 			if (&frame == mMap->getKeyframes().begin()->get())
 			{
 				//First key frame in region, scale fixed
-				//problem.AddParameterBlock(params.data(), 3);
-				problem.AddParameterBlock(params.data() + 3, 3, new Fixed3DNormParametrization(1));
+				problem.AddParameterBlock(params.data(), 3);
+				//problem.AddParameterBlock(params.data() + 3, 3, new Fixed3DNormParametrization(1));
 				problem.AddParameterBlock(params.data() + 3, 3);
 			}
 			else
@@ -229,9 +241,14 @@ bool CalibratedBundleAdjuster::bundleAdjust()
 		mParamsK[0] = mK(0, 0);
 		mParamsK[1] = mK(0, 2);
 		mParamsK[2] = mK(1, 2);
-		problem.AddParameterBlock(mParamsK.data(), 3);
+		problem.AddParameterBlock(mParamsK.data(), mParamsK.size());
 		//problem.SetParameterBlockConstant(mParamsK.data());
 		//options.linear_solver_ordering->AddElementToGroup(kparams.data(), 1);
+
+		//Distortion params
+		mImageSize = (**mFramesToAdjust.begin()).getImageSize();
+		mParamsDistortion = Eigen::Vector2d::Zero();
+		problem.AddParameterBlock(mParamsDistortion.data(), mParamsDistortion.size());
 
 		//Gather measurements
 		for (auto &featurep : mFeaturesToAdjust)
@@ -265,9 +282,9 @@ bool CalibratedBundleAdjuster::bundleAdjust()
 			if (mFramesToAdjust.find(&frame) == mFramesToAdjust.end())
 			{
 				problem.AddParameterBlock(poseParams.data(), 3);
-				problem.AddParameterBlock(poseParams.data()+3, 3);
+				problem.AddParameterBlock(poseParams.data() + 3, 3);
 				problem.SetParameterBlockConstant(poseParams.data());
-				problem.SetParameterBlockConstant(poseParams.data()+3);
+				problem.SetParameterBlockConstant(poseParams.data() + 3);
 				//options.linear_solver_ordering->AddElementToGroup(poseParams.data(), 1);
 				//options.linear_solver_ordering->AddElementToGroup(poseParams.data()+3, 1);
 			}
@@ -276,9 +293,9 @@ bool CalibratedBundleAdjuster::bundleAdjust()
 			ceres::LossFunction *lossFunc_i = NULL;
 
 			problem.AddResidualBlock(
-				new ceres::AutoDiffCostFunction<CalibratedReprojectionError, CalibratedReprojectionError::kResidualCount, 3,3,3,2>(
-				new CalibratedReprojectionError(m)),
-				lossFunc_i, mParamsK.data(), poseParams.data(), poseParams.data()+3, featureParams.data());
+				new ceres::AutoDiffCostFunction<CalibratedReprojectionError, CalibratedReprojectionError::kResidualCount, 2, 3, 3, 3, 2>(
+				new CalibratedReprojectionError(mImageSize, m)),
+				lossFunc_i, mParamsDistortion.data(), mParamsK.data(), poseParams.data(), poseParams.data() + 3, featureParams.data());
 		}
 	}
 
@@ -296,7 +313,12 @@ bool CalibratedBundleAdjuster::bundleAdjust()
 	}
 
 	MYAPP_LOG << "Calibrated BA report:\n" << summary.FullReport();
-	MYAPP_LOG << "Calibrated BA K: " << mParamsK << "\n";
+	MYAPP_LOG << "Calibrated BA K: " << mParamsK.transpose() << "\n";
+	MYAPP_LOG << "Calibrated BA distortion: " << mParamsDistortion.transpose() << "\n";
+	
+	double fx2 = mParamsK[0] * mParamsK[0];
+	double fx4 = fx2*fx2;
+	MYAPP_LOG << "Calibrated BA distortion (adjusted): " << mParamsDistortion[0]*fx2 << ", " << mParamsDistortion[1]*fx4 << "\n";
 	//if (summary.termination_type == ceres::USER_FAILURE || (!mIsExpanderBA && mMap->getAbortBA()))
 	//{
 	//	DTSLAM_LOG << "\n\nBA aborted due to new key frame in map!!!\n\n";
