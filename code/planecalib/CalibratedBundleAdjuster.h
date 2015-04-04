@@ -60,7 +60,7 @@ protected:
 	Eigen::Matrix<double, 1, 6> &getPoseParams(Keyframe *framep);
 	Eigen::Vector2d &getFeatureParams(Feature *featurep);
 
-	bool isInlier(const FeatureMeasurement &measurement, Eigen::Matrix<double,1,6> &pose, const Eigen::Vector2d &position);
+	bool isInlier(const FeatureMeasurement &measurement, const Eigen::Matrix<double,1,6> &pose, const Eigen::Vector2d &position);
 
 	void getInliers(int &inlierCount);
 };

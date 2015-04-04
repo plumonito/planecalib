@@ -22,7 +22,7 @@ class BundleAdjuster
 {
 public:
 	BundleAdjuster():
-		mUseLocks(true), mIsExpanderBA(false), mTracker(NULL)
+		mUseLocks(true)
 	{}
 
 	void setOutlierThreshold(float pixelThreshold)
@@ -34,22 +34,12 @@ public:
 	bool getUseLocks() const {return mUseLocks;}
 	void setUseLocks(bool value) {mUseLocks = value;}
 
-	void setIsExpanderBA(bool value) { mIsExpanderBA = value; }
-
 	const std::unordered_set<Keyframe *> getFramesToAdjust() const {return mFramesToAdjust;}
 	const std::unordered_set<Feature *> getFeaturesToAdjust() const {return mFeaturesToAdjust;}
 
 	void setMap(Map *map) {mMap=map;}
-	void setTracker(PoseTracker *tracker) { mTracker = tracker; }
 
 	void addFrameToAdjust(Keyframe &newFrame);
-
-	bool isInlier(const FeatureMeasurement &measurement, const Eigen::Matrix3dr &pose, const Eigen::Vector2d &position);
-
-	void getInliers(const std::unordered_map<Keyframe *, Eigen::Matrix3dr> &paramsPoses,
-		const std::unordered_map<Feature *, Eigen::Vector2d> &paramsFeatures,
-			const std::vector<FeatureMeasurement> &measurements,
-			int &inlierCount);
 
 	bool bundleAdjust();
 
@@ -60,12 +50,20 @@ protected:
 	bool mIsExpanderBA;
 
 	Map *mMap;
-	PoseTracker *mTracker; //resync() will be called on this tracker if the BA is succesful
 	std::unordered_set<Keyframe *> mFramesToAdjust;
 	std::unordered_set<Feature *> mFeaturesToAdjust;
 
-	typedef std::pair<std::unordered_map<Keyframe *, Eigen::Matrix3dr>::iterator, bool> TGetPoseParamsResult;
-	TGetPoseParamsResult getPoseParams(Keyframe &frame, std::unordered_map<Keyframe *, Eigen::Matrix3dr> &paramsPoses);
+	std::unordered_map<Keyframe *, Eigen::Matrix3dr, std::hash<Keyframe*>, std::equal_to<Keyframe*>, Eigen::aligned_allocator<std::pair<Keyframe*, Eigen::Matrix3dr>>> mParamsPoses;
+	std::unordered_map<Feature *, Eigen::Vector2d, std::hash<Feature*>, std::equal_to<Feature*>, Eigen::aligned_allocator<std::pair<Feature*, Eigen::Vector2d>>> mParamsFeatures;
+	std::vector<FeatureMeasurement *> mMeasurementsInProblem;
+
+	Eigen::Matrix3dr &getPoseParams(Keyframe *framep);
+	Eigen::Vector2d &getFeatureParams(Feature *featurep);
+
+
+	bool isInlier(const FeatureMeasurement &measurement, const Eigen::Matrix3dr &pose, const Eigen::Vector2d &position);
+
+	void getInliers(int &inlierCount);
 };
 
 }

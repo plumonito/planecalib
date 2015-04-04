@@ -40,6 +40,7 @@ public:
 
     void draw();
 
+	void doHomographyBA();
 	void doFullBA();
 	void loadBouguetCalib();
 

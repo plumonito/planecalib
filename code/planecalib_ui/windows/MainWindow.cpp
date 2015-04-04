@@ -35,7 +35,8 @@ bool MainWindow::init(PlaneCalibApp *app, const Eigen::Vector2i &imageSize)
 	//mKeyBindings.addBinding(false, 't', static_cast<KeyBindingHandler<BaseWindow>::SimpleBindingFunc>(&ARWindow::toggleDisplayType), "Toggle display mode.");
 	mKeyBindings.addBinding(false, 'l', static_cast<KeyBindingHandler<BaseWindow>::SimpleBindingFunc>(&MainWindow::loadBouguetCalib), "Load bouguet calibration data.");
 	mKeyBindings.addBinding(false, 'b', static_cast<KeyBindingHandler<BaseWindow>::SimpleBindingFunc>(&MainWindow::doFullBA), "Full BA.");
-
+	mKeyBindings.addBinding(false, 'h', static_cast<KeyBindingHandler<BaseWindow>::SimpleBindingFunc>(&MainWindow::doHomographyBA), "Homography BA.");
+	
 	mRefTexture.create(GL_RGB, eutils::ToSize(imageSize));
 	mRefTexture.update(mSystem->getMap().getKeyframes()[0]->getColorImage());
 
@@ -97,7 +98,10 @@ void MainWindow::resize()
     mTiler.configDevice(Eigen::Vector2i::Zero(),UserInterfaceInfo::Instance().getScreenSize(),3,3);
 
 	mTiler.addTile(0, 0, -1.0f, 3, 2);
-	mTiler.setImageMVP(0, mImageSize);
+	mTiler.setImageMVP(0, 2*mImageSize);
+	Eigen::Matrix4f offsetMat;
+	offsetMat << 1, 0, 0, mImageSize[0] / 2, 0, 1, 0, mImageSize[1] / 2, 0, 0, 1, 0, 0,0,0,1;
+	mTiler.multiplyMVP(0, offsetMat);
 
 	mTiler.addTile(0, 2);
 	mTiler.setImageMVP(1, mImageSize);
@@ -127,6 +131,29 @@ void MainWindow::draw()
 	mShaders->getTexture().renderTexture(mRefTexture.getTarget(), mRefTexture.getId(), mImageSize, 1.0f);
 	if (!mIsLost)
 		mShaders->getTextureWarp().renderTexture(mCurrentImageTextureTarget, mCurrentImageTextureId, mTrackerPose, 0.5f, mImageSize);
+
+	std::vector<Eigen::Vector2f> pointsSrc;
+	pointsSrc.push_back(Eigen::Vector2f(0, 0));
+	pointsSrc.push_back(Eigen::Vector2f(mImageSize[0], 0));
+	pointsSrc.push_back(Eigen::Vector2f(mImageSize[0], mImageSize[1]));
+	pointsSrc.push_back(Eigen::Vector2f(0, mImageSize[1]));
+
+	mShaders->getWarpPos().setMVPMatrix(mTiler.getMVP());
+
+	for (auto &framep : mMap->getKeyframes())
+	{
+		auto &frame = *framep;
+		mShaders->getWarpPos().setHomography(frame.getPose());
+		mShaders->getWarpPos().drawVertices(GL_LINE_LOOP, &pointsSrc[0], pointsSrc.size(), StaticColors::Gray());
+	}
+
+	mShaders->getWarpPos().setHomography(mSystem->getTracker().getCurrentPose());
+	Eigen::Vector4f color;
+	if (mSystem->getTracker().isLost())
+		color = StaticColors::Red();
+	else
+		color = StaticColors::White();
+	mShaders->getWarpPos().drawVertices(GL_LINE_LOOP, &pointsSrc[0], pointsSrc.size(), color);
 
 	//Draw image lines
 	mShaders->getColor().drawVertices(GL_LINES, mImageLines.data(), mImageLineColors.data(), mImageLines.size());
@@ -170,6 +197,7 @@ void MainWindow::loadBouguetCalib()
 	matvar_t *matVar;
 
 	//Read number of images
+	Mat_Rewind(matFile); //Hack: must call or Mat_VarRead might fail
 	matVar = Mat_VarRead(matFile,"n_ima");
 	if (!matVar)
 		throw std::runtime_error("Variable not found in mat file.");
@@ -179,6 +207,7 @@ void MainWindow::loadBouguetCalib()
 
 
 	//Read image width
+	Mat_Rewind(matFile); //Hack: must call or Mat_VarRead might fail
 	matVar = Mat_VarRead(matFile, "nx");
 	if (!matVar)
 		throw std::runtime_error("Variable not found in mat file.");
@@ -186,6 +215,7 @@ void MainWindow::loadBouguetCalib()
 	Mat_VarFree(matVar);
 
 	//Read image height
+	Mat_Rewind(matFile); //Hack: must call or Mat_VarRead might fail
 	matVar = Mat_VarRead(matFile, "ny");
 	if (!matVar)
 		throw std::runtime_error("Variable not found in mat file.");
@@ -201,6 +231,7 @@ void MainWindow::loadBouguetCalib()
 		{
 			std::stringstream ss;
 			ss << "x_" << (i + 1);
+			Mat_Rewind(matFile); //Hack: must call or Mat_VarRead might fail
 			matVar = Mat_VarRead(matFile, ss.str().c_str());
 			if (!matVar)
 				throw std::runtime_error("Variable not found in mat file.");
@@ -220,6 +251,7 @@ void MainWindow::loadBouguetCalib()
 		{
 			std::stringstream ss;
 			ss << "H_" << (i + 1);
+			Mat_Rewind(matFile); //Hack: must call or Mat_VarRead might fail
 			matVar = Mat_VarRead(matFile, ss.str().c_str());
 			if (!matVar)
 				throw std::runtime_error("Variable not found in mat file.");
@@ -272,6 +304,16 @@ void MainWindow::loadBouguetCalib()
 	}
 
 	mSystem->setMap(std::move(map));
+}
+
+void MainWindow::doHomographyBA()
+{
+	//RadialCameraDistortionModel model;
+	//model.init(Eigen::Vector2f(0.16262f / (1759.9583f*1759.9583f), -0.67445f / (1759.9583f*1759.9583f*1759.9583f*1759.9583f)), mImageSize);
+	//RadialCameraDistortionModel invModel = model.createInverseModel();
+
+
+	mSystem->doHomographyBA();
 }
 
 void MainWindow::doFullBA()

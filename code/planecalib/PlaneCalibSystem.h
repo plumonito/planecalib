@@ -6,6 +6,7 @@
 #include <future>
 #include "stdutils.h"
 #include "Map.h"
+#include "CameraDistortionModel.h"
 
 namespace planecalib
 {
@@ -39,6 +40,7 @@ public:
 	//Handles thread creation and other maintenance. This should be called when idle and after processImage().
 	void idle();
 
+	void doHomographyBA();
 	void doFullBA();
 
 protected:
@@ -46,6 +48,7 @@ protected:
 	// Members
 	bool mSingleThreaded;
 
+	std::unique_ptr<RadialCameraDistortionModel> mCameraDistortion;
 	std::unique_ptr<Map> mMap;
 
 	std::unique_ptr<PoseTracker> mTracker;

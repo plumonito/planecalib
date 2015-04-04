@@ -49,6 +49,10 @@ bool PlaneCalibSystem::init(double timestamp, cv::Mat3b &imgColor, cv::Mat1b &im
 
 	MYAPP_LOG << "SBI size: " << keyframe->getSBI().size() << "\n";
 
+	//Distortion
+	mCameraDistortion.reset(new RadialCameraDistortionModel());
+	mCameraDistortion->init(Eigen::Vector2f::Zero(), imageSize);
+
 	//Reset map
 	mMap.reset(new Map());
 
@@ -242,7 +246,19 @@ void PlaneCalibSystem::createKeyframe()
 	
 }
 
-
+void PlaneCalibSystem::doHomographyBA()
+{
+	BundleAdjuster ba;
+	for (auto &framep : mMap->getKeyframes())
+	{
+		auto &frame = *framep;
+		ba.addFrameToAdjust(frame);
+	}
+	ba.setUseLocks(false);
+	ba.setOutlierThreshold(3);
+	ba.setMap(mMap.get());
+	ba.bundleAdjust();
+}
 
 void PlaneCalibSystem::doFullBA()
 {

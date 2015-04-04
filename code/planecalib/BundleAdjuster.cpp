@@ -15,8 +15,6 @@
 #include "shared_mutex.h"
 #include "Profiler.h"
 #include "CeresParametrization.h"
-//#include "ReprojectionError3D.h"
-//#include "EpipolarSegmentError.h"
 #include "PoseTracker.h"
 
 namespace planecalib
@@ -49,22 +47,28 @@ protected:
 };
 
 template<class T>
-bool ReprojectionError::operator () (const T * const homography, const T * const x, T *residuals) const
+bool ReprojectionError::operator () (const T * const _homography, const T * const _x, T *residuals) const
 {
-	T p[3];
+	Eigen::Map<Eigen::Matrix<T, 3, 3, Eigen::RowMajor>> homography((T*)_homography);
+	Eigen::Map<Eigen::Matrix<T, 2, 1>> x((T*)_x);
+
 
 	//Translate
-	p[0] = homography[0] * x[0] + homography[1] * x[1] + homography[2];
-	p[1] = homography[3] * x[0] + homography[4] * x[1] + homography[5];
-	p[2] = homography[6] * x[0] + homography[7] * x[1] + homography[8];
+	const Eigen::Matrix<T, 3, 1> x3(x[0], x[1], T(1));
+	const Eigen::Matrix<T, 3, 1> p = homography*x3;
+	//p[0] = homography(0,0) * x[0] + homography[1] * x[1] + homography[2];
+	//p[1] = homography[3] * x[0] + homography[4] * x[1] + homography[5];
+	//p[2] = homography[6] * x[0] + homography[7] * x[1] + homography[8];
+	//p[0] = homography[0] * x[0] + homography[1] * x[1] + homography[2];
+	//p[1] = homography[3] * x[0] + homography[4] * x[1] + homography[5];
+	//p[2] = homography[6] * x[0] + homography[7] * x[1] + homography[8];
 
 	//Normalize
-	p[0] /= p[2];
-	p[1] /= p[2];
+	const Eigen::Matrix<T, 2, 1> pn = p.hnormalized();
 
 	//Residuals
-	residuals[0] = (T(mImgPoint.x()) - p[0]) / T(mScale);
-	residuals[1] = (T(mImgPoint.y()) - p[1]) / T(mScale);
+	residuals[0] = (T(mImgPoint.x()) - pn[0]) / T(mScale);
+	residuals[1] = (T(mImgPoint.y()) - pn[1]) / T(mScale);
 	return true;
 }
 
@@ -72,10 +76,10 @@ void ReprojectionError::evalToErrors(const Eigen::Matrix3dr &homography, const E
 {
 	assert(kResidualCount == 2);
 	
-	double residuals[kResidualCount];
-	this->operator()(homography.data(), x.data(), residuals);
+	Eigen::Vector2d residuals;
+	this->operator()(homography.data(), x.data(), residuals.data());
 	
-	errors.reprojectionErrorsSq = (float)(residuals[0] * residuals[0] + residuals[1] * residuals[1]);
+	errors.reprojectionErrorsSq = (float)residuals.squaredNorm();
 	errors.isInlier = errors.reprojectionErrorsSq < errorThresholdSq;
 }
 
@@ -96,7 +100,7 @@ void BundleAdjuster::addFrameToAdjust(Keyframe &newFrame)
 			Feature &feature = (*itM)->getFeature();
 
 			//We need at least two measurements to bundle adjust
-			if(feature.getMeasurements().size() > 1)
+			//if(feature.getMeasurements().size() > 1)
 			{
 				mFeaturesToAdjust.insert(&feature);
 			}
@@ -113,100 +117,69 @@ bool BundleAdjuster::isInlier(const FeatureMeasurement &measurement, const Eigen
 	return errors.isInlier;
 }
 
-void BundleAdjuster::getInliers(const std::unordered_map<Keyframe *, Eigen::Matrix3dr> &paramsPoses,
-		const std::unordered_map<Feature *, Eigen::Vector2d> &paramsFeatures,
-		const std::vector<FeatureMeasurement> &measurements,
-		int &inlierCount)
+void BundleAdjuster::getInliers(int &inlierCount)
 {
 	inlierCount = 0;
-	for(auto &m : measurements)
+	for(auto &mp : mMeasurementsInProblem)
 	{
-		auto itFeature = paramsFeatures.find(&m.getFeature());
-		auto itPose = paramsPoses.find(&m.getKeyframe());
-		if(isInlier(m, itPose->second, itFeature->second))
+		auto &m = *mp;
+		if(isInlier(m, getPoseParams(&m.getKeyframe()), getFeatureParams(&m.getFeature())))
 			inlierCount++;
 	}
 }
 
-/*
-class BAIterationCallback : public ceres::IterationCallback
+Eigen::Matrix3dr &BundleAdjuster::getPoseParams(Keyframe *framep)
 {
-public:
-	BAIterationCallback(const SlamRegion *region) :
-		mRegion(region)
-	{}
-
-	virtual ceres::CallbackReturnType operator()(const ceres::IterationSummary& summary)
+	auto &frame = *framep;
+	auto itNew = mParamsPoses.emplace(&frame, Eigen::Matrix3dr());
+	auto &params = itNew.first->second;
+	if (itNew.second)
 	{
-		if (mRegion->getAbortBA())
-			return ceres::SOLVER_ABORT;
-		else
-			return ceres::SOLVER_CONTINUE;
+		//Is new, create
+		params = frame.getPose().cast<double>();
 	}
 
-protected:
-	const SlamRegion *mRegion;
-};
-*/
-
-BundleAdjuster::TGetPoseParamsResult BundleAdjuster::getPoseParams(Keyframe &frame, std::unordered_map<Keyframe *, Eigen::Matrix3dr> &paramsPoses)
-{
-	auto itNew = paramsPoses.emplace(&frame, Eigen::Matrix3dr());
-
-	if(itNew.second)
-	{
-		//Copy pose params
-		auto &pose = frame.getPose();
-
-		auto &params = itNew.first->second;
-		params = pose.cast<double>();
-	}
-	return itNew;
+	return params;
 }
+
+Eigen::Vector2d &BundleAdjuster::getFeatureParams(Feature *featurep)
+{
+	auto &feature = *featurep;
+	auto itNew = mParamsFeatures.emplace(&feature, Eigen::Vector2d());
+	auto &params = itNew.first->second;
+	if (itNew.second)
+	{
+		//Is new, create
+		params = feature.getPosition().cast<double>();
+	}
+
+	return params;
+}
+
 
 bool BundleAdjuster::bundleAdjust()
 {
 	ProfileSection s("bundleAdjust");
 
-	if(mFramesToAdjust.empty())
+	if (mFramesToAdjust.empty())
 		return true;
-
-	//Gather relevant measurements
-	std::unordered_map<Keyframe *, Eigen::Matrix3dr> paramsPoses;
-	std::unordered_map<Feature *, Eigen::Vector2d> paramsFeatures;
-
-	std::vector<FeatureMeasurement> measurements;
 
 	//BA ceres problem
 	ceres::Solver::Options options;
-	options.linear_solver_type = ceres::ITERATIVE_SCHUR;
-	options.preconditioner_type = ceres::SCHUR_JACOBI;
+	options.linear_solver_type = ceres::CGNR;
+	//options.preconditioner_type = ceres::SCHUR_JACOBI;
 	options.dense_linear_algebra_library_type = ceres::LAPACK;
 
+	options.max_num_iterations = 500;
 	options.num_threads = 4;
 	options.num_linear_solver_threads = 4;
 	options.logging_type = ceres::SILENT;
-	
+
 	options.minimizer_progress_to_stdout = false;
 
-    // in some environments ceres uses std::tr1::shared_ptr, in others
-    // it uses std::shared_ptr. Let's keep it simple by not using
-    // make_shared.
-	options.linear_solver_ordering.reset(new ceres::ParameterBlockOrdering());
-
-	//Abort callback
-	//std::unique_ptr<BAIterationCallback> callback;
-	//if (!mIsExpanderBA)
-	//{
-	//	callback.reset(new BAIterationCallback(mRegion));
-	//	options.callbacks.push_back(callback.get());
-	//}
+	//options.linear_solver_ordering.reset(new ceres::ParameterBlockOrdering());
 
 	ceres::Problem problem;
-
-	//Reset new key frame flag
-	//if (!mIsExpanderBA)
-	//	mRegion->setAbortBA(false);
 
 	//Read-lock to prepare ceres problem
 	{
@@ -216,94 +189,98 @@ bool BundleAdjuster::bundleAdjust()
 		if (mUseLocks)
 			lockRead.lock();
 
-		assert(mMap->getKeyframes().size() >= 2);
+		//assert(mMap->getKeyframes().size() >= 2);
 		assert(!mFramesToAdjust.empty());
 		assert(!mFeaturesToAdjust.empty());
 
 		//Prepare poses
-		for (auto &framePtr : mFramesToAdjust)
+		for (auto &framep : mFramesToAdjust)
 		{
-			Keyframe &frame = *framePtr;
+			auto &frame = *framep;
 
-			//Add frame to params list
-			auto itNew = getPoseParams(frame, paramsPoses);
-			auto &params = itNew.first->second;
+			//Create and init params
+			auto &params = getPoseParams(&frame);
 
 			//Add pose as parameter block
-			problem.AddParameterBlock(params.data(), 9);
-			options.linear_solver_ordering->AddElementToGroup(params.data(), 1);
-
 			if (&frame == mMap->getKeyframes().begin()->get())
 			{
-				//First key frame in region, pose fixed
+				//First key frame in region, scale fixed
+				problem.AddParameterBlock(params.data(), 9);
+				//problem.AddParameterBlock(params.data() + 3, 3, new Fixed3DNormParametrization(1));
 				problem.SetParameterBlockConstant(params.data());
 			}
+			else
+			{
+				problem.AddParameterBlock(params.data(), 9);
+			}
+			//options.linear_solver_ordering->AddElementToGroup(params.data(), 1);
+			//options.linear_solver_ordering->AddElementToGroup(params.data()+3, 1);
 		}
 
 		//Prepare features
-		for (auto &featurePtr : mFeaturesToAdjust)
+		for (auto &featurep : mFeaturesToAdjust)
 		{
-			Feature &feature = *featurePtr;
+			auto &feature = *featurep;
 
-			//We need at least two measurements to bundle adjust
-			if (feature.getMeasurements().size() > 1)
-			{
-				//Add feature to params list
-				auto itNew = paramsFeatures.emplace(&feature, feature.getPosition().cast<double>());
-				auto &params = itNew.first->second;
+			//Create and init params
+			auto &params = getFeatureParams(&feature);
 
-				//Add 3D feature as parameter block
-				problem.AddParameterBlock(params.data(), 2);
-				options.linear_solver_ordering->AddElementToGroup(params.data(), 0);
-
-				//Measurements will be added later so that we don't need to find the params again
-			}
+			//Add feature as parameter block
+			problem.AddParameterBlock(params.data(), 2);
+			//problem.SetParameterBlockConstant(params.data());
+			//options.linear_solver_ordering->AddElementToGroup(params.data(), 0);
 		}
 
-		//Add all 3D feautres to ceres problem
-		for (auto &params : paramsFeatures)
+		//Gather measurements
+		for (auto &featurep : mFeaturesToAdjust)
 		{
-			Feature &feature = *params.first;
-			auto &featureParams = params.second;
+			auto &feature = *featurep;
+
+			//if (feature.getMeasurements().size() <= 1)
+			//	continue; //Skip if only one measurement
 
 			//Add all measurements as residual blocks
 			for (auto &mPtr : feature.getMeasurements())
 			{
 				FeatureMeasurement &m = *mPtr;
-				Keyframe &frame = m.getKeyframe();
-
-				//Make a copy of the measurement
-				measurements.push_back(m);
-
-				//Get pose
-				auto itNewPose = getPoseParams(frame, paramsPoses);
-				auto &poseParams = itNewPose.first->second;
-
-				//Is this frame outside of bundle adjustment?
-				if (itNewPose.second)
-				{
-					problem.AddParameterBlock(poseParams.data(), 9);
-					options.linear_solver_ordering->AddElementToGroup(poseParams.data(), 1);
-					problem.SetParameterBlockConstant(poseParams.data());
-				}
-
-				//const int scale = 1<<m.getOctave();
-				//const double costScale = (feature.getMeasurements().size() > 3) ? 1e6 : 1.0;
-				ceres::LossFunction *lossFunc_i = new ceres::CauchyLoss(mOutlierPixelThreshold);
-				//ceres::LossFunction *scaledLoss = new ceres::ScaledLoss(lossFunc_i, costScale, ceres::TAKE_OWNERSHIP);
-
-				problem.AddResidualBlock(
-					new ceres::AutoDiffCostFunction<ReprojectionError, ReprojectionError::kResidualCount, 9, 2>(
-					new ReprojectionError(m)),
-					lossFunc_i, poseParams.data(), featureParams.data());
+				mMeasurementsInProblem.push_back(&m);
 			}
+		}
+
+
+		//Add measurements to problem
+		for (auto mp : mMeasurementsInProblem)
+		{
+			auto &m = *mp;
+
+			Feature &feature = m.getFeature();
+			auto &featureParams = getFeatureParams(&feature);
+
+			Keyframe &frame = m.getKeyframe();
+			auto &poseParams = getPoseParams(&frame);
+
+			//Is this frame outside of bundle adjustment?
+			if (mFramesToAdjust.find(&frame) == mFramesToAdjust.end())
+			{
+				problem.AddParameterBlock(poseParams.data(), 9);
+				problem.SetParameterBlockConstant(poseParams.data());
+				//options.linear_solver_ordering->AddElementToGroup(poseParams.data(), 1);
+			}
+
+			ceres::LossFunction *lossFunc_i = NULL;
+			//lossFunc_i = new ceres::CauchyLoss(mOutlierPixelThreshold);
+
+			problem.AddResidualBlock(
+				new ceres::AutoDiffCostFunction<ReprojectionError, ReprojectionError::kResidualCount, 9, 2>(
+				new ReprojectionError(m)),
+				lossFunc_i, poseParams.data(), featureParams.data());
 		}
 	}
 
 	//Get inliers before
-	//int inlierCountBefore;
-	//getInliers(paramsPoses, paramsFeatures3D, measurements3D, measurements2D, inlierCountBefore);
-	//DTSLAM_LOG << "BA inlier count before: " << inlierCountBefore << "\n";
+	int inlierCount;
+	getInliers(inlierCount);
+	MYAPP_LOG << "BA inlier count: " << inlierCount << "\n";
 
 	//No locks while ceres runs
 	//Non-linear minimization!
@@ -313,8 +290,7 @@ bool BundleAdjuster::bundleAdjust()
 		ceres::Solve(options, &problem, &summary);
 	}
 
-	MYAPP_LOG << "Uncalibrated BA report:\n" << summary.FullReport();
-
+	MYAPP_LOG << "BA report:\n" << summary.FullReport();
 	//if (summary.termination_type == ceres::USER_FAILURE || (!mIsExpanderBA && mMap->getAbortBA()))
 	//{
 	//	DTSLAM_LOG << "\n\nBA aborted due to new key frame in map!!!\n\n";
@@ -322,84 +298,31 @@ bool BundleAdjuster::bundleAdjust()
 	//}
 	if (summary.termination_type == ceres::FAILURE)
 	{
-		MYAPP_LOG << "\n\nBA solver failed!!!\n\n" << summary.FullReport();
+		MYAPP_LOG << "\n\nBA solver failed!!!\n\n"; //<< summary.FullReport();
 		return false;
 	}
-	else
+
+	getInliers(inlierCount);
+	MYAPP_LOG << "BA inlier count: " << inlierCount << "\n";
+
+	//Update pose
+	for (auto &p : mParamsPoses)
 	{
-		//Solver finished succesfully
-		//Write-lock to update map
-		{
-			ProfileSection supdate("update");
+		auto &frame = *p.first;
+		auto &params = p.second;
 
-			//std::unique_lock<std::mutex> lockLong(mMap->getLongOperationMutex(), std::defer_lock);
-			//if(mUseLocks)
-			//	lockLong.lock();
-
-			std::unique_lock<shared_mutex> lockWrite(mMap->getMutex(), std::defer_lock);
-			if(mUseLocks)
-				lockWrite.lock();
-
-			MYAPP_LOG << "BA updating map...\n";
-
-			//Update all involved
-			//Update frames
-			for(auto &paramsPose : paramsPoses)
-			{
-				Keyframe &frame = *paramsPose.first;
-				auto &params = paramsPose.second;
-				frame.getPose() = params.cast<float>();
-			}
-
-			//Update features
-			for(auto &params : paramsFeatures)
-			{
-				Feature &feature = *params.first;
-				auto &featureParams = params.second;
-
-				feature.setPosition(featureParams.cast<float>());
-
-				//if (!mIsExpanderBA)
-				//{
-				//	//Update status
-				//	int inlierCount = 0;
-				//	for (auto &mPtr : feature.getMeasurements())
-				//	{
-				//		auto &m = *mPtr;
-				//		auto &pose = m.getKeyFrame().getPose();
-
-				//		MatchReprojectionErrors errors;
-				//		BAReprojectionError3D err(m);
-				//		err.evalToErrors(pose.getRotation(), pose.getTranslation(), feature.getPosition(), mOutlierPixelThreshold, errors);
-				//		if (errors.isInlier)
-				//			inlierCount++;
-				//	}
-				//	feature.setStatus(inlierCount);
-
-				//	//Delete?
-				//	if (inlierCount < (int)std::ceil(0.7f*feature.getMeasurements().size()))
-				//	{
-				//		feature.getRegion()->moveToGarbage(feature);
-				//	}
-				//}
-			}
-
-			MYAPP_LOG << "BA updating done.\n";
-
-			//Mark that we performed BA
-			if (mTracker)
-				mTracker->resync();
-		}
-
-		//Get inliers after
-		//int totalCount = measurements3D.size() + measurements2D.size();
-		//int inlierCount;
-		//getInliers(paramsPoses, paramsFeatures3D, measurements3D, measurements2D, inlierCount);
-		//int inlierPercent = (int)(inlierCount*100.0f/totalCount);
-		//DTSLAM_LOG << "BA inlier count after: " << inlierCount << " (" << inlierPercent << "%), time: " << summary.total_time_in_seconds << "s\n";
-
-		return true;
+		frame.setPose(params.cast<float>());
 	}
+
+	//Update positions
+	for (auto &p : mParamsFeatures)
+	{
+		auto &feature = *p.first;
+		auto &params = p.second;
+
+		feature.setPosition(params.cast<float>());
+	}
+	return true;
 }
 
 } /* namespace dtslam */

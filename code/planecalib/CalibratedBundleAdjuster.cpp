@@ -92,7 +92,7 @@ void CalibratedBundleAdjuster::addFrameToAdjust(Keyframe &newFrame)
 	}
 }
 
-bool CalibratedBundleAdjuster::isInlier(const FeatureMeasurement &measurement, Eigen::Matrix<double, 1, 6> &pose, const Eigen::Vector2d &position)
+bool CalibratedBundleAdjuster::isInlier(const FeatureMeasurement &measurement, const Eigen::Matrix<double, 1, 6> &pose, const Eigen::Vector2d &position)
 {
 	CalibratedReprojectionError err(measurement);
 	Eigen::Vector2d residuals;
@@ -144,8 +144,7 @@ Eigen::Vector2d &CalibratedBundleAdjuster::getFeatureParams(Feature *featurep)
 	if (itNew.second)
 	{
 		//Is new, create
-		params[0] = feature.mPosition3D[0];
-		params[1] = feature.mPosition3D[1];
+		params = feature.getPosition().cast<double>();
 	}
 
 	return params;
@@ -153,7 +152,7 @@ Eigen::Vector2d &CalibratedBundleAdjuster::getFeatureParams(Feature *featurep)
 
 bool CalibratedBundleAdjuster::bundleAdjust()
 {
-	ProfileSection s("bundleAdjust");
+	ProfileSection s("calibratedBundleAdjust");
 
 	if(mFramesToAdjust.empty())
 		return true;
@@ -173,19 +172,7 @@ bool CalibratedBundleAdjuster::bundleAdjust()
 
 	//options.linear_solver_ordering.reset(new ceres::ParameterBlockOrdering());
 
-	//Abort callback
-	//std::unique_ptr<BAIterationCallback> callback;
-	//if (!mIsExpanderBA)
-	//{
-	//	callback.reset(new BAIterationCallback(mRegion));
-	//	options.callbacks.push_back(callback.get());
-	//}
-
 	ceres::Problem problem;
-
-	//Reset new key frame flag
-	//if (!mIsExpanderBA)
-	//	mRegion->setAbortBA(false);
 
 	//Read-lock to prepare ceres problem
 	{
@@ -211,8 +198,8 @@ bool CalibratedBundleAdjuster::bundleAdjust()
 			if (&frame == mMap->getKeyframes().begin()->get())
 			{
 				//First key frame in region, scale fixed
-				problem.AddParameterBlock(params.data(), 3);
-				//problem.AddParameterBlock(params.data() + 3, 3, new Fixed3DNormParametrization(1));
+				//problem.AddParameterBlock(params.data(), 3);
+				problem.AddParameterBlock(params.data() + 3, 3, new Fixed3DNormParametrization(1));
 				problem.AddParameterBlock(params.data() + 3, 3);
 			}
 			else
