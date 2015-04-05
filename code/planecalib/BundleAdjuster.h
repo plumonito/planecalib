@@ -22,7 +22,7 @@ class BundleAdjuster
 {
 public:
 	BundleAdjuster():
-		mUseLocks(true)
+		mUseLocks(true), mOnlyDistortion(false), mParamsDistortion(0,0)
 	{}
 
 	void setOutlierThreshold(float pixelThreshold)
@@ -34,10 +34,19 @@ public:
 	bool getUseLocks() const {return mUseLocks;}
 	void setUseLocks(bool value) {mUseLocks = value;}
 
+	bool getOnlyDistortion() const { return mOnlyDistortion; }
+	void setOnlyDistortion(bool value) { mOnlyDistortion = value; }
+
+	void setMap(Map *map) { mMap = map; }
+
 	const std::unordered_set<Keyframe *> getFramesToAdjust() const {return mFramesToAdjust;}
 	const std::unordered_set<Feature *> getFeaturesToAdjust() const {return mFeaturesToAdjust;}
 
-	void setMap(Map *map) {mMap=map;}
+	const Eigen::Vector2d &getDistortion() const { return mParamsDistortion; }
+	void setDistortion(const Eigen::Vector2d &coeff) { mParamsDistortion = coeff; }
+
+	const Eigen::Vector2d &getP0() const { return mParamsP0; }
+	void setP0(const Eigen::Vector2d &p0) { mParamsP0 = p0; } 
 
 	void addFrameToAdjust(Keyframe &newFrame);
 
@@ -47,7 +56,7 @@ protected:
 	float mOutlierPixelThreshold;
 	float mOutlierPixelThresholdSq;
 	bool mUseLocks;
-	bool mIsExpanderBA;
+	bool mOnlyDistortion;
 
 	Map *mMap;
 	std::unordered_set<Keyframe *> mFramesToAdjust;
@@ -56,6 +65,7 @@ protected:
 	Eigen::Vector2i mImageSize;
 
 	Eigen::Vector2d mParamsDistortion;
+	Eigen::Vector2d mParamsP0;
 	std::unordered_map<Keyframe *, Eigen::Matrix3dr, std::hash<Keyframe*>, std::equal_to<Keyframe*>, Eigen::aligned_allocator<std::pair<Keyframe*, Eigen::Matrix3dr>>> mParamsPoses;
 	std::unordered_map<Feature *, Eigen::Vector2d, std::hash<Feature*>, std::equal_to<Feature*>, Eigen::aligned_allocator<std::pair<Feature*, Eigen::Vector2d>>> mParamsFeatures;
 	std::vector<FeatureMeasurement *> mMeasurementsInProblem;

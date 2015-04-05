@@ -50,8 +50,13 @@ bool PlaneCalibSystem::init(double timestamp, cv::Mat3b &imgColor, cv::Mat1b &im
 	MYAPP_LOG << "SBI size: " << keyframe->getSBI().size() << "\n";
 
 	//Distortion
-	mCameraDistortion.reset(new RadialCameraDistortionModel());
-	mCameraDistortion->init(Eigen::Vector2f::Zero(), imageSize);
+	mHomographyP0 = imageSize.cast<float>() / 2;
+	mHomographyDistortion.init(Eigen::Vector2f::Zero(), imageSize);
+	mCameraDistortion.init(Eigen::Vector2f::Zero(), imageSize);
+	mActiveDistortion = &mHomographyDistortion;
+
+	mK = Eigen::Matrix3fr::Zero();
+	mNormal = Eigen::Vector3f::Zero();
 
 	//Reset map
 	mMap.reset(new Map());
@@ -111,7 +116,7 @@ void PlaneCalibSystem::setMap(std::unique_ptr<Map> map)
 	}
 
 	//Calibrate
-	mCalib->calibrate(allPoses, mTracker->getImageSize());
+	mCalib->calibrate(mHomographyP0, allPoses);
 }
 
 void PlaneCalibSystem::processImage(double timestamp, cv::Mat3b &imgColor, cv::Mat1b &imgGray)
@@ -189,28 +194,7 @@ void PlaneCalibSystem::processImage(double timestamp, cv::Mat3b &imgColor, cv::M
 		{
 			createKeyframe();
 
-			std::vector<Eigen::Matrix3fr> allPoses;
-			for (auto &frame : mMap->getKeyframes())
-			{
-				allPoses.push_back(frame->getPose());
-			}
-			//mAllH.push_back(mTracker->getCurrentPose());
-
-			//Calibrate
-			mCalib->calibrate(allPoses, mTracker->getImageSize());
-			//MYAPP_LOG << "K=" << K << "\n";
-
-			// THIS DOESN'T WORK YET!!!
-			//CalibratedBundleAdjuster ba;
-			//ba.setMap(mMap.get());
-			//ba.setOutlierThreshold(2.5f);
-			//ba.setUseLocks(false);
-			//for (auto &framePtr : mMap->getKeyframes())
-			//{
-			//	ba.addFrameToAdjust(*framePtr);
-			//}
-			//ba.setK(mCalib->getK().cast<double>().eval());
-			//ba.bundleAdjust();
+			doHomographyCalib();
 		}
 	}
 }
@@ -231,42 +215,66 @@ void PlaneCalibSystem::createKeyframe()
 		frame->getMeasurements().push_back(m.get());
 		m->getFeature().getMeasurements().push_back(std::move(m));
 	}
-
-	//BA
-	BundleAdjuster ba;
-	ba.setMap(mMap.get());
-	ba.setOutlierThreshold(2.5f);
-	ba.setUseLocks(false);
-	for (auto &framePtr : mMap->getKeyframes())
-	{
-		ba.addFrameToAdjust(*framePtr);
-	}
-
-	//ba.bundleAdjust();
-	
 }
 
 void PlaneCalibSystem::doHomographyBA()
 {
 	BundleAdjuster ba;
+	ba.setUseLocks(false);
+	ba.setMap(mMap.get());
+	ba.setOutlierThreshold(3);
 	for (auto &framep : mMap->getKeyframes())
 	{
 		auto &frame = *framep;
 		ba.addFrameToAdjust(frame);
 	}
-	ba.setUseLocks(false);
-	ba.setOutlierThreshold(3);
-	ba.setMap(mMap.get());
+
+	ba.setOnlyDistortion(false);
+	ba.setP0((**ba.getFramesToAdjust().begin()).getImageSize().cast<double>()/2);
 	ba.bundleAdjust();
+
+	mHomographyP0 = ba.getP0().cast<float>();
+	mHomographyDistortion.setCoefficients(ba.getDistortion().cast<float>());
+	mActiveDistortion = &mHomographyDistortion;
+
+	//Calib
+	doHomographyCalib();
+
+	//Update homography distortion with the new principal point
+	ba.setOnlyDistortion(true);
+	ba.setP0(Eigen::Vector2d(mK(0, 2), mK(1, 2)));
+	ba.bundleAdjust();
+
+	mHomographyP0 = ba.getP0().cast<float>();
+	mHomographyDistortion.setCoefficients(ba.getDistortion().cast<float>());
+	mActiveDistortion = &mHomographyDistortion;
+}
+
+void PlaneCalibSystem::doHomographyCalib()
+{
+	std::vector<Eigen::Matrix3fr> allPoses;
+	for (auto &frame : mMap->getKeyframes())
+	{
+		allPoses.push_back(frame->getPose());
+	}
+
+	//Calibrate
+	mCalib->calibrate(mHomographyP0, allPoses);
+	mK = mCalib->getK().cast<float>();
+	mNormal = mCalib->getNormal().cast<float>();
 }
 
 void PlaneCalibSystem::doFullBA()
 {
+	float fx2 = mK(0, 0) * mK(0, 0);
+	Eigen::Vector2f distortion(mHomographyDistortion.getCoefficients()[0] * fx2, mHomographyDistortion.getCoefficients()[1]*fx2*fx2);
+	mHomographyDistortionInv = mHomographyDistortion.createInverseModel();
+
 	//Set pose for reference frame
 	Keyframe &refFrame = *mMap->getKeyframes()[0];
 
 	Eigen::Vector3f basis1, basis2, basis3;
-	basis3 = mCalib->getNormal().cast<float>();
+	basis3 = mNormal;
 	HomographyCalibrationError::GetBasis(basis3.data(), basis1, basis2);
 	basis1.normalize();
 	basis2.normalize();
@@ -288,18 +296,18 @@ void PlaneCalibSystem::doFullBA()
 
 	//Invert K
 	Eigen::Matrix3fr Kinv;
-	float fi = 1.0f / mCalib->getK()(0, 0);
-	Kinv << fi, 0, -fi*mCalib->getK()(0, 2), 0, fi, -fi*mCalib->getK()(1, 2), 0, 0, 1;
+	float fxi = 1.0f / mK(0, 0);
+	float fyi = 1.0f / mK(1, 1);
+	Kinv << fxi, 0, -fxi*mK(0, 2), 0, fyi, -fyi*mK(1, 2), 0, 0, 1;
 
 	//Triangulate all features
 	for (auto &pfeature : mMap->getFeatures())
 	{
 		auto &feature = *pfeature;
 		
-		Eigen::Vector3f m;
-		m << feature.getPosition()[0], feature.getPosition()[1], 1;
+		Eigen::Vector2f m = mHomographyDistortionInv.distortPoint(feature.getPosition() - mHomographyP0) + mHomographyP0;
 
-		Eigen::Vector3f xn = Kinv * m;
+		Eigen::Vector3f xn = Kinv * m.homogeneous();
 
 		Eigen::Vector3f xdir = refFrame.mPose3DR.transpose()*xn;
 		
@@ -316,16 +324,16 @@ void PlaneCalibSystem::doFullBA()
 		//Check
 		//Eigen::Vector3f tl = xdir.cross(feature.mPosition3D-refCenter);
 		//float tp = feature.mPosition3D[2];
-		Eigen::Vector3f mm = mCalib->getK() * (refFrame.mPose3DR*feature.mPosition3D + refFrame.mPose3DT);
-		Eigen::Vector2f m2;
-		m2 << mm[0] / mm[2], mm[1] / mm[2];
+		//Eigen::Vector3f mm = mCalib->getK() * (refFrame.mPose3DR*feature.mPosition3D + refFrame.mPose3DT);
+		//Eigen::Vector2f m2;
+		//m2 << mm[0] / mm[2], mm[1] / mm[2];
 
-		float diff = (m2 - feature.getPosition()).norm();
-		MatlabDataLog::Instance().AddValue("diffTest", diff);
+		//float diff = (m2 - feature.getPosition()).norm();
+		//MatlabDataLog::Instance().AddValue("diffTest", diff);
 	}
 
 	//Estimate frame positions
-	cv::Mat1f cvK(3,3,const_cast<float*>(mCalib->getK().data()));
+	cv::Mat1f cvK(3,3,const_cast<float*>(mK.data()));
 	for (auto &framep : mMap->getKeyframes())
 	{
 		auto &frame = *framep;
@@ -340,7 +348,8 @@ void PlaneCalibSystem::doFullBA()
 		for (auto &mp : frame.getMeasurements())
 		{
 			auto &m = *mp;
-			cvImagePoints.push_back(cv::Point2f(m.getPosition()[0], m.getPosition()[1]));
+			Eigen::Vector2f mu = mHomographyDistortionInv.distortPoint(m.getPosition() - mHomographyP0) + mHomographyP0;
+			cvImagePoints.push_back(cv::Point2f(mu[0], mu[1]));
 			cvWorldPoints.push_back(cv::Point3f(m.getFeature().mPosition3D[0], m.getFeature().mPosition3D[1], m.getFeature().mPosition3D[2]));
 		}
 
@@ -371,7 +380,8 @@ void PlaneCalibSystem::doFullBA()
 	CalibratedBundleAdjuster ba;
 	ba.setUseLocks(false);
 	ba.setOutlierThreshold(3);
-	ba.setK(mCalib->getK().cast<double>());
+	ba.setDistortion(distortion.cast<double>());
+	ba.setK(mK.cast<double>());
 	ba.setMap(mMap.get());
 	for (auto &framep : mMap->getKeyframes())
 	{
@@ -379,43 +389,48 @@ void PlaneCalibSystem::doFullBA()
 	}
 	//ba.addFrameToAdjust(**mMap->getKeyframes().begin());
 	ba.bundleAdjust();
-	MatlabDataLog::Instance().AddValue("K", ba.getK());
+
+	mCameraDistortion.setCoefficients(ba.getDistortion().cast<float>());
+	mActiveDistortion = &mCameraDistortion;
+
+	mK = ba.getK().cast<float>();
 
 	//Log
-	MatlabDataLog::Instance().AddValue("Kold", mCalib->getK());
-	MatlabDataLog::Instance().AddValue("Nold", mCalib->getNormal());
-	for (auto &framep : mMap->getKeyframes())
-	{
-		auto &frame = *framep;
-		MatlabDataLog::Instance().AddCell("poseR", frame.mPose3DR);
-		MatlabDataLog::Instance().AddCell("poseT", frame.mPose3DT);
-		MatlabDataLog::Instance().AddCell("poseH", frame.getPose());
+	//MatlabDataLog::Instance().AddValue("K", ba.getK());
+	//MatlabDataLog::Instance().AddValue("Kold", mCalib->getK());
+	//MatlabDataLog::Instance().AddValue("Nold", mCalib->getNormal());
+	//for (auto &framep : mMap->getKeyframes())
+	//{
+	//	auto &frame = *framep;
+	//	MatlabDataLog::Instance().AddCell("poseR", frame.mPose3DR);
+	//	MatlabDataLog::Instance().AddCell("poseT", frame.mPose3DT);
+	//	MatlabDataLog::Instance().AddCell("poseH", frame.getPose());
 
-		MatlabDataLog::Instance().AddCell("posM");
-		MatlabDataLog::Instance().AddCell("posRt");
-		MatlabDataLog::Instance().AddCell("posH");
-		for (auto &mp : frame.getMeasurements())
-		{
-			auto &m = *mp;
+	//	MatlabDataLog::Instance().AddCell("posM");
+	//	MatlabDataLog::Instance().AddCell("posRt");
+	//	MatlabDataLog::Instance().AddCell("posH");
+	//	for (auto &mp : frame.getMeasurements())
+	//	{
+	//		auto &m = *mp;
 
-			MatlabDataLog::Instance().AddValueToCell("posM", m.getPosition());
+	//		MatlabDataLog::Instance().AddValueToCell("posM", m.getPosition());
 
-			Eigen::Vector3f mm;
-			Eigen::Vector2f m2;
+	//		Eigen::Vector3f mm;
+	//		Eigen::Vector2f m2;
 
-			mm = ba.getK().cast<float>() * (frame.mPose3DR*m.getFeature().mPosition3D + frame.mPose3DT);
-			m2 << mm[0] / mm[2], mm[1] / mm[2];
+	//		mm = ba.getK().cast<float>() * (frame.mPose3DR*m.getFeature().mPosition3D + frame.mPose3DT);
+	//		m2 << mm[0] / mm[2], mm[1] / mm[2];
 
-			MatlabDataLog::Instance().AddValueToCell("posRt", m2);
+	//		MatlabDataLog::Instance().AddValueToCell("posRt", m2);
 
-			Eigen::Vector3f p; p << m.getFeature().getPosition()[0], m.getFeature().getPosition()[1], 1;
-			mm = frame.getPose() * p;
-			m2 << mm[0] / mm[2], mm[1] / mm[2];
+	//		Eigen::Vector3f p; p << m.getFeature().getPosition()[0], m.getFeature().getPosition()[1], 1;
+	//		mm = frame.getPose() * p;
+	//		m2 << mm[0] / mm[2], mm[1] / mm[2];
 
-			MatlabDataLog::Instance().AddValueToCell("posH", m2);
+	//		MatlabDataLog::Instance().AddValueToCell("posH", m2);
 
-		}
-	}
+	//	}
+	//}
 }
 
 } /* namespace dtslam */

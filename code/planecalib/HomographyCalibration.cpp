@@ -13,16 +13,14 @@
 
 namespace planecalib {
 
-void HomographyCalibration::calibrate(const std::vector<Eigen::Matrix3fr> &H, const Eigen::Vector2i &imageSize)
+	void HomographyCalibration::calibrate(const Eigen::Vector2f &p0, const std::vector<Eigen::Matrix3fr> &H)
 {
 	int hcount = H.size();
 
 	//Adjust for principal point
 	Eigen::Matrix3fr T, Ti;
-	float halfWidth = (float)imageSize.x()/2;
-	float halfHeight = (float)imageSize.y() / 2;
-	T << 1, 0, -halfWidth, 0, 1, -halfHeight, 0, 0, 1;
-	Ti << 1, 0, +halfWidth / 2, 0, 1, +halfHeight / 2, 0, 0, 1;
+	T << 1, 0, -p0[0], 0, 1, -p0[1], 0, 0, 1;
+	Ti << 1, 0, +p0[0], 0, 1, +p0[1], 0, 0, 1;
 
 	std::vector<Eigen::Matrix3d> Ht(hcount);
 	for (int i = 0; i < hcount; i++)
@@ -49,9 +47,10 @@ void HomographyCalibration::calibrate(const std::vector<Eigen::Matrix3fr> &H, co
 
 	//Non-linear minimization
 	ceres::Problem problem;
-	ceres::LossFunction *lossFunc = new ceres::CauchyLoss(3.0);
+	ceres::LossFunction *lossFunc = NULL;
+	//lossFunc = new ceres::CauchyLoss(3.0);
 
-	Eigen::Vector2d pp(0,0); //Assume principal point is in the middle
+	Eigen::Vector2d pp(0,0); //Homographies have been normalized so principal point is at the origin
 	mNormal << 0, 0, 1; //Assume reference camera is perependicular to plane.
 
 	problem.AddParameterBlock(&alpha, 1);
@@ -81,8 +80,12 @@ void HomographyCalibration::calibrate(const std::vector<Eigen::Matrix3fr> &H, co
 
 	MYAPP_LOG << "Initial alpha=" << alpha << ", final=" << alpha << "\n";
 
+	//Shift pp
+	Eigen::Vector2f ppn = pp.cast<float>() + p0;
+	MYAPP_LOG << "PP=" << ppn.transpose() << "\n";
+
 	//Build final K
-	mK << (float)alpha, 0, (float)pp.x()+halfWidth, 0, (float)alpha, (float)pp.y()+halfHeight, 0, 0, 1;
+	mK << (float)alpha, 0, ppn.x(), 0, (float)alpha, ppn.y(), 0, 0, 1;
 }
 
 } 

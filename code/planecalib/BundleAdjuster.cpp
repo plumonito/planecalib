@@ -21,6 +21,37 @@
 namespace planecalib
 {
 
+class P0Regularizer
+{
+public:
+	P0Regularizer(const double scale, const Eigen::Vector2d &ref) :
+		mScale(scale), mRef(ref)
+	{
+	}
+
+	EIGEN_MAKE_ALIGNED_OPERATOR_NEW
+
+	static const int kResidualCount = 2;
+
+	template<class T>
+	bool operator() (const T * const _p0, T *residuals) const;
+
+protected:
+	const Eigen::Vector2d mRef;
+	const double mScale;
+};
+
+template<class T>
+bool P0Regularizer::operator() (const T * const _p0, T *residuals) const
+{
+	T scale(mScale);
+
+	residuals[0] = scale*(T(mRef[0]) - T(_p0[0]));
+	residuals[1] = scale*(T(mRef[1]) - T(_p0[1]));
+	
+	return true;
+}
+
 
 class ReprojectionError
 {
@@ -38,9 +69,9 @@ public:
 	static const int kResidualCount = 2;
 
 	template<class T>
-	bool operator() (const T * const _distortion, const T * const _homography, const T * const _x, T *residuals) const;
+	bool operator() (const T * const _p0, const T * const _distortion, const T * const _homography, const T * const _x, T *residuals) const;
 
-	void evalToErrors(const Eigen::Vector2d &distortion, const Eigen::Matrix3dr &homography, const Eigen::Vector2d &x, const float errorThreshold, MatchReprojectionErrors &errors) const;
+	void evalToErrors(const Eigen::Vector2d &p0, const Eigen::Vector2d &distortion, const Eigen::Matrix3dr &homography, const Eigen::Vector2d &x, const float errorThreshold, MatchReprojectionErrors &errors) const;
 
 protected:
 	const double mMaxRadiusSq;
@@ -55,11 +86,12 @@ struct ble
 };
 
 template<class T>
-bool ReprojectionError::operator () (const T * const _distortion, const T * const _homography, const T * const _x, T *residuals) const
+bool ReprojectionError::operator () (const T * const _p0, const T * const _distortion, const T * const _homography, const T * const _x, T *residuals) const
 {
 	Eigen::Map<Eigen::Matrix<T, 2, 1>> distortion((T*)_distortion);
 	Eigen::Map<Eigen::Matrix<T, 3, 3, Eigen::RowMajor>> homography((T*)_homography);
 	Eigen::Map<Eigen::Matrix<T, 2, 1>> x((T*)_x);
+	Eigen::Map<Eigen::Matrix<T, 2, 1>> p0((T*)_p0);
 
 
 	//Homography
@@ -70,11 +102,17 @@ bool ReprojectionError::operator () (const T * const _distortion, const T * cons
 	//p[2] = homography[6] * x[0] + homography[7] * x[1] + homography[8];
 
 	//Normalize
-	const Eigen::Matrix<T, 2, 1> pn = p.hnormalized();
+	Eigen::Matrix<T, 2, 1> pn = p.hnormalized();
 
+	//Principal point
+	pn = pn - p0;
+	
 	//Distort
 	Eigen::Matrix<T, 2, 1> pd;
 	RadialCameraDistortionModel::DistortPoint(mMaxRadiusSq, distortion, pn, pd);
+
+	//Principal point
+	pd = pd + p0;
 
 	//Residuals
 	residuals[0] = (T(mImgPoint.x()) - pd[0]) / T(mScale);
@@ -82,12 +120,12 @@ bool ReprojectionError::operator () (const T * const _distortion, const T * cons
 	return true;
 }
 
-void ReprojectionError::evalToErrors(const Eigen::Vector2d &distortion, const Eigen::Matrix3dr &homography, const Eigen::Vector2d &x, const float errorThresholdSq, MatchReprojectionErrors &errors) const
+void ReprojectionError::evalToErrors(const Eigen::Vector2d &p0, const Eigen::Vector2d &distortion, const Eigen::Matrix3dr &homography, const Eigen::Vector2d &x, const float errorThresholdSq, MatchReprojectionErrors &errors) const
 {
 	assert(kResidualCount == 2);
 	
 	Eigen::Vector2d residuals;
-	this->operator()(distortion.data(), homography.data(), x.data(), residuals.data());
+	this->operator()(p0.data(), distortion.data(), homography.data(), x.data(), residuals.data());
 	
 	errors.reprojectionErrorsSq = (float)residuals.squaredNorm();
 	errors.isInlier = errors.reprojectionErrorsSq < errorThresholdSq;
@@ -123,7 +161,7 @@ bool BundleAdjuster::isInlier(const FeatureMeasurement &measurement, const Eigen
 	MatchReprojectionErrors errors;
 
 	ReprojectionError err(mImageSize, measurement);
-	err.evalToErrors(mParamsDistortion, pose, position, mOutlierPixelThresholdSq, errors);
+	err.evalToErrors(mParamsP0, mParamsDistortion, pose, position, mOutlierPixelThresholdSq, errors);
 	return errors.isInlier;
 }
 
@@ -212,17 +250,18 @@ bool BundleAdjuster::bundleAdjust()
 			auto &params = getPoseParams(&frame);
 
 			//Add pose as parameter block
+			problem.AddParameterBlock(params.data(), 9);
+			//problem.AddParameterBlock(params.data() + 3, 3, new Fixed3DNormParametrization(1));
 			if (&frame == mMap->getKeyframes().begin()->get())
 			{
 				//First key frame in region, scale fixed
-				problem.AddParameterBlock(params.data(), 9);
-				//problem.AddParameterBlock(params.data() + 3, 3, new Fixed3DNormParametrization(1));
 				problem.SetParameterBlockConstant(params.data());
 			}
-			else
+			else if (mOnlyDistortion)
 			{
-				problem.AddParameterBlock(params.data(), 9);
-			}
+				problem.SetParameterBlockConstant(params.data());
+			}			
+
 			//options.linear_solver_ordering->AddElementToGroup(params.data(), 1);
 			//options.linear_solver_ordering->AddElementToGroup(params.data()+3, 1);
 		}
@@ -237,16 +276,22 @@ bool BundleAdjuster::bundleAdjust()
 
 			//Add feature as parameter block
 			problem.AddParameterBlock(params.data(), 2);
+			if (mOnlyDistortion)
+				problem.SetParameterBlockConstant(params.data());
 			//problem.SetParameterBlockConstant(params.data());
 			//options.linear_solver_ordering->AddElementToGroup(params.data(), 0);
 		}
 
 		//Distortion params
 		mImageSize = (**mFramesToAdjust.begin()).getImageSize();
-		mParamsDistortion = Eigen::Vector2d::Zero();
+		problem.AddParameterBlock(mParamsP0.data(), 2);
+		if (mOnlyDistortion)
+			problem.SetParameterBlockConstant(mParamsP0.data());
+
 		problem.AddParameterBlock(mParamsDistortion.data(), mParamsDistortion.rows());
 
 		//Gather measurements
+		mMeasurementsInProblem.clear();
 		for (auto &featurep : mFeaturesToAdjust)
 		{
 			auto &feature = *featurep;
@@ -286,10 +331,16 @@ bool BundleAdjuster::bundleAdjust()
 			//lossFunc_i = new ceres::CauchyLoss(mOutlierPixelThreshold);
 
 			problem.AddResidualBlock(
-				new ceres::AutoDiffCostFunction<ReprojectionError, ReprojectionError::kResidualCount, 2, 9, 2>(
+				new ceres::AutoDiffCostFunction<ReprojectionError, ReprojectionError::kResidualCount, 2, 2, 9, 2>(
 				new ReprojectionError(mImageSize, m)),
-				lossFunc_i, mParamsDistortion.data(), poseParams.data(), featureParams.data());
+				lossFunc_i, mParamsP0.data(), mParamsDistortion.data(), poseParams.data(), featureParams.data());
 		}
+
+		//Add p0 regularizer
+		problem.AddResidualBlock(
+			new ceres::AutoDiffCostFunction<P0Regularizer, P0Regularizer::kResidualCount, 2>(
+			new P0Regularizer(1, mParamsP0)),
+			NULL, mParamsP0.data());
 	}
 
 	//Get inliers before
@@ -306,12 +357,15 @@ bool BundleAdjuster::bundleAdjust()
 	}
 
 	MYAPP_LOG << "BA report:\n" << summary.FullReport();
+	MYAPP_LOG << "P0: " << mParamsP0.transpose() << "\n";
 	MYAPP_LOG << "Distortion coefficients: " << mParamsDistortion.transpose() << "\n";
+
 	//if (summary.termination_type == ceres::USER_FAILURE || (!mIsExpanderBA && mMap->getAbortBA()))
 	//{
 	//	DTSLAM_LOG << "\n\nBA aborted due to new key frame in map!!!\n\n";
 	//	return false;
 	//}
+
 	if (summary.termination_type == ceres::FAILURE)
 	{
 		MYAPP_LOG << "\n\nBA solver failed!!!\n\n"; //<< summary.FullReport();

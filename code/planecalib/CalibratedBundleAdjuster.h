@@ -17,7 +17,7 @@ class CalibratedBundleAdjuster
 {
 public:
 	CalibratedBundleAdjuster() :
-		mUseLocks(true) 
+		mUseLocks(true), mParamsDistortion(0, 0), mK(Eigen::Matrix3dr::Identity())
 	{}
 
 	void setOutlierThreshold(float pixelThreshold)
@@ -37,6 +37,9 @@ public:
 	void setK(const Eigen::Matrix3dr &K) { mK = K; }
 	const Eigen::Matrix3dr &getK() const { return mK; }
 
+	void setDistortion(const Eigen::Vector2d &coeff) { mParamsDistortion = coeff; }
+	const Eigen::Vector2d &getDistortion() const { return mParamsDistortion; }
+
 	void addFrameToAdjust(Keyframe &newFrame);
 
 	bool bundleAdjust();
@@ -54,7 +57,7 @@ protected:
 	Eigen::Matrix3dr mK;
 
 	Eigen::Vector2d mParamsDistortion;
-	Eigen::Vector3d mParamsK;
+	Eigen::Vector4d mParamsK;
 	std::unordered_map<Keyframe *, Eigen::Matrix<double, 1, 6>, std::hash<Keyframe*>, std::equal_to<Keyframe*>, Eigen::aligned_allocator<std::pair<Keyframe*,Eigen::Matrix<double,1,6>>>> mParamsPoses;
 	std::unordered_map<Feature *, Eigen::Vector2d, std::hash<Feature*>, std::equal_to<Feature*>, Eigen::aligned_allocator<std::pair<Feature*, Eigen::Vector2d>>> mParamsFeatures;
 	std::vector<FeatureMeasurement *> mMeasurementsInProblem;

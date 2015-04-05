@@ -43,35 +43,33 @@ protected:
 };
 
 template<class T>
-bool CalibratedReprojectionError::operator () (const T * const _distortion, const T * const kparams, const T * const rparams, const T * const tparams, const T * const x, T *residuals) const
+bool CalibratedReprojectionError::operator () (const T * const _distortion, const T * const kparams, const T * const rparams, const T * const _tparams, const T * const x, T *residuals) const
 {
 	Eigen::Map<Eigen::Matrix<T, 2, 1>> distortion((T*)_distortion);
+	Eigen::Map<Eigen::Matrix<T, 3, 1>> tparams((T*)_tparams);
 
-	T xw[3];
+	Eigen::Matrix<T, 3, 1>  xw;
 	xw[0] = x[0];
 	xw[1] = x[1];
 	xw[2] = T(0);
 
 	//Rotate and translate
-	T xc[3];
-	ceres::AngleAxisRotatePoint(rparams, xw, xc);
+	Eigen::Matrix<T, 3, 1>  xc;
+	ceres::AngleAxisRotatePoint(rparams, xw.data(), xc.data());
 
-	xc[0] += tparams[0];
-	xc[1] += tparams[1];
-	xc[2] += tparams[2];
+	xc += tparams;
 
-	//Normalize + focal
-	Eigen::Matrix<T, 2, 1> p;
-	p[0] = kparams[0] * xc[0] / xc[2];
-	p[1] = kparams[0] * xc[1] / xc[2];
+	//Normalize
+	Eigen::Matrix<T, 2, 1> xn = xc.hnormalized();
 
 	//Distort
-	Eigen::Matrix<T, 2, 1> pd;
-	RadialCameraDistortionModel::DistortPoint(mMaxRadiusSq, distortion, p, pd);
+	Eigen::Matrix<T, 2, 1> xd;
+	RadialCameraDistortionModel::DistortPoint(mMaxRadiusSq, distortion, xn, xd);
 
-	//Center
-	pd[0] += kparams[1];
-	pd[1] += kparams[2];
+	//Intrinsics
+	Eigen::Matrix<T, 2, 1> pd;
+	pd[0] = kparams[0] * xd[0] + kparams[2];
+	pd[1] = kparams[1] * xd[1] + kparams[3];
 
 	//Residuals
 	residuals[0] = (T(mImgPoint.x()) - pd[0]) / T(mScale);
@@ -239,18 +237,19 @@ bool CalibratedBundleAdjuster::bundleAdjust()
 
 		//K params
 		mParamsK[0] = mK(0, 0);
-		mParamsK[1] = mK(0, 2);
-		mParamsK[2] = mK(1, 2);
+		mParamsK[1] = mK(1, 1);
+		mParamsK[2] = mK(0, 2);
+		mParamsK[3] = mK(1, 2);
 		problem.AddParameterBlock(mParamsK.data(), mParamsK.size());
 		//problem.SetParameterBlockConstant(mParamsK.data());
 		//options.linear_solver_ordering->AddElementToGroup(kparams.data(), 1);
 
 		//Distortion params
-		mImageSize = (**mFramesToAdjust.begin()).getImageSize();
-		mParamsDistortion = Eigen::Vector2d::Zero();
+		mImageSize = (**mFramesToAdjust.begin()).getImageSize(); //Image size is needed to determine the maximum radius for distortion
 		problem.AddParameterBlock(mParamsDistortion.data(), mParamsDistortion.size());
 
 		//Gather measurements
+		mMeasurementsInProblem.clear();
 		for (auto &featurep : mFeaturesToAdjust)
 		{
 			auto &feature = *featurep;
@@ -293,7 +292,7 @@ bool CalibratedBundleAdjuster::bundleAdjust()
 			ceres::LossFunction *lossFunc_i = NULL;
 
 			problem.AddResidualBlock(
-				new ceres::AutoDiffCostFunction<CalibratedReprojectionError, CalibratedReprojectionError::kResidualCount, 2, 3, 3, 3, 2>(
+				new ceres::AutoDiffCostFunction<CalibratedReprojectionError, CalibratedReprojectionError::kResidualCount, 2, 4, 3, 3, 2>(
 				new CalibratedReprojectionError(mImageSize, m)),
 				lossFunc_i, mParamsDistortion.data(), mParamsK.data(), poseParams.data(), poseParams.data() + 3, featureParams.data());
 		}
@@ -316,9 +315,6 @@ bool CalibratedBundleAdjuster::bundleAdjust()
 	MYAPP_LOG << "Calibrated BA K: " << mParamsK.transpose() << "\n";
 	MYAPP_LOG << "Calibrated BA distortion: " << mParamsDistortion.transpose() << "\n";
 	
-	double fx2 = mParamsK[0] * mParamsK[0];
-	double fx4 = fx2*fx2;
-	MYAPP_LOG << "Calibrated BA distortion (adjusted): " << mParamsDistortion[0]*fx2 << ", " << mParamsDistortion[1]*fx4 << "\n";
 	//if (summary.termination_type == ceres::USER_FAILURE || (!mIsExpanderBA && mMap->getAbortBA()))
 	//{
 	//	DTSLAM_LOG << "\n\nBA aborted due to new key frame in map!!!\n\n";
@@ -343,9 +339,9 @@ bool CalibratedBundleAdjuster::bundleAdjust()
 
 	//Update K
 	mK(0, 0) = mParamsK[0];
-	mK(1, 1) = mParamsK[0];
-	mK(0, 2) = mParamsK[1];
-	mK(1, 2) = mParamsK[2];
+	mK(1, 1) = mParamsK[1];
+	mK(0, 2) = mParamsK[2];
+	mK(1, 2) = mParamsK[3];
 
 	//Update pose
 	for (auto &p : mParamsPoses)

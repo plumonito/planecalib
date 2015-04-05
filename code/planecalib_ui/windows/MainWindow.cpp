@@ -173,7 +173,7 @@ void MainWindow::draw()
 	{
 		TextRendererStream ts(mShaders->getText());
 		ts << "Alpha0=" << mSystem->getCalib().getInitialAlpha() << "\n";
-		ts << "K=" << mSystem->getCalib().getK() << "\nNormal=" << mSystem->getCalib().getNormal();
+		ts << "Normal=" << mSystem->getNormal() << "\nK=" << mSystem->getK() << "\nDistortion=" << mSystem->getDistortion().getCoefficients().transpose();
 	}
 }
 

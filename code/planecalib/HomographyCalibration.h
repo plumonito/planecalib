@@ -10,7 +10,7 @@ namespace planecalib {
 class HomographyCalibration
 {
 public:
-	HomographyCalibration()
+	HomographyCalibration() : mInitialAlpha(0), mNormal(0,0,0)
 	{
 	}
 
@@ -19,7 +19,7 @@ public:
 	const Eigen::Matrix3fr &getK() const { return mK; }
 	const Eigen::Vector3d &getNormal() const { return mNormal; }
 
-	void calibrate(const std::vector<Eigen::Matrix3fr> &H, const Eigen::Vector2i &imageSize);
+	void calibrate(const Eigen::Vector2f &p0, const std::vector<Eigen::Matrix3fr> &H);
 
 protected:
 	double mInitialAlpha;

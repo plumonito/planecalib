@@ -31,8 +31,13 @@ public:
 	void setMap(std::unique_ptr<Map> map);
 
 	PoseTracker &getTracker() { return *mTracker; }
+	
 	HomographyCalibration &getCalib() { return *mCalib; }
 	//SlamMapExpander &getMapExpander() {return *mMapExpander;}
+
+	const Eigen::Matrix3fr &getK() const { return mK; }
+	const Eigen::Vector3f &getNormal() const { return mNormal; }
+	const RadialCameraDistortionModel &getDistortion() const { return *mActiveDistortion; }
 
 
 	void processImage(double timestamp, cv::Mat3b &imgColor, cv::Mat1b &imgGray);
@@ -41,6 +46,7 @@ public:
 	void idle();
 
 	void doHomographyBA();
+	void doHomographyCalib();
 	void doFullBA();
 
 protected:
@@ -48,7 +54,15 @@ protected:
 	// Members
 	bool mSingleThreaded;
 
-	std::unique_ptr<RadialCameraDistortionModel> mCameraDistortion;
+	Eigen::Vector2f mHomographyP0;
+	RadialCameraDistortionModel mHomographyDistortion;	
+	RadialCameraDistortionModel mHomographyDistortionInv;
+	RadialCameraDistortionModel mCameraDistortion;
+	RadialCameraDistortionModel *mActiveDistortion;
+
+	Eigen::Vector3f mNormal;
+	Eigen::Matrix3fr mK;
+
 	std::unique_ptr<Map> mMap;
 
 	std::unique_ptr<PoseTracker> mTracker;
