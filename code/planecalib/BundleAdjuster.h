@@ -66,15 +66,9 @@ protected:
 
 	Eigen::Vector2d mParamsDistortion;
 	Eigen::Vector2d mParamsP0;
-	std::unordered_map<Keyframe *, Eigen::Matrix3dr, std::hash<Keyframe*>, std::equal_to<Keyframe*>, Eigen::aligned_allocator<std::pair<Keyframe*, Eigen::Matrix3dr>>> mParamsPoses;
-	std::unordered_map<Feature *, Eigen::Vector2d, std::hash<Feature*>, std::equal_to<Feature*>, Eigen::aligned_allocator<std::pair<Feature*, Eigen::Vector2d>>> mParamsFeatures;
 	std::vector<FeatureMeasurement *> mMeasurementsInProblem;
 
-	Eigen::Matrix3dr &getPoseParams(Keyframe *framep);
-	Eigen::Vector2d &getFeatureParams(Feature *featurep);
-
-
-	bool isInlier(const FeatureMeasurement &measurement, const Eigen::Matrix3dr &pose, const Eigen::Vector2d &position);
+	bool isInlier(const FeatureMeasurement &measurement);
 
 	void getInliers(int &inlierCount);
 };

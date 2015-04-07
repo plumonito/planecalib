@@ -46,30 +46,30 @@ list(APPEND DEBUG_DLL_GLOB_PATTERNS "${EP_PREFIX}/${OpenCV_ARCH}/${OpenCV_RUNTIM
 list(APPEND RELEASE_DLL_GLOB_PATTERNS "${EP_PREFIX}/${OpenCV_ARCH}/${OpenCV_RUNTIME}/bin/*0.dll")
 
 # gflags -----------------------------------------------------------------
-ConfigExternalProject(gflags
-    SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/${GFLAGS_ROOT_DIR}
-    CMAKE_ARGS -DCMAKE_POSITION_INDEPENDENT_CODE:BOOL=TRUE
-    CMAKE_CACHE_ARGS -DGFLAGS_NAMESPACE:STRING=google)
+#ConfigExternalProject(gflags
+#    SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/${GFLAGS_ROOT_DIR}
+#    CMAKE_ARGS -DCMAKE_POSITION_INDEPENDENT_CODE:BOOL=TRUE
+#    CMAKE_CACHE_ARGS -DGFLAGS_NAMESPACE:STRING=google)
 
 # we must fix the gflags-config, the gflags target is gflags-static!
-if(WIN32)
-    set(gflags_DIR "${EP_PREFIX}/CMake")
-else()
-    set(gflags_DIR "${EP_PREFIX}/lib/cmake/gflags")
-endif()
-file(STRINGS "${gflags_DIR}/gflags-config.cmake" NVMARK REGEX "NVMARK")
-if(NOT NVMARK AND EXISTS "${gflags_DIR}/gflags-config.cmake")
-    file(APPEND "${gflags_DIR}/gflags-config.cmake"
-                "\n# NVMARK\nset(gflags_LIBRARIES gflags-static)\n")
-endif()
+#if(WIN32)
+#    set(gflags_DIR "${EP_PREFIX}/CMake")
+#else()
+#    set(gflags_DIR "${EP_PREFIX}/lib/cmake/gflags")
+#endif()
+#file(STRINGS "${gflags_DIR}/gflags-config.cmake" NVMARK REGEX "NVMARK")
+#if(NOT NVMARK AND EXISTS "${gflags_DIR}/gflags-config.cmake")
+#    file(APPEND "${gflags_DIR}/gflags-config.cmake"
+#                "\n# NVMARK\nset(gflags_LIBRARIES gflags-static)\n")
+#endif()
 
 
 # glog --------------------------------------------------------------------
-ConfigExternalProject(glog
-    SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/glog_cmake
-    CMAKE_ARGS -DGLOG_ROOT_DIR:STRING=${GLOG_ROOT_DIR}
-               -DCMAKE_POSITION_INDEPENDENT_CODE:BOOL=TRUE
-    CMAKE_CACHE_ARGS -DCMAKE_DEBUG_POSTFIX:STRING= )
+#ConfigExternalProject(glog
+#    SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/glog_cmake
+#    CMAKE_ARGS -DGLOG_ROOT_DIR:STRING=${GLOG_ROOT_DIR}
+#               -DCMAKE_POSITION_INDEPENDENT_CODE:BOOL=TRUE
+#    CMAKE_CACHE_ARGS -DCMAKE_DEBUG_POSTFIX:STRING= )
 
 # suitesparse-metis -------------------------------------------------------
 set(suitesparse_dir "${CMAKE_CURRENT_SOURCE_DIR}/${SUITESPARSE_METIS_ROOT_DIR}")
@@ -120,32 +120,32 @@ if(WIN32)
     set(blas_lapack_packages MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/cmake/lapack)
 endif()
 
-ConfigExternalProject(Ceres
-    SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/${CERES_SOLVER_ROOT_DIR}
-    ${blas_lapack_packages}
-    CMAKE_ARGS -DBUILD_SHARED_LIBS:BOOL=TRUE
-    CMAKE_CACHE_ARGS
-               -DCXSPARSE_LIBRARY:PATH=
-               -DCMAKE_CXX_FLAGS:STRING=${CXXFLAGS}
-               -DBUILD_TESTING:BOOL=OFF
-               -DBUILD_EXAMPLES:BOOL=OFF
-               -DSuiteSparse_USE_LAPACK_BLAS:BOOL=TRUE
-               -DEIGEN_INCLUDE_DIR_HINTS:PATH=${EIGEN_INCLUDE_DIR}
-               -DSUITESPARSE_INCLUDE_DIR_HINTS:PATH=${EP_PREFIX}/include/suitesparse
-               -DCXSPARSE_CHECK_INCLUDE_DIRS:PATH=${EP_PREFIX}/include/suitesparse
-               "-DSUITESPARSE_LIBRARY_DIR_HINTS:STRING=${EP_PREFIX}/lib\\\;${EP_PREFIX}/lib64"
-               "-DCXSPARSE_CHECK_LIBRARY_DIRS:STRING=${EP_PREFIX}/lib\\\;${EP_PREFIX}/lib64")
+#ConfigExternalProject(Ceres
+#    SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/${CERES_SOLVER_ROOT_DIR}
+#    ${blas_lapack_packages}
+#    CMAKE_ARGS -DBUILD_SHARED_LIBS:BOOL=TRUE
+#    CMAKE_CACHE_ARGS
+#              -DCXSPARSE_LIBRARY:PATH=
+#               -DCMAKE_CXX_FLAGS:STRING=${CXXFLAGS}
+#               -DBUILD_TESTING:BOOL=OFF
+#               -DBUILD_EXAMPLES:BOOL=OFF
+#               -DSuiteSparse_USE_LAPACK_BLAS:BOOL=TRUE
+#               -DEIGEN_INCLUDE_DIR_HINTS:PATH=${EIGEN_INCLUDE_DIR}
+#               -DSUITESPARSE_INCLUDE_DIR_HINTS:PATH=${EP_PREFIX}/include/suitesparse
+#               -DCXSPARSE_CHECK_INCLUDE_DIRS:PATH=${EP_PREFIX}/include/suitesparse
+#               "-DSUITESPARSE_LIBRARY_DIR_HINTS:STRING=${EP_PREFIX}/lib\\\;${EP_PREFIX}/lib64"
+#               "-DCXSPARSE_CHECK_LIBRARY_DIRS:STRING=${EP_PREFIX}/lib\\\;${EP_PREFIX}/lib64")
 
 # ceres is such a pain... it insists in using its own Find*, we need to use
 # ours...
-if(WIN32)
-    set(Ceres_DIR "${EP_PREFIX}/CMake")
-    list(APPEND DEBUG_DLL_GLOB_PATTERNS "${EP_PREFIX}/bin/ceres-debug.dll")
-    list(APPEND RELEASE_DLL_GLOB_PATTERNS "${EP_PREFIX}/bin/ceres.dll")
-else()
-    set(Ceres_DIR "${EP_PREFIX}/share/Ceres")
-endif()
-execute_process(COMMAND ${CMAKE_COMMAND} -E copy "${CMAKE_CURRENT_SOURCE_DIR}/cmake/FindGlog.cmake" "${Ceres_DIR}")
+#if(WIN32)
+#    set(Ceres_DIR "${EP_PREFIX}/CMake")
+#    list(APPEND DEBUG_DLL_GLOB_PATTERNS "${EP_PREFIX}/bin/ceres-debug.dll")
+#    list(APPEND RELEASE_DLL_GLOB_PATTERNS "${EP_PREFIX}/bin/ceres.dll")
+#else()
+#    set(Ceres_DIR "${EP_PREFIX}/share/Ceres")
+#endif()
+#execute_process(COMMAND ${CMAKE_COMMAND} -E copy "${CMAKE_CURRENT_SOURCE_DIR}/cmake/FindGlog.cmake" "${Ceres_DIR}")
 
 #  matio -------------------------------------------------------------------
 find_library(MATIO_LIB matio)

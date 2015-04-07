@@ -66,6 +66,10 @@ public:
 
 	void removeMeasurement(FeatureMeasurement *m);
 
+	////////////////////////////////////
+	// BA params
+	Eigen::Matrix3dr mParamsPose;
+
 protected:
 	double mTimestamp;
 

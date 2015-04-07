@@ -54,6 +54,8 @@ class Feature
 public:
 	friend Map;
 
+	EIGEN_MAKE_ALIGNED_OPERATOR_NEW
+
 	const Eigen::Vector2f &getPosition() const {return mPosition;}
 	void setPosition(const Eigen::Vector2f &value) {mPosition=value;}
 
@@ -62,6 +64,10 @@ public:
 
 	std::vector<std::unique_ptr<FeatureMeasurement>> &getMeasurements() {return mMeasurements;}
 	const std::vector<std::unique_ptr<FeatureMeasurement>> &getMeasurements() const {return mMeasurements;}
+
+	////////////////////////////////////
+	// BA params
+	Eigen::Vector2d mParams;
 
 protected:
 	Eigen::Vector2f mPosition;	//Position in world coordinates

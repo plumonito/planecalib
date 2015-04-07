@@ -162,6 +162,7 @@ bool PoseTracker::trackFrame(std::unique_ptr<Keyframe> frame_)
 				auto &refDesc_i = m.getDescriptor();
 
 				//Find best match
+				const int kMatchThresholdSq = 40 * 40;
 				int bestScore = std::numeric_limits<int>::max();
 				Eigen::Vector2f bestPosition;
 				const uchar *bestDescriptor;
@@ -169,7 +170,7 @@ bool PoseTracker::trackFrame(std::unique_ptr<Keyframe> frame_)
 				for (int j = 0; j < (int)imgKeypoints.size(); j++)
 				{
 					auto diff = projection.getPosition() - eutils::FromCV(imgKeypoints[j].pt);
-					if (diff.dot(diff) < 20 * 20 || mIsLost)
+					if (diff.dot(diff) < kMatchThresholdSq || mIsLost)
 					{
 						const uchar *imgDesc_j = &imgDesc(j, 0);
 						int score = cv::normHamming(refDesc_i.data(), imgDesc_j, 32);

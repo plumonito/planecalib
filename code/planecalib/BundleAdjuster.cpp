@@ -95,14 +95,15 @@ bool ReprojectionError::operator () (const T * const _p0, const T * const _disto
 
 
 	//Homography
-	const Eigen::Matrix<T, 3, 1> x3(x[0], x[1], T(1));
-	const Eigen::Matrix<T, 3, 1> p = homography*x3;
-	//p[0] = homography[0] * x[0] + homography[1] * x[1] + homography[2];
-	//p[1] = homography[3] * x[0] + homography[4] * x[1] + homography[5];
-	//p[2] = homography[6] * x[0] + homography[7] * x[1] + homography[8];
+	const Eigen::Matrix<T, 3, 1> p = homography*x.homogeneous();
+	//Eigen::Matrix<T, 3, 1> p;
+	//p[0] = homography(0, 0) * x[0] + homography(0, 1) * x[1] + homography(0, 2);
+	//p[1] = homography(1, 0) * x[0] + homography(1, 1) * x[1] + homography(1, 2);
+	//p[2] = homography(2, 0) * x[0] + homography(2, 1) * x[1] + homography(2, 2);
 
 	//Normalize
 	Eigen::Matrix<T, 2, 1> pn = p.hnormalized();
+	//Eigen::Matrix<T, 2, 1> pn(p[0] / p[2], p[1] / p[2]);
 
 	//Principal point
 	pn = pn - p0;
@@ -113,6 +114,7 @@ bool ReprojectionError::operator () (const T * const _p0, const T * const _disto
 
 	//Principal point
 	pd = pd + p0;
+	//pd = pn;
 
 	//Residuals
 	residuals[0] = (T(mImgPoint.x()) - pd[0]) / T(mScale);
@@ -156,12 +158,12 @@ void BundleAdjuster::addFrameToAdjust(Keyframe &newFrame)
 	}
 }
 
-bool BundleAdjuster::isInlier(const FeatureMeasurement &measurement, const Eigen::Matrix3dr &pose, const Eigen::Vector2d &position)
+bool BundleAdjuster::isInlier(const FeatureMeasurement &measurement)
 {
 	MatchReprojectionErrors errors;
 
 	ReprojectionError err(mImageSize, measurement);
-	err.evalToErrors(mParamsP0, mParamsDistortion, pose, position, mOutlierPixelThresholdSq, errors);
+	err.evalToErrors(mParamsP0, mParamsDistortion, measurement.getKeyframe().mParamsPose, measurement.getFeature().mParams, mOutlierPixelThresholdSq, errors);
 	return errors.isInlier;
 }
 
@@ -171,39 +173,10 @@ void BundleAdjuster::getInliers(int &inlierCount)
 	for(auto &mp : mMeasurementsInProblem)
 	{
 		auto &m = *mp;
-		if(isInlier(m, getPoseParams(&m.getKeyframe()), getFeatureParams(&m.getFeature())))
+		if(isInlier(m))
 			inlierCount++;
 	}
 }
-
-Eigen::Matrix3dr &BundleAdjuster::getPoseParams(Keyframe *framep)
-{
-	auto &frame = *framep;
-	auto itNew = mParamsPoses.emplace(&frame, Eigen::Matrix3dr());
-	auto &params = itNew.first->second;
-	if (itNew.second)
-	{
-		//Is new, create
-		params = frame.getPose().cast<double>();
-	}
-
-	return params;
-}
-
-Eigen::Vector2d &BundleAdjuster::getFeatureParams(Feature *featurep)
-{
-	auto &feature = *featurep;
-	auto itNew = mParamsFeatures.emplace(&feature, Eigen::Vector2d());
-	auto &params = itNew.first->second;
-	if (itNew.second)
-	{
-		//Is new, create
-		params = feature.getPosition().cast<double>();
-	}
-
-	return params;
-}
-
 
 bool BundleAdjuster::bundleAdjust()
 {
@@ -214,10 +187,19 @@ bool BundleAdjuster::bundleAdjust()
 
 	//BA ceres problem
 	ceres::Solver::Options options;
-	options.linear_solver_type = ceres::CGNR;
-	//options.preconditioner_type = ceres::SCHUR_JACOBI;
-	options.dense_linear_algebra_library_type = ceres::LAPACK;
+	//options.linear_solver_type = ceres::CGNR;
+	if (mOnlyDistortion)
+	{
+		options.linear_solver_type = ceres::DENSE_QR;
 
+	}
+	else
+	{
+		options.linear_solver_type = ceres::SPARSE_SCHUR;
+		options.preconditioner_type = ceres::SCHUR_JACOBI;
+	}
+	//options.dense_linear_algebra_library_type = ceres::LAPACK;
+	options.sparse_linear_algebra_library_type = ceres::SUITE_SPARSE;
 	options.max_num_iterations = 500;
 	options.num_threads = 4;
 	options.num_linear_solver_threads = 4;
@@ -225,7 +207,7 @@ bool BundleAdjuster::bundleAdjust()
 
 	options.minimizer_progress_to_stdout = false;
 
-	//options.linear_solver_ordering.reset(new ceres::ParameterBlockOrdering());
+	options.linear_solver_ordering.reset(new ceres::ParameterBlockOrdering());
 
 	ceres::Problem problem;
 
@@ -247,11 +229,15 @@ bool BundleAdjuster::bundleAdjust()
 			auto &frame = *framep;
 
 			//Create and init params
-			auto &params = getPoseParams(&frame);
+			auto &params = frame.mParamsPose;
+
+			//Is new, create
+			params = frame.getPose().cast<double>();
 
 			//Add pose as parameter block
 			problem.AddParameterBlock(params.data(), 9);
 			//problem.AddParameterBlock(params.data() + 3, 3, new Fixed3DNormParametrization(1));
+			options.linear_solver_ordering->AddElementToGroup(params.data(), 1);
 			if (&frame == mMap->getKeyframes().begin()->get())
 			{
 				//First key frame in region, scale fixed
@@ -262,8 +248,6 @@ bool BundleAdjuster::bundleAdjust()
 				problem.SetParameterBlockConstant(params.data());
 			}			
 
-			//options.linear_solver_ordering->AddElementToGroup(params.data(), 1);
-			//options.linear_solver_ordering->AddElementToGroup(params.data()+3, 1);
 		}
 
 		//Prepare features
@@ -272,26 +256,32 @@ bool BundleAdjuster::bundleAdjust()
 			auto &feature = *featurep;
 
 			//Create and init params
-			auto &params = getFeatureParams(&feature);
+			auto &params = feature.mParams;
+
+			//Is new, create
+			params = feature.getPosition().cast<double>();
 
 			//Add feature as parameter block
 			problem.AddParameterBlock(params.data(), 2);
 			if (mOnlyDistortion)
 				problem.SetParameterBlockConstant(params.data());
 			//problem.SetParameterBlockConstant(params.data());
-			//options.linear_solver_ordering->AddElementToGroup(params.data(), 0);
+			options.linear_solver_ordering->AddElementToGroup(params.data(), 0);
 		}
 
 		//Distortion params
 		mImageSize = (**mFramesToAdjust.begin()).getImageSize();
 		problem.AddParameterBlock(mParamsP0.data(), 2);
+		options.linear_solver_ordering->AddElementToGroup(mParamsP0.data(), 1);
 		if (mOnlyDistortion)
 			problem.SetParameterBlockConstant(mParamsP0.data());
 
 		problem.AddParameterBlock(mParamsDistortion.data(), mParamsDistortion.rows());
+		options.linear_solver_ordering->AddElementToGroup(mParamsDistortion.data(), 1);
 
 		//Gather measurements
 		mMeasurementsInProblem.clear();
+		mMeasurementsInProblem.reserve(4 * mFeaturesToAdjust.size());
 		for (auto &featurep : mFeaturesToAdjust)
 		{
 			auto &feature = *featurep;
@@ -314,18 +304,18 @@ bool BundleAdjuster::bundleAdjust()
 			auto &m = *mp;
 
 			Feature &feature = m.getFeature();
-			auto &featureParams = getFeatureParams(&feature);
+			auto &featureParams = feature.mParams;
 
 			Keyframe &frame = m.getKeyframe();
-			auto &poseParams = getPoseParams(&frame);
+			auto &poseParams = frame.mParamsPose;
 
 			//Is this frame outside of bundle adjustment?
-			if (mFramesToAdjust.find(&frame) == mFramesToAdjust.end())
-			{
-				problem.AddParameterBlock(poseParams.data(), 9);
-				problem.SetParameterBlockConstant(poseParams.data());
-				//options.linear_solver_ordering->AddElementToGroup(poseParams.data(), 1);
-			}
+			//if (mFramesToAdjust.find(&frame) == mFramesToAdjust.end())
+			//{
+			//	problem.AddParameterBlock(poseParams.data(), 9);
+			//	problem.SetParameterBlockConstant(poseParams.data());
+			//	//options.linear_solver_ordering->AddElementToGroup(poseParams.data(), 1);
+			//}
 
 			ceres::LossFunction *lossFunc_i = NULL;
 			//lossFunc_i = new ceres::CauchyLoss(mOutlierPixelThreshold);
@@ -344,9 +334,9 @@ bool BundleAdjuster::bundleAdjust()
 	}
 
 	//Get inliers before
-	int inlierCount;
-	getInliers(inlierCount);
-	MYAPP_LOG << "BA inlier count: " << inlierCount << "\n";
+	//int inlierCount;
+	//getInliers(inlierCount);
+	//MYAPP_LOG << "BA inlier count: " << inlierCount << "\n";
 
 	//No locks while ceres runs
 	//Non-linear minimization!
@@ -372,23 +362,23 @@ bool BundleAdjuster::bundleAdjust()
 		return false;
 	}
 
-	getInliers(inlierCount);
-	MYAPP_LOG << "BA inlier count: " << inlierCount << "\n";
+	//getInliers(inlierCount);
+	//MYAPP_LOG << "BA inlier count: " << inlierCount << "\n";
 
 	//Update pose
-	for (auto &p : mParamsPoses)
+	for (auto &framep : mFramesToAdjust)
 	{
-		auto &frame = *p.first;
-		auto &params = p.second;
+		auto &frame = *framep;
+		auto &params = frame.mParamsPose;
 
 		frame.setPose(params.cast<float>());
 	}
 
 	//Update positions
-	for (auto &p : mParamsFeatures)
+	for (auto &featurep : mFeaturesToAdjust)
 	{
-		auto &feature = *p.first;
-		auto &params = p.second;
+		auto &feature = *featurep;
+		auto &params = feature.mParams;
 
 		feature.setPosition(params.cast<float>());
 	}

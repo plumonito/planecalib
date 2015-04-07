@@ -101,7 +101,7 @@ void MainWindow::resize()
 	mTiler.addTile(0, 0, -1.0f, 3, 2);
 	mTiler.setImageMVP(0, 2*mImageSize);
 	Eigen::Matrix4f offsetMat;
-	offsetMat << 1, 0, 0, mImageSize[0] / 2, 0, 1, 0, mImageSize[1] / 2, 0, 0, 1, 0, 0,0,0,1;
+	offsetMat << 1, 0, 0, (float)mImageSize[0] / 2, 0, 1, 0, (float)mImageSize[1] / 2, 0, 0, 1, 0, 0, 0, 0, 1;
 	mTiler.multiplyMVP(0, offsetMat);
 
 	mTiler.addTile(0, 2);
@@ -122,6 +122,17 @@ void MainWindow::draw()
 	mTiler.setActiveTile(2);
 	mShaders->getTexture().setMVPMatrix(mTiler.getMVP());
 	mShaders->getTexture().renderTexture(mCurrentImageTextureTarget, mCurrentImageTextureId, mImageSize, 1.0f);
+	if (mTracker->getFrame())
+	{
+		std::vector<Eigen::Vector2f> points;
+		for (auto &kp : mTracker->getFrame()->getKeypoints(0))
+		{
+			points.push_back(eutils::FromCV(kp.pt));
+		}
+		glPointSize(3.0f);
+		mShaders->getColor().setMVPMatrix(mTiler.getMVP());
+		mShaders->getColor().drawVertices(GL_POINTS, points.data(), points.size(), StaticColors::Blue());
+	}
 
 	mTiler.setActiveTile(0);
     mShaders->getTexture().setMVPMatrix(mTiler.getMVP());
