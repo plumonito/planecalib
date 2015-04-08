@@ -1,0 +1,9 @@
+*.aux
+*.bbl
+*.blg
+*.log
+*.gz
+*-converted-to.pdf
+egpaper_final.pdf
+egpaper_for_review.pdf
+planecalib_paper.pdf

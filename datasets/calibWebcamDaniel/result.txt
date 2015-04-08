@@ -1,0 +1,13 @@
+>> cameraParameters.IntrinsicMatrix'
+
+ans =
+
+  618.8956         0  316.4595
+         0  619.2835  238.4590
+         0         0    1.0000
+
+>> cameraParameters.RadialDistortion
+
+ans =
+
+    0.1204   -0.2117
