@@ -239,15 +239,16 @@ void PlaneCalibSystem::doHomographyBA()
 
 	//Calib
 	doHomographyCalib();
+	mHomographyP0 = Eigen::Vector2d(mK(0, 2), mK(1, 2));
 
 	//Update homography distortion with the new principal point
-	ba.setOnlyDistortion(true);
-	ba.setP0(Eigen::Vector2d(mK(0, 2), mK(1, 2)));
-	ba.bundleAdjust();
+	//ba.setOnlyDistortion(true);
+	//ba.setP0(Eigen::Vector2d(mK(0, 2), mK(1, 2)));
+	//ba.bundleAdjust();
 
-	mHomographyP0 = ba.getP0().cast<float>();
-	mHomographyDistortion.setCoefficients(ba.getDistortion().cast<float>());
-	mActiveDistortion = &mHomographyDistortion;
+	//mHomographyP0 = ba.getP0().cast<float>();
+	//mHomographyDistortion.setCoefficients(ba.getDistortion().cast<float>());
+	//mActiveDistortion = &mHomographyDistortion;
 }
 
 void PlaneCalibSystem::doHomographyCalib()
@@ -433,4 +434,9 @@ void PlaneCalibSystem::doFullBA()
 	//}
 }
 
-} /* namespace dtslam */
+void PlaneCalibSystem::generateSyntheticMap(const Eigen::Matrix3fr &k, const Eigen::Vector2f &distortion, float measurementNoiseVar)
+{
+
+}
+
+} 

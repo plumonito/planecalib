@@ -49,6 +49,9 @@ public:
 	void doHomographyCalib();
 	void doFullBA();
 
+	//Testing
+	void generateSyntheticMap(const Eigen::Matrix3fr &k, const Eigen::Vector2f &distortion, float measurementNoiseVar);
+
 protected:
 	////////////////////////////////////////////////////////
 	// Members

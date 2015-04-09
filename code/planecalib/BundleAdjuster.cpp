@@ -199,7 +199,7 @@ bool BundleAdjuster::bundleAdjust()
 		options.preconditioner_type = ceres::SCHUR_JACOBI;
 	}
 	//options.dense_linear_algebra_library_type = ceres::LAPACK;
-	options.sparse_linear_algebra_library_type = ceres::SUITE_SPARSE;
+	//options.sparse_linear_algebra_library_type = ceres::SUITE_SPARSE;
 	options.max_num_iterations = 500;
 	options.num_threads = 4;
 	options.num_linear_solver_threads = 4;
