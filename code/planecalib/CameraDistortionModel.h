@@ -17,19 +17,21 @@ public:
 	Eigen::Matrix<float, 0, 1> getCoefficients() const { return Eigen::Matrix<float, 0, 1>(); }
 	void setCoefficients(const Eigen::Matrix<float, 0, 1> &coeff) { }
 
+	//Distortion
 	Eigen::Vector2f distortPoint(const Eigen::Vector2f &x) const
 	{
 		return x;
 	}
+
 	template <typename TScalar>
 	void distortPoint(const Eigen::MatrixBase<Eigen::Matrix<TScalar, 2, 1>> &x, Eigen::MatrixBase<Eigen::Matrix<TScalar, 2, 1>> &xd) const
 	{
 		xd = x;
 	}
 
-	Eigen::Vector3f undistortPoint(const Eigen::Vector2f &pd) const
+	Eigen::Vector2f undistortPoint(const Eigen::Vector2f &pd) const
 	{
-		return pd.homogeneous();
+		return pd;
 	}
 };
 
@@ -38,12 +40,14 @@ class RadialCameraDistortionModel
 public:
 	RadialCameraDistortionModel() {}
 
-	static float MaxRadiusSqFromImageSize(const Eigen::Vector2i imageSize)
+	template<class TSize>
+	static float MaxRadiusSqFromImageSize(const Eigen::Matrix<TSize,2,1> &imageSize)
 	{
-		return static_cast<float>(imageSize.squaredNorm() / 4);
+		return static_cast<float>(imageSize.squaredNorm());
 	}
 
-	void init(const Eigen::Vector2f &coeff, const Eigen::Vector2i imageSize)
+	template<class TSize>
+	void init(const Eigen::Vector2f &coeff, const Eigen::Matrix<TSize,2,1> &imageSize)
 	{
 		init(coeff, MaxRadiusSqFromImageSize(imageSize));
 	}

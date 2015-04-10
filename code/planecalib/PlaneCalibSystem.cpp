@@ -15,8 +15,9 @@
 #include "CalibratedBundleAdjuster.h"
 //#include "CeresUtils.h"
 //#include "FeatureGridIndexer.h"
-
 #include "flags.h"
+
+#include <random>
 
 namespace planecalib
 {
@@ -116,6 +117,8 @@ void PlaneCalibSystem::setMap(std::unique_ptr<Map> map)
 	}
 
 	//Calibrate
+	mHomographyP0 = frame.getImageSize().cast<float>() / 2;
+	mHomographyDistortion.init(Eigen::Vector2f::Zero(), frame.getImageSize());
 	mCalib->calibrate(mHomographyP0, allPoses);
 }
 
@@ -230,7 +233,8 @@ void PlaneCalibSystem::doHomographyBA()
 	}
 
 	ba.setOnlyDistortion(false);
-	ba.setP0((**ba.getFramesToAdjust().begin()).getImageSize().cast<double>()/2);
+	ba.setP0(mHomographyP0.cast<double>());
+	ba.setDistortion(mHomographyDistortion.getCoefficients().cast<double>());
 	ba.bundleAdjust();
 
 	mHomographyP0 = ba.getP0().cast<float>();
@@ -239,7 +243,6 @@ void PlaneCalibSystem::doHomographyBA()
 
 	//Calib
 	doHomographyCalib();
-	mHomographyP0 = Eigen::Vector2d(mK(0, 2), mK(1, 2));
 
 	//Update homography distortion with the new principal point
 	//ba.setOnlyDistortion(true);
@@ -263,6 +266,9 @@ void PlaneCalibSystem::doHomographyCalib()
 	mCalib->calibrate(mHomographyP0, allPoses);
 	mK = mCalib->getK().cast<float>();
 	mNormal = mCalib->getNormal().cast<float>();
+
+	float fx2 = mK(0, 0)*mK(0, 0);
+	MYAPP_LOG << "Translated distortion: " << mHomographyDistortion.getCoefficients()[0] * fx2 << ", " << mHomographyDistortion.getCoefficients()[1] * fx2*fx2 << "\n";
 }
 
 void PlaneCalibSystem::doFullBA()
@@ -434,9 +440,124 @@ void PlaneCalibSystem::doFullBA()
 	//}
 }
 
-void PlaneCalibSystem::generateSyntheticMap(const Eigen::Matrix3fr &k, const Eigen::Vector2f &distortion, float measurementNoiseVar)
+void PlaneCalibSystem::generateSyntheticMap(const Eigen::Matrix3fr &k, const Eigen::Vector2f &distortionCoeffs, const Eigen::Vector2i &imageSize, float measurementNoiseStd)
 {
+	std::random_device rd;
+	std::unique_ptr<Map> newMap(new Map());
 
+	cv::Mat3b nullImg3(imageSize[1], imageSize[0]);
+	cv::Mat1b nullImg1(imageSize[1], imageSize[0]);
+	Eigen::Matrix<uchar, 1, 32> nullDescr;
+	nullDescr.setZero();
+
+	//Invert
+	Eigen::Vector2f imagePlaneSize(imageSize[0] / k(1, 1), imageSize[1] / k(2, 2));
+	RadialCameraDistortionModel distortion;
+	distortion.init(distortionCoeffs, imagePlaneSize);
+	auto distortionInv = distortion.createInverseModel();
+
+	Eigen::Matrix3fr kinv = k.inverse();
+
+	//Features
+	const int kFeatureCount = 1000;
+	std::uniform_real_distribution<float> distributionx(0,imageSize[0]);
+	std::uniform_real_distribution<float> distributiony(0, imageSize[1]);
+	for (int i = 0; i < kFeatureCount; i++)
+	{
+		std::unique_ptr<Feature> newFeature(new Feature());
+		
+		//Get position
+		Eigen::Vector2f imagePos(distributionx(rd), distributiony(rd));
+		Eigen::Vector2f xd = (kinv*imagePos.homogeneous()).eval().hnormalized();
+		Eigen::Vector2f xn = distortionInv.distortPoint(xd);
+
+		newFeature->mPosition3D = Eigen::Vector3f(xn[0],xn[1],0);
+
+		newMap->addFeature(std::move(newFeature));
+	}
+
+	//Frame poses
+	std::vector<Eigen::Matrix3fr> posesR;
+	std::vector<Eigen::Vector3f> posesCenter;
+
+	posesR.push_back(Eigen::Matrix3fr::Identity());
+	posesCenter.push_back(Eigen::Vector3f(0,0,-1));
+
+	for (float alpha = -45; alpha < 45; alpha += 10)
+	{
+		float rad = alpha*M_PI/180;
+		posesR.push_back(eutils::RotationY(rad));
+		posesCenter.push_back(Eigen::Vector3f(1*sin(rad), 0, -1*cos(rad)));
+	}
+	for (float alpha = -45; alpha < 45; alpha += 10)
+	{
+		float rad = alpha*M_PI / 180;
+		posesR.push_back(eutils::RotationX(rad));
+		posesCenter.push_back(Eigen::Vector3f(0, 1 * sin(rad), -1 * cos(rad)));
+	}
+
+	//Frames
+	const int kRefFrameIdx = 0;
+	std::normal_distribution<float> error_distribution(0, measurementNoiseStd);
+	for (int i = 0; i < (int)posesR.size(); i++)
+	{
+		std::unique_ptr<Keyframe> newFrame(new Keyframe());
+
+		newFrame->init(nullImg3, nullImg1);
+
+		//Points
+		std::vector<cv::Point2f> refPoints, imgPoints;
+		for (int j = 0; j< (int)newMap->getFeatures().size(); j++)
+		{
+			auto &feature = *newMap->getFeatures()[j];
+
+			//Project
+			Eigen::Vector2f xn = (posesR[i] * feature.mPosition3D - posesR[i] * posesCenter[i]).eval().hnormalized();
+			Eigen::Vector2f xd = distortion.distortPoint(xn);
+			Eigen::Vector2f imagePos = (k*xd.homogeneous()).eval().hnormalized(); //.unaryExpr(std::roundf)
+			Eigen::Vector2f imagePos2 = (k*xn.homogeneous()).eval().hnormalized(); //.unaryExpr(std::roundf)
+			//imagePos[0] += error_distribution(rd);
+			//imagePos[1] += error_distribution(rd);
+
+			//Position
+			if (i == kRefFrameIdx)
+				feature.setPosition(imagePos);
+
+			//Measurement
+			std::unique_ptr<FeatureMeasurement> m(new FeatureMeasurement(&feature, newFrame.get(), imagePos, 0, nullDescr.data()));
+			newFrame->getMeasurements().push_back(m.get());
+			feature.getMeasurements().push_back(std::move(m));
+
+			//Save match
+			refPoints.push_back(eutils::ToCVPoint(feature.getPosition()));
+			imgPoints.push_back(eutils::ToCVPoint(imagePos));
+		}
+
+		//Get homography
+		Eigen::Matrix<uchar, Eigen::Dynamic, 1> mask(refPoints.size());
+		cv::Mat1b mask_cv(refPoints.size(), 1, mask.data());
+
+		cv::Mat H;
+		H = cv::findHomography(refPoints, imgPoints, cv::RANSAC, 3*measurementNoiseStd, mask_cv);
+
+		cv::Matx33f cvH;
+		if (H.empty())
+			MYAPP_LOG << "findHomography failed \n";
+		cvH = H;
+
+		//Refine
+		HomographyEstimation hest;
+		std::vector<bool> inliersVec;
+		std::vector<int> octaveVec(imgPoints.size(), 0);
+		cvH = hest.estimateCeres(cvH, imgPoints, refPoints, octaveVec, 3 * measurementNoiseStd, inliersVec);
+
+		//Set final
+		newFrame->setPose(eutils::FromCV(cvH));
+
+		newMap->addKeyframe(std::move(newFrame));
+	}
+
+	setMap(std::move(newMap));
 }
 
 } 

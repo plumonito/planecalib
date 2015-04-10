@@ -17,7 +17,7 @@ class CalibratedBundleAdjuster
 {
 public:
 	CalibratedBundleAdjuster() :
-		mUseLocks(true), mParamsDistortion(0, 0), mK(Eigen::Matrix3dr::Identity())
+		mUseLocks(true), mParamsDistortion(0, 0), mK(Eigen::Matrix3dr::Identity()), mOutlierPixelThreshold(3), mOutlierPixelThresholdSq(9)
 	{}
 
 	void setOutlierThreshold(float pixelThreshold)

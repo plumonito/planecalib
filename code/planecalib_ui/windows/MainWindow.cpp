@@ -34,7 +34,8 @@ bool MainWindow::init(PlaneCalibApp *app, const Eigen::Vector2i &imageSize)
 	mKeyBindings.addBinding(false, 'l', static_cast<KeyBindingHandler<BaseWindow>::SimpleBindingFunc>(&MainWindow::loadBouguetCalib), "Load bouguet calibration data.");
 	mKeyBindings.addBinding(false, 'b', static_cast<KeyBindingHandler<BaseWindow>::SimpleBindingFunc>(&MainWindow::doFullBA), "Full BA.");
 	mKeyBindings.addBinding(false, 'h', static_cast<KeyBindingHandler<BaseWindow>::SimpleBindingFunc>(&MainWindow::doHomographyBA), "Homography BA.");
-	
+	mKeyBindings.addBinding(false, 't', static_cast<KeyBindingHandler<BaseWindow>::SimpleBindingFunc>(&MainWindow::synthTest), "Synthetic test.");
+
 	mRefTexture.create(GL_RGB, eutils::ToSize(imageSize));
 	mRefTexture.update(mSystem->getMap().getKeyframes()[0]->getColorImage());
 
@@ -332,6 +333,19 @@ void MainWindow::doHomographyBA()
 void MainWindow::doFullBA()
 {
 	mSystem->doFullBA();
+}
+
+void MainWindow::synthTest()
+{
+	Eigen::Matrix3fr k;
+	k << 600, 0, 320, 0, 600, 240, 0, 0, 1;
+	//Eigen::Vector2f distortion(-0.389839386716848, 0.197068948715649);
+	Eigen::Vector2f distortion(0.05,0);
+	Eigen::Vector2i imageSize(640, 480);
+	float noiseStd = 1;
+	mSystem->generateSyntheticMap(k, distortion, imageSize, noiseStd);
+
+	updateState();
 }
 
 } /* namespace dtslam */

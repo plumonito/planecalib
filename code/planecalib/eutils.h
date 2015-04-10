@@ -52,6 +52,20 @@ public:
 		return (H*p.homogeneous()).eval().hnormalized();
 	}
 
+	static Eigen::Matrix3fr RotationX(float angle)
+	{
+		Eigen::Matrix3fr m;
+		m << cos(angle), 0, sin(angle), 0, 1, 0, -sin(angle), 0, cos(angle);
+		return m;
+	}
+
+	static Eigen::Matrix3fr RotationY(float angle)
+	{
+		Eigen::Matrix3fr m;
+		m << 1, 0, 0, 0, cos(angle), -sin(angle), 0, sin(angle), cos(angle);
+		return m;
+	}
+
 	static Eigen::Vector2i FromSize(const cv::Size2i &sz) 
 	{
 		return Eigen::Vector2i(sz.width, sz.height);

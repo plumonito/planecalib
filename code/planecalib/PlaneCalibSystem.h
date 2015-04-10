@@ -50,7 +50,7 @@ public:
 	void doFullBA();
 
 	//Testing
-	void generateSyntheticMap(const Eigen::Matrix3fr &k, const Eigen::Vector2f &distortion, float measurementNoiseVar);
+	void generateSyntheticMap(const Eigen::Matrix3fr &k, const Eigen::Vector2f &distortion, const Eigen::Vector2i &imageSize, float measurementNoiseStd);
 
 protected:
 	////////////////////////////////////////////////////////

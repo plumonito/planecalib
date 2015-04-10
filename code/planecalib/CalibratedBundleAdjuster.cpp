@@ -288,8 +288,8 @@ bool CalibratedBundleAdjuster::bundleAdjust()
 				//options.linear_solver_ordering->AddElementToGroup(poseParams.data()+3, 1);
 			}
 
-			//ceres::LossFunction *lossFunc_i = new ceres::CauchyLoss(mOutlierPixelThreshold);
 			ceres::LossFunction *lossFunc_i = NULL;
+			lossFunc_i = new ceres::CauchyLoss(mOutlierPixelThreshold);
 
 			problem.AddResidualBlock(
 				new ceres::AutoDiffCostFunction<CalibratedReprojectionError, CalibratedReprojectionError::kResidualCount, 2, 4, 3, 3, 2>(

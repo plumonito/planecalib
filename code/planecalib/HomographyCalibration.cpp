@@ -13,7 +13,7 @@
 
 namespace planecalib {
 
-	void HomographyCalibration::calibrate(const Eigen::Vector2f &p0, const std::vector<Eigen::Matrix3fr> &H)
+void HomographyCalibration::calibrate(const Eigen::Vector2f &p0, const std::vector<Eigen::Matrix3fr> &H)
 {
 	int hcount = H.size();
 
@@ -55,7 +55,7 @@ namespace planecalib {
 
 	problem.AddParameterBlock(&alpha, 1);
 	problem.AddParameterBlock(pp.data(), 2);
-	//problem.SetParameterBlockConstant(pp.data());
+	problem.SetParameterBlockConstant(pp.data());
 	problem.AddParameterBlock(mNormal.data(), 3, new Fixed3DNormParametrization(1));
 	//problem.SetParameterBlockConstant(mNormal.data());
 	for (int i = 0; i<hcount; i++)

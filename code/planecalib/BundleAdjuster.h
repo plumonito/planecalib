@@ -22,7 +22,7 @@ class BundleAdjuster
 {
 public:
 	BundleAdjuster():
-		mUseLocks(true), mOnlyDistortion(false), mParamsDistortion(0,0)
+		mUseLocks(true), mOnlyDistortion(false), mParamsDistortion(0, 0), mOutlierPixelThreshold(3), mOutlierPixelThresholdSq(9)
 	{}
 
 	void setOutlierThreshold(float pixelThreshold)

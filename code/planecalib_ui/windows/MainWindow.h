@@ -43,6 +43,7 @@ public:
 	void doHomographyBA();
 	void doFullBA();
 	void loadBouguetCalib();
+	void synthTest();
 
 protected:
     ViewportTiler mTiler;

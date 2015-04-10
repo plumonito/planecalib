@@ -95,22 +95,22 @@ bool ReprojectionError::operator () (const T * const _p0, const T * const _disto
 
 
 	//Homography
-	const Eigen::Matrix<T, 3, 1> p = homography*x.homogeneous();
-	//Eigen::Matrix<T, 3, 1> p;
-	//p[0] = homography(0, 0) * x[0] + homography(0, 1) * x[1] + homography(0, 2);
-	//p[1] = homography(1, 0) * x[0] + homography(1, 1) * x[1] + homography(1, 2);
-	//p[2] = homography(2, 0) * x[0] + homography(2, 1) * x[1] + homography(2, 2);
+	//const Eigen::Matrix<T, 3, 1> p = homography*x.homogeneous();
+	Eigen::Matrix<T, 3, 1> p;
+	p[0] = homography(0, 0) * x[0] + homography(0, 1) * x[1] + homography(0, 2);
+	p[1] = homography(1, 0) * x[0] + homography(1, 1) * x[1] + homography(1, 2);
+	p[2] = homography(2, 0) * x[0] + homography(2, 1) * x[1] + homography(2, 2);
 
 	//Normalize
-	Eigen::Matrix<T, 2, 1> pn = p.hnormalized();
-	//Eigen::Matrix<T, 2, 1> pn(p[0] / p[2], p[1] / p[2]);
+	//Eigen::Matrix<T, 2, 1> pn = p.hnormalized();
+	Eigen::Matrix<T, 2, 1> pn(p[0] / p[2], p[1] / p[2]);
 
 	//Principal point
 	pn = pn - p0;
 	
 	//Distort
 	Eigen::Matrix<T, 2, 1> pd;
-	RadialCameraDistortionModel::DistortPoint(mMaxRadiusSq, distortion, pn, pd);
+	RadialCameraDistortionModel::DistortPoint(1e10, distortion, pn, pd);
 
 	//Principal point
 	pd = pd + p0;
@@ -187,7 +187,6 @@ bool BundleAdjuster::bundleAdjust()
 
 	//BA ceres problem
 	ceres::Solver::Options options;
-	//options.linear_solver_type = ceres::CGNR;
 	if (mOnlyDistortion)
 	{
 		options.linear_solver_type = ceres::DENSE_QR;
@@ -198,6 +197,9 @@ bool BundleAdjuster::bundleAdjust()
 		options.linear_solver_type = ceres::SPARSE_SCHUR;
 		options.preconditioner_type = ceres::SCHUR_JACOBI;
 	}
+	//options.linear_solver_type = ceres::CGNR;
+	//options.linear_solver_type = ceres::DENSE_QR;
+
 	//options.dense_linear_algebra_library_type = ceres::LAPACK;
 	//options.sparse_linear_algebra_library_type = ceres::SUITE_SPARSE;
 	options.max_num_iterations = 500;
@@ -236,12 +238,12 @@ bool BundleAdjuster::bundleAdjust()
 
 			//Add pose as parameter block
 			problem.AddParameterBlock(params.data(), 9);
-			//problem.AddParameterBlock(params.data() + 3, 3, new Fixed3DNormParametrization(1));
-			options.linear_solver_ordering->AddElementToGroup(params.data(), 1);
+			//problem.AddParameterBlock(params.data(), 9, new Fixed9DNormParametrization(1));
+			options.linear_solver_ordering->AddElementToGroup(params.data(), 0);
 			if (&frame == mMap->getKeyframes().begin()->get())
 			{
 				//First key frame in region, scale fixed
-				problem.SetParameterBlockConstant(params.data());
+				//problem.SetParameterBlockConstant(params.data());
 			}
 			else if (mOnlyDistortion)
 			{
@@ -265,19 +267,19 @@ bool BundleAdjuster::bundleAdjust()
 			problem.AddParameterBlock(params.data(), 2);
 			if (mOnlyDistortion)
 				problem.SetParameterBlockConstant(params.data());
-			//problem.SetParameterBlockConstant(params.data());
 			options.linear_solver_ordering->AddElementToGroup(params.data(), 0);
 		}
 
 		//Distortion params
 		mImageSize = (**mFramesToAdjust.begin()).getImageSize();
 		problem.AddParameterBlock(mParamsP0.data(), 2);
-		options.linear_solver_ordering->AddElementToGroup(mParamsP0.data(), 1);
+		options.linear_solver_ordering->AddElementToGroup(mParamsP0.data(), 0);
 		if (mOnlyDistortion)
 			problem.SetParameterBlockConstant(mParamsP0.data());
 
 		problem.AddParameterBlock(mParamsDistortion.data(), mParamsDistortion.rows());
-		options.linear_solver_ordering->AddElementToGroup(mParamsDistortion.data(), 1);
+		//problem.SetParameterBlockConstant(mParamsDistortion.data());
+		options.linear_solver_ordering->AddElementToGroup(mParamsDistortion.data(), 0);
 
 		//Gather measurements
 		mMeasurementsInProblem.clear();
@@ -318,7 +320,7 @@ bool BundleAdjuster::bundleAdjust()
 			//}
 
 			ceres::LossFunction *lossFunc_i = NULL;
-			//lossFunc_i = new ceres::CauchyLoss(mOutlierPixelThreshold);
+			lossFunc_i = new ceres::CauchyLoss(mOutlierPixelThreshold);
 
 			problem.AddResidualBlock(
 				new ceres::AutoDiffCostFunction<ReprojectionError, ReprojectionError::kResidualCount, 2, 2, 9, 2>(
@@ -334,9 +336,9 @@ bool BundleAdjuster::bundleAdjust()
 	}
 
 	//Get inliers before
-	//int inlierCount;
-	//getInliers(inlierCount);
-	//MYAPP_LOG << "BA inlier count: " << inlierCount << "\n";
+	int inlierCount;
+	getInliers(inlierCount);
+	MYAPP_LOG << "BA inlier count before: " << inlierCount << " / " << mMeasurementsInProblem.size() << "\n";
 
 	//No locks while ceres runs
 	//Non-linear minimization!
@@ -362,8 +364,8 @@ bool BundleAdjuster::bundleAdjust()
 		return false;
 	}
 
-	//getInliers(inlierCount);
-	//MYAPP_LOG << "BA inlier count: " << inlierCount << "\n";
+	getInliers(inlierCount);
+	MYAPP_LOG << "BA inlier count after: " << inlierCount << " / " << mMeasurementsInProblem.size() << "\n";
 
 	//Update pose
 	for (auto &framep : mFramesToAdjust)
