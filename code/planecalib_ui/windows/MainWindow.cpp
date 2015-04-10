@@ -339,10 +339,10 @@ void MainWindow::synthTest()
 {
 	Eigen::Matrix3fr k;
 	k << 600, 0, 320, 0, 600, 240, 0, 0, 1;
-	//Eigen::Vector2f distortion(-0.389839386716848, 0.197068948715649);
-	Eigen::Vector2f distortion(0.05,0);
+	Eigen::Vector2f distortion(-0.389839386716848, 0.197068948715649);
+	//Eigen::Vector2f distortion(0.05,0);
 	Eigen::Vector2i imageSize(640, 480);
-	float noiseStd = 1;
+	float noiseStd = 3/3;
 	mSystem->generateSyntheticMap(k, distortion, imageSize, noiseStd);
 
 	updateState();

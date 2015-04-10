@@ -16,7 +16,7 @@
 
 % \iccvfinalcopy % *** Uncomment this line for the final submission
 
-\def\iccvPaperID{****} % *** Enter the ICCV Paper ID here
+\def\iccvPaperID{408} % *** Enter the ICCV Paper ID here
 \def\httilde{\mbox{\tt\raisebox{-.5ex}{\symbol{126}}}}
 
 % Pages are numbered in submission mode, and unnumbered in camera-ready
@@ -48,13 +48,13 @@ First line of institution2 address\\
 
 %%%%%%%%% ABSTRACT
 \begin{abstract}
-We introduce a self-calibration method using a planar scene of unknown texture. Planar surfaces are everywhere but checkerboards are not, thus the method can be easily applied outside of the lab. We demonstrate that the accuracy is equivalent to a checkerboard-based calibration, so there is no need for printing checkerboards any more. We provide a closed-form initialization of the focal length with minimal and practical assumptions. The method recovers the intrinsic and extrinsic parameters of the camera and the metric structure of the planar scene. The method is implemented in a real-time calibration application for non-expert users providing an easy and practical process to obtain high accuracy calibrations. 
+We introduce a self-calibration method using a planar scene of unknown texture. Planar surfaces are everywhere but checkerboards are not, thus the method can be easily applied outside of the lab. We demonstrate that the accuracy is equivalent to a checkerboard-based calibration, so there is no need for printing checkerboards any more. Moreover, the use of a planar scene provides improved robustness and stronger constraints than a self-calibration with an arbitrary scene. We provide a closed-form initialization of the focal length with minimal and practical assumptions. The method recovers the intrinsic and extrinsic parameters of the camera and the metric structure of the planar scene. The method is implemented in a real-time calibration application for non-expert users that provides an easy and practical process to obtain high accuracy calibrations. 
 \end{abstract}
 
-%%%%%%%%% BODY TEXT
+%%%%%%%%% BODY TEXT	
 \section{Introduction}
 
-Calibrating a camera intrinsics is a fundamental problem in computer vision. A calibrated camera is needed to perform a metric reconstruction of a scene, otherwise only a projective reconstruction is possible \cite{hartley2000}. Some of the most interesting applications of computer vision, like simultaneous localization and mapping, augmented reality, and 3D reconstruction, require a metric reconstruction of the scene. Cameras are most often calibrated offline using a calibration target. Using a planar target with a checkerboard pattern of known structure is a well established and popular method for camera calibration \cite{zhang2000,bouguetMCT}.	
+Calibrating a camera's intrinsics is a fundamental problem in computer vision. A calibrated camera is needed to perform a metric reconstruction of a scene, otherwise only a projective reconstruction is possible \cite{hartley2000}. Some of the most interesting applications of computer vision, like simultaneous localization and mapping, augmented reality, and 3D reconstruction, require a metric reconstruction of the scene. Cameras are most often calibrated offline using a calibration target. Using a planar target with a checkerboard pattern of known structure is a well established and popular method for camera calibration \cite{zhang2000,bouguetMCT}.	
 
 {\small
 \bibliographystyle{ieee}

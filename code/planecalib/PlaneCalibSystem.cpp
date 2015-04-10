@@ -225,7 +225,7 @@ void PlaneCalibSystem::doHomographyBA()
 	BundleAdjuster ba;
 	ba.setUseLocks(false);
 	ba.setMap(mMap.get());
-	ba.setOutlierThreshold(3);
+	ba.setOutlierThreshold(3*mExpectedPixelNoiseStd);
 	for (auto &framep : mMap->getKeyframes())
 	{
 		auto &frame = *framep;
@@ -275,7 +275,6 @@ void PlaneCalibSystem::doFullBA()
 {
 	float fx2 = mK(0, 0) * mK(0, 0);
 	Eigen::Vector2f distortion(mHomographyDistortion.getCoefficients()[0] * fx2, mHomographyDistortion.getCoefficients()[1]*fx2*fx2);
-	mHomographyDistortionInv = mHomographyDistortion.createInverseModel();
 
 	//Set pose for reference frame
 	Keyframe &refFrame = *mMap->getKeyframes()[0];
@@ -312,7 +311,7 @@ void PlaneCalibSystem::doFullBA()
 	{
 		auto &feature = *pfeature;
 		
-		Eigen::Vector2f m = mHomographyDistortionInv.distortPoint(feature.getPosition() - mHomographyP0) + mHomographyP0;
+		Eigen::Vector2f m = mHomographyDistortion.undistortPoint(feature.getPosition() - mHomographyP0) + mHomographyP0;
 
 		Eigen::Vector3f xn = Kinv * m.homogeneous();
 
@@ -355,7 +354,7 @@ void PlaneCalibSystem::doFullBA()
 		for (auto &mp : frame.getMeasurements())
 		{
 			auto &m = *mp;
-			Eigen::Vector2f mu = mHomographyDistortionInv.distortPoint(m.getPosition() - mHomographyP0) + mHomographyP0;
+			Eigen::Vector2f mu = mHomographyDistortion.undistortPoint(m.getPosition() - mHomographyP0) + mHomographyP0;
 			cvImagePoints.push_back(cv::Point2f(mu[0], mu[1]));
 			cvWorldPoints.push_back(cv::Point3f(m.getFeature().mPosition3D[0], m.getFeature().mPosition3D[1], m.getFeature().mPosition3D[2]));
 		}
@@ -386,7 +385,7 @@ void PlaneCalibSystem::doFullBA()
 	//BAAAAA!!!
 	CalibratedBundleAdjuster ba;
 	ba.setUseLocks(false);
-	ba.setOutlierThreshold(3);
+	ba.setOutlierThreshold(3 * mExpectedPixelNoiseStd);
 	ba.setDistortion(distortion.cast<double>());
 	ba.setK(mK.cast<double>());
 	ba.setMap(mMap.get());
@@ -445,6 +444,8 @@ void PlaneCalibSystem::generateSyntheticMap(const Eigen::Matrix3fr &k, const Eig
 	std::random_device rd;
 	std::unique_ptr<Map> newMap(new Map());
 
+	mExpectedPixelNoiseStd = measurementNoiseStd;
+
 	cv::Mat3b nullImg3(imageSize[1], imageSize[0]);
 	cv::Mat1b nullImg1(imageSize[1], imageSize[0]);
 	Eigen::Matrix<uchar, 1, 32> nullDescr;
@@ -454,7 +455,6 @@ void PlaneCalibSystem::generateSyntheticMap(const Eigen::Matrix3fr &k, const Eig
 	Eigen::Vector2f imagePlaneSize(imageSize[0] / k(1, 1), imageSize[1] / k(2, 2));
 	RadialCameraDistortionModel distortion;
 	distortion.init(distortionCoeffs, imagePlaneSize);
-	auto distortionInv = distortion.createInverseModel();
 
 	Eigen::Matrix3fr kinv = k.inverse();
 
@@ -469,9 +469,10 @@ void PlaneCalibSystem::generateSyntheticMap(const Eigen::Matrix3fr &k, const Eig
 		//Get position
 		Eigen::Vector2f imagePos(distributionx(rd), distributiony(rd));
 		Eigen::Vector2f xd = (kinv*imagePos.homogeneous()).eval().hnormalized();
-		Eigen::Vector2f xn = distortionInv.distortPoint(xd);
+		Eigen::Vector2f xn = distortion.undistortPoint(xd);
 
 		newFeature->mPosition3D = Eigen::Vector3f(xn[0],xn[1],0);
+		newFeature->setPosition(imagePos);
 
 		newMap->addFeature(std::move(newFeature));
 	}
@@ -493,17 +494,42 @@ void PlaneCalibSystem::generateSyntheticMap(const Eigen::Matrix3fr &k, const Eig
 	{
 		float rad = alpha*M_PI / 180;
 		posesR.push_back(eutils::RotationX(rad));
-		posesCenter.push_back(Eigen::Vector3f(0, 1 * sin(rad), -1 * cos(rad)));
+		posesCenter.push_back(Eigen::Vector3f(0, -1 * sin(rad), -1 * cos(rad)));
+	}
+
+	//Set reference frame
+	const int kRefFrameIdx = 0;
+	if (kRefFrameIdx != 0)
+	{
+		std::swap(posesR[0], posesR[kRefFrameIdx]);
+		std::swap(posesCenter[0], posesCenter[kRefFrameIdx]);
+	}
+
+	//Matlab log
+	Eigen::MatrixX3f points(newMap->getFeatures().size(),3);
+	for (int i = 0; i < points.rows(); i++)
+	{
+		points.row(i) = newMap->getFeatures()[i]->mPosition3D.transpose();
+	}
+	MatlabDataLog::Instance().AddValue("K", k);
+	MatlabDataLog::Instance().AddValue("X",points.transpose());
+	for (int i = 0; i < posesR.size(); i++)
+	{
+		MatlabDataLog::Instance().AddCell("R",posesR[i]);
+		MatlabDataLog::Instance().AddCell("center", posesCenter[i]);
 	}
 
 	//Frames
-	const int kRefFrameIdx = 0;
 	std::normal_distribution<float> error_distribution(0, measurementNoiseStd);
 	for (int i = 0; i < (int)posesR.size(); i++)
 	{
 		std::unique_ptr<Keyframe> newFrame(new Keyframe());
 
 		newFrame->init(nullImg3, nullImg1);
+
+		//Stats
+		std::vector<float> distortionError;
+		std::vector<float> noiseError;
 
 		//Points
 		std::vector<cv::Point2f> refPoints, imgPoints;
@@ -514,13 +540,20 @@ void PlaneCalibSystem::generateSyntheticMap(const Eigen::Matrix3fr &k, const Eig
 			//Project
 			Eigen::Vector2f xn = (posesR[i] * feature.mPosition3D - posesR[i] * posesCenter[i]).eval().hnormalized();
 			Eigen::Vector2f xd = distortion.distortPoint(xn);
-			Eigen::Vector2f imagePos = (k*xd.homogeneous()).eval().hnormalized(); //.unaryExpr(std::roundf)
-			Eigen::Vector2f imagePos2 = (k*xn.homogeneous()).eval().hnormalized(); //.unaryExpr(std::roundf)
-			//imagePos[0] += error_distribution(rd);
-			//imagePos[1] += error_distribution(rd);
+			Eigen::Vector2f imagePosClean = (k*xd.homogeneous()).eval().hnormalized(); //.unaryExpr(std::roundf)
+			Eigen::Vector2f imagePosNoDistortion = (k*xn.homogeneous()).eval().hnormalized(); //.unaryExpr(std::roundf)
+			Eigen::Vector2f noise(error_distribution(rd), error_distribution(rd));
+			Eigen::Vector2f imagePos = imagePosClean + noise;
+
+			//Skip if outside of image
+			if (imagePos[0] < 0 || imagePos[1] < 0 || imagePos[0] > imageSize[0] || imagePos[1] > imageSize[1])
+				continue;
+
+			distortionError.push_back((imagePosClean-imagePosNoDistortion).norm());
+			noiseError.push_back(noise.norm());
 
 			//Position
-			if (i == kRefFrameIdx)
+			if (i == 0)
 				feature.setPosition(imagePos);
 
 			//Measurement
@@ -554,6 +587,15 @@ void PlaneCalibSystem::generateSyntheticMap(const Eigen::Matrix3fr &k, const Eig
 		//Set final
 		newFrame->setPose(eutils::FromCV(cvH));
 
+		//Write stats
+		Eigen::Map<Eigen::ArrayXf> _distortionError(distortionError.data(), distortionError.size());
+		Eigen::Map<Eigen::ArrayXf> _noiseError(noiseError.data(), noiseError.size());
+		MYAPP_LOG << "Frame " << i << "\n";
+		MYAPP_LOG << "  Measurement count: " << newFrame->getMeasurements().size() << "\n";
+		MYAPP_LOG << "  Max distortion error: " << _distortionError.maxCoeff() << "\n";
+		MYAPP_LOG << "  Max noise error: " << _noiseError.maxCoeff() << "\n";
+
+		//Add
 		newMap->addKeyframe(std::move(newFrame));
 	}
 

@@ -17,7 +17,7 @@ class HomographyCalibration;
 class PlaneCalibSystem
 {
 public:
-	PlaneCalibSystem() : mSingleThreaded(false) {}
+	PlaneCalibSystem() : mSingleThreaded(false), mExpectedPixelNoiseStd(1) {}
 	~PlaneCalibSystem();
 
 	bool init(double timestamp, cv::Mat3b &imgColor, cv::Mat1b &imgGray);
@@ -57,9 +57,10 @@ protected:
 	// Members
 	bool mSingleThreaded;
 
+	float mExpectedPixelNoiseStd;
+
 	Eigen::Vector2f mHomographyP0;
 	RadialCameraDistortionModel mHomographyDistortion;	
-	RadialCameraDistortionModel mHomographyDistortionInv;
 	RadialCameraDistortionModel mCameraDistortion;
 	RadialCameraDistortionModel *mActiveDistortion;
 

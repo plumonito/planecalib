@@ -102,7 +102,7 @@ public:
 	Eigen::Vector2f undistortPoint(const Eigen::Vector2f &pd) const;
 
 	//Create inverse model
-	RadialCameraDistortionModel createInverseModel() const;
+	//RadialCameraDistortionModel createInverseModel() const;
 
 protected:
 	Eigen::Vector2f mCoefficients;
