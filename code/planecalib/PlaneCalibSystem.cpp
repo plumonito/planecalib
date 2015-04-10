@@ -444,7 +444,7 @@ void PlaneCalibSystem::generateSyntheticMap(const Eigen::Matrix3fr &k, const Eig
 	std::random_device rd;
 	std::unique_ptr<Map> newMap(new Map());
 
-	mExpectedPixelNoiseStd = measurementNoiseStd;
+	mExpectedPixelNoiseStd = std::max(0.3f,measurementNoiseStd);
 
 	cv::Mat3b nullImg3(imageSize[1], imageSize[0]);
 	cv::Mat1b nullImg1(imageSize[1], imageSize[0]);
@@ -505,19 +505,19 @@ void PlaneCalibSystem::generateSyntheticMap(const Eigen::Matrix3fr &k, const Eig
 		std::swap(posesCenter[0], posesCenter[kRefFrameIdx]);
 	}
 
-	//Matlab log
-	Eigen::MatrixX3f points(newMap->getFeatures().size(),3);
-	for (int i = 0; i < points.rows(); i++)
-	{
-		points.row(i) = newMap->getFeatures()[i]->mPosition3D.transpose();
-	}
-	MatlabDataLog::Instance().AddValue("K", k);
-	MatlabDataLog::Instance().AddValue("X",points.transpose());
-	for (int i = 0; i < posesR.size(); i++)
-	{
-		MatlabDataLog::Instance().AddCell("R",posesR[i]);
-		MatlabDataLog::Instance().AddCell("center", posesCenter[i]);
-	}
+	////Matlab log
+	//Eigen::MatrixX3f points(newMap->getFeatures().size(),3);
+	//for (int i = 0; i < points.rows(); i++)
+	//{
+	//	points.row(i) = newMap->getFeatures()[i]->mPosition3D.transpose();
+	//}
+	//MatlabDataLog::Instance().AddValue("K", k);
+	//MatlabDataLog::Instance().AddValue("X",points.transpose());
+	//for (int i = 0; i < posesR.size(); i++)
+	//{
+	//	MatlabDataLog::Instance().AddCell("R",posesR[i]);
+	//	MatlabDataLog::Instance().AddCell("center", posesCenter[i]);
+	//}
 
 	//Frames
 	std::normal_distribution<float> error_distribution(0, measurementNoiseStd);
@@ -566,27 +566,6 @@ void PlaneCalibSystem::generateSyntheticMap(const Eigen::Matrix3fr &k, const Eig
 			imgPoints.push_back(eutils::ToCVPoint(imagePos));
 		}
 
-		//Get homography
-		Eigen::Matrix<uchar, Eigen::Dynamic, 1> mask(refPoints.size());
-		cv::Mat1b mask_cv(refPoints.size(), 1, mask.data());
-
-		cv::Mat H;
-		H = cv::findHomography(refPoints, imgPoints, cv::RANSAC, 3*measurementNoiseStd, mask_cv);
-
-		cv::Matx33f cvH;
-		if (H.empty())
-			MYAPP_LOG << "findHomography failed \n";
-		cvH = H;
-
-		//Refine
-		HomographyEstimation hest;
-		std::vector<bool> inliersVec;
-		std::vector<int> octaveVec(imgPoints.size(), 0);
-		cvH = hest.estimateCeres(cvH, imgPoints, refPoints, octaveVec, 3 * measurementNoiseStd, inliersVec);
-
-		//Set final
-		newFrame->setPose(eutils::FromCV(cvH));
-
 		//Write stats
 		Eigen::Map<Eigen::ArrayXf> _distortionError(distortionError.data(), distortionError.size());
 		Eigen::Map<Eigen::ArrayXf> _noiseError(noiseError.data(), noiseError.size());
@@ -594,6 +573,31 @@ void PlaneCalibSystem::generateSyntheticMap(const Eigen::Matrix3fr &k, const Eig
 		MYAPP_LOG << "  Measurement count: " << newFrame->getMeasurements().size() << "\n";
 		MYAPP_LOG << "  Max distortion error: " << _distortionError.maxCoeff() << "\n";
 		MYAPP_LOG << "  Max noise error: " << _noiseError.maxCoeff() << "\n";
+
+		//Get homography
+		Eigen::Matrix<uchar, Eigen::Dynamic, 1> mask(refPoints.size());
+		cv::Mat1b mask_cv(refPoints.size(), 1, mask.data());
+
+		cv::Mat H;
+		H = cv::findHomography(refPoints, imgPoints, cv::RANSAC, 3 * mExpectedPixelNoiseStd, mask_cv);
+		cv::Matx33f cvH = cv::Matx33f::eye();
+		if (!H.empty())
+		{
+			cvH = H;
+		}
+		else
+		{
+			MYAPP_LOG << "findHomography failed \n";
+		}
+
+		//Refine
+		HomographyEstimation hest;
+		std::vector<bool> inliersVec;
+		std::vector<int> octaveVec(imgPoints.size(), 0);
+		cvH = hest.estimateCeres(cvH, imgPoints, refPoints, octaveVec, 3 * mExpectedPixelNoiseStd, inliersVec);
+
+		//Set final
+		newFrame->setPose(eutils::FromCV(cvH));
 
 		//Add
 		newMap->addKeyframe(std::move(newFrame));

@@ -339,11 +339,38 @@ void MainWindow::synthTest()
 {
 	Eigen::Matrix3fr k;
 	k << 600, 0, 320, 0, 600, 240, 0, 0, 1;
-	Eigen::Vector2f distortion(-0.389839386716848, 0.197068948715649);
-	//Eigen::Vector2f distortion(0.05,0);
+	//Eigen::Vector2f distortion(-0.389839386716848, 0.197068948715649);
+	Eigen::Vector2f distortion(0.0,0.0);
 	Eigen::Vector2i imageSize(640, 480);
 	float noiseStd = 3/3;
-	mSystem->generateSyntheticMap(k, distortion, imageSize, noiseStd);
+	//mSystem->generateSyntheticMap(k, distortion, imageSize, noiseStd);
+
+	std::vector<float> noiseStdVec;
+	std::vector<float> errorFocal;
+	std::vector<float> errorP0;
+	std::vector<float> errorDist0;
+	std::vector<float> errorDist1;
+	for (noiseStd = 0; noiseStd < 10; noiseStd += 0.05)
+	{
+		for (int kk = 0; kk < 50; kk++)
+		{
+		MYAPP_LOG << "-------------Synth test, noiseStd=" << noiseStd << ", iter=" << kk << "----------------\n";
+		mSystem->generateSyntheticMap(k, distortion, imageSize, noiseStd);
+		mSystem->doHomographyBA();
+		mSystem->doFullBA();
+
+		noiseStdVec.push_back(noiseStd);
+		errorFocal.push_back(mSystem->getK()(0,0)- k(0,0));
+		errorP0.push_back(Eigen::Vector2f(mSystem->getK()(0, 2) - k(0, 2), mSystem->getK()(1, 2) - k(1, 2)).norm());
+		errorDist0.push_back(mSystem->getDistortion().getCoefficients()[0] - distortion(0));
+		errorDist1.push_back(mSystem->getDistortion().getCoefficients()[1] - distortion(1));
+		}
+	}
+	MatlabDataLog::Instance().AddValue("noise", noiseStdVec);
+	MatlabDataLog::Instance().AddValue("errorFocal", errorFocal);
+	MatlabDataLog::Instance().AddValue("errorP0", errorP0);
+	MatlabDataLog::Instance().AddValue("errorDist0", errorDist0);
+	MatlabDataLog::Instance().AddValue("errorDist1", errorDist1);
 
 	updateState();
 }
