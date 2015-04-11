@@ -17,7 +17,7 @@ namespace planecalib
 {
 ///////////////////////////////////////////////////////
 
-DEFINE_int32(PyramidMaxTopLevelWidth, 240, "Maximum width of the highest pyramid level for a frame.");
+DEFINE_int32(PyramidMaxTopLevelWidth, 320, "Maximum width of the highest pyramid level for a frame.");
 DEFINE_int32(SBIMaxWidth, 60, "Maximum width for the Small Blurry Image, input will be downsampled until width is less than this.");
 DEFINE_int32(FeatureDetectorThreshold, 10, "Threshold for the keypoint detector");
 DEFINE_int32(MatcherPixelSearchDistance, 8, "The search distance for matching features (distance from point projection or from epiplar line). Units in pixels of the highest pyramid level.");

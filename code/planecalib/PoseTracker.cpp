@@ -143,13 +143,13 @@ bool PoseTracker::trackFrame(std::unique_ptr<Keyframe> frame_)
 	mMap->getFeaturesInView(mCurrentPose, mImageSize, mOctaveCount, featuresToIgnore, mFeaturesInView);
 
 	//Match
-	//for (int octave = mOctaveCount - 1; octave >= 0; octave--)
-	int octave = 0;// mOctaveCount - 1;
+	for (int octave = mOctaveCount - 1; octave >= 0; octave--)
+		//int octave = mOctaveCount - 1;
 	{
 		const int scale = 1 << octave;
 		{
 			ProfileSection sm("matching");
-			
+
 			auto &imgKeypoints = mFrame->getKeypoints(octave);
 			auto &imgDesc = mFrame->getDescriptors(octave);
 			//std::vector<cv::Point2f> refPoints, imgPoints;
@@ -202,7 +202,7 @@ bool PoseTracker::trackFrame(std::unique_ptr<Keyframe> frame_)
 				}
 			}
 		}
-
+	}
 		//Homography
 		//MYAPP_LOG << "Matches=" << refPoints.size() << "\n";
 		//if (mMatches.size() >= 4)
@@ -227,21 +227,21 @@ bool PoseTracker::trackFrame(std::unique_ptr<Keyframe> frame_)
 			cv::Mat H;
 			{
 				ProfileSection s("findHomography");
-				H = cv::findHomography(refPoints, imgPoints, cv::RANSAC, 2.5, mask_cv);
+				//H = cv::findHomography(refPoints, imgPoints, cv::RANSAC, 2.5, mask_cv);
 			}
 
 			cv::Matx33f cvH;
 			if (H.empty())
 			{
-				MYAPP_LOG << "findHomography failed \n";
+				//MYAPP_LOG << "findHomography failed \n";
 				cvH = eutils::ToCV(mCurrentPose);
 
-				const int scale = 1 << octave;
+				//const int scale = 1 << octave;
 
-				cvH(0, 2) /= scale;
-				cvH(1, 2) /= scale;
-				cvH(2, 0) *= scale;
-				cvH(2, 1) *= scale;
+				//cvH(0, 2) /= scale;
+				//cvH(1, 2) /= scale;
+				//cvH(2, 0) *= scale;
+				//cvH(2, 1) *= scale;
 			}
 			else
 				cvH = H;
@@ -271,12 +271,12 @@ bool PoseTracker::trackFrame(std::unique_ptr<Keyframe> frame_)
 				mCurrentPose = eutils::FromCV(cvH);
 
 				//const int scale = mImageSize.x() / img.cols;
-				const int scale = 1<<octave;
+				//const int scale = 1<<octave;
 
-				mCurrentPose(0, 2) *= scale;
-				mCurrentPose(1, 2) *= scale;
-				mCurrentPose(2, 0) /= scale;
-				mCurrentPose(2, 1) /= scale;
+				//mCurrentPose(0, 2) *= scale;
+				//mCurrentPose(1, 2) *= scale;
+				//mCurrentPose(2, 0) /= scale;
+				//mCurrentPose(2, 1) /= scale;
 				mFrame->setPose(mCurrentPose);
 				//MYAPP_LOG << "H = " << H << "\n";
 				mIsLost = false;
@@ -284,7 +284,7 @@ bool PoseTracker::trackFrame(std::unique_ptr<Keyframe> frame_)
 			else
 				mIsLost = true;
 		}
-	}
+	//}
 
 	//Eval
 	int matchCount = mMatches.size();

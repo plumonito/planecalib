@@ -55,11 +55,11 @@ FeatureProjectionInfo Map::projectFeature(const Eigen::Matrix3fr &pose, Feature 
 	int octave = 0;
 	while (distSq > 1)
 	{
-		distSq /= 2;
+		distSq /= 4;
 		octave++;
 	}
 
-	return FeatureProjectionInfo(&feature, feature.getMeasurements()[0].get(), octave, pos);
+	return FeatureProjectionInfo(&feature, feature.getMeasurements().back().get(), octave, pos);
 }
 
 void Map::addKeyframe(std::unique_ptr<Keyframe> newKeyframe)
