@@ -122,7 +122,7 @@ int main(int argc, char**argv)
 	//glutInitWindowPosition(900,10);
 	glutInitWindowSize(initialSize.x(),initialSize.y());
 	planecalib::UserInterfaceInfo::Instance().setScreenSize(initialSize);
-	gWindowId = glutCreateWindow("dslam");
+	gWindowId = glutCreateWindow("planecalib");
 
 	//Glew
 	if(glewInit() != GLEW_OK)

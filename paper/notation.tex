@@ -1,0 +1,97 @@
+\def\ellv{\bm{\ell}}
+\def\phiv{{\bm{\phi}}}
+\def\thetav{\bm{\theta}}
+\def\omegav{\bm{\omega}}
+
+\def\av{\mathbf{a}}
+\def\bv{\mathbf{b}}
+\def\cv{\mathbf{c}}
+\def\dv{\mathbf{d}}
+\def\ev{\mathbf{e}}
+\def\fv{\mathbf{f}}
+\def\gv{\mathbf{g}}
+\def\hv{\mathbf{h}}
+\def\iv{\mathbf{i}}
+\def\jv{\mathbf{j}}
+\def\kv{\mathbf{k}}
+\def\lv{\mathbf{l}}
+\def\mv{\mathbf{m}}
+\def\nv{\mathbf{n}}
+\def\ov{\mathbf{o}}
+\def\pv{\mathbf{p}}
+\def\qv{\mathbf{q}}
+\def\rv{\mathbf{r}}
+\def\sv{\mathbf{s}}
+\def\tv{\mathbf{t}}
+\def\uv{\mathbf{u}}
+\def\vv{\mathbf{v}}
+\def\wv{\mathbf{w}}
+\def\xv{\mathbf{x}}
+\def\yv{\mathbf{y}}
+\def\zv{\mathbf{z}}
+
+\def\Am{\mathbf{A}}
+\def\Bm{\mathbf{B}}
+\def\Cm{\mathbf{C}}
+\def\Dm{\mathbf{D}}
+\def\Em{\mathbf{E}}
+\def\Fm{\mathbf{F}}
+\def\Gm{\mathbf{G}}
+\def\Hm{\mathbf{H}}
+\def\Im{\mathbf{I}}
+\def\Jm{\mathbf{J}}
+\def\Km{\mathbf{K}}
+\def\Lm{\mathbf{L}}
+\def\Mm{\mathbf{M}}
+\def\Nm{\mathbf{N}}
+\def\Om{\mathbf{O}}
+\def\Pm{\mathbf{P}}
+\def\Qm{\mathbf{Q}}
+\def\Rm{\mathbf{R}}
+\def\Sm{\mathbf{S}}
+\def\Tm{\mathbf{T}}
+\def\Um{\mathbf{U}}
+\def\Vm{\mathbf{V}}
+\def\Wm{\mathbf{W}}
+\def\Xm{\mathbf{X}}
+\def\Ym{\mathbf{Y}}
+\def\Zm{\mathbf{Z}}
+
+\newcommand{\homogeneous}[1]{\hat{#1}} % Vector homogenous notation
+\newcommand{\hnorm}[1]{\check{#1}} % Perspective division notation
+
+\def\Projection{\mathcal{P}}
+\def\IntrinsicMatFunc{\mathcal{K}}
+\def\ExtrinsicFunc{\mathcal{R}}
+\def\pdiv{\hat{\mathbf{\nu}}}
+\def\Distortion{\mathcal{D}}
+
+\def\Real{\varmathbb{R}}
+\def\Projective{\varmathbb{P}}
+
+\DeclareMathOperator*{\argmin}{arg\,min}
+\DeclareMathOperator{\Err}{Err}
+\DeclareMathOperator{\Proj}{Proj}
+\DeclareMathOperator{\Norm}{Norm}
+
+\DeclarePairedDelimiter{\norm}{\lVert}{\rVert}
+
+% Add a period to the end of an abbreviation unless there's one
+% already, then \xspace.
+\makeatletter
+\DeclareRobustCommand\onedot{\futurelet\@let@token\@onedot}
+\def\@onedot{\ifx\@let@token.\else.\null\fi\xspace}
+
+\def\eg{\emph{e.g}\onedot} \def\Eg{\emph{E.g}\onedot}
+\def\ie{\emph{i.e}\onedot} \def\Ie{\emph{I.e}\onedot}
+\def\cf{\emph{c.f}\onedot} \def\Cf{\emph{C.f}\onedot}
+\def\etc{\emph{etc}\onedot} \def\vs{\emph{vs}\onedot}
+\def\wrt{w.r.t\onedot} \def\dof{d.o.f\onedot}
+\def\etal{\emph{et al}\onedot}
+\makeatother
+
+%Author notes
+\def\authornote#1#2{{\textred{\textsl{\small#1:[*#2*]}}}} \newcommand*{\Scale}[2][4]{\scalebox{#1}{$#2$}}%
+\newcommand{\dhnote}[1]{\authornote{DH}{#1}} % Daniel
+\newcommand{\jknote}[1]{\authornote{JK}{#1}} % Juho
+\newcommand{\jhnote}[1]{\authornote{JH}{#1}} % Janne
