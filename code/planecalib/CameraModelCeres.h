@@ -1,43 +1,30 @@
-///*
-// * CameraModelCeres.h
-// *
-// * Copyright(C) 2014, University of Oulu, all rights reserved.
-// * Copyright(C) 2014, NVIDIA Corporation, all rights reserved.
-// * Third party copyrights are property of their respective owners.
-// * Contact: Daniel Herrera C. (dherrera@ee.oulu.fi),
-// *          Kihwan Kim(kihwank@nvidia.com)
-// * Author : Daniel Herrera C.
-// */
-//
-//#ifndef CAMERAMODELCERES_H_
-//#define CAMERAMODELCERES_H_
-//
-//#include "CameraModel.h"
-//#include <ceres/jet.h>
-//
-//namespace dtslam
-//{
-//
-//template<class TDistortionModel>
-//void CameraModel_<TDistortionModel>::projectFromWorldJacobian(const cv::Point3f &xc, cv::Vec3f &ujac, cv::Vec3f &vjac) const
-//{
-//	ceres::Jet<float, 3> xJet(xc.x, 0);
-//	ceres::Jet<float, 3> yJet(xc.y, 1);
-//	ceres::Jet<float, 3> zJet(xc.z, 2);
-//
-//	ceres::Jet<float, 3> uJet;
-//	ceres::Jet<float, 3> vJet;
-//
-//	projectFromWorld(xJet,yJet,zJet,uJet,vJet);
-//	ujac[0] = uJet.v[0];
-//	ujac[1] = uJet.v[1];
-//	ujac[2] = uJet.v[2];
-//
-//	vjac[0] = vJet.v[0];
-//	vjac[1] = vJet.v[1];
-//	vjac[2] = vJet.v[2];
-//}
-//
-//}
-//
-//#endif /* CAMERAMODELCERES_H_ */
+#ifndef CAMERAMODELCERES_H_
+#define CAMERAMODELCERES_H_
+
+#include "CameraModel.h"
+#include <ceres/jet.h>
+
+namespace planecalib
+{
+
+template<class TDistortionModel>
+void CameraModel_<TDistortionModel>::projectFromWorldJacobian(const Eigen::Vector3f &xc, Eigen::Vector3f &ujac, Eigen::Vector3f &vjac) const
+{
+	typedef ceres::Jet<double, 3> TJet;
+	Eigen::Matrix<TJet, 3, 1> x(TJet(xc[0], 0), TJet(xc[1], 1), TJet(xc[2], 2));
+
+	Eigen::Matrix<TJet, 2, 1> p;
+
+	projectFromWorld(x,p);
+	ujac[0] = (float)p[0].v[0];
+	ujac[1] = (float)p[0].v[1];
+	ujac[2] = (float)p[0].v[2];
+
+	vjac[0] = (float)p[1].v[0];
+	vjac[1] = (float)p[1].v[1];
+	vjac[2] = (float)p[1].v[2];
+}
+
+}
+
+#endif /* CAMERAMODELCERES_H_ */

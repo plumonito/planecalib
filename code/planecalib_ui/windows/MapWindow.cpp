@@ -26,7 +26,7 @@ bool MapWindow::init(PlaneCalibApp *app, const Eigen::Vector2i &imageSize)
 	BaseWindow::init(app, imageSize);
 	
 	mViewerCameraR = Eigen::Matrix3fr::Identity();
-	mViewerCameraT = Eigen::Vector3f(0, 0, -1);
+	mViewerCameraT = Eigen::Vector3f(0, 0, 5);
 
 	resize();
 
@@ -47,6 +47,7 @@ void MapWindow::updateState()
 	mTracker = &mApp->getSystem().getTracker();
 
 	mSystemCameraK = mApp->getSystem().getK();
+	mSystemCameraKinv = mSystemCameraK.inverse();
 	mSystemCameraDistortion = mApp->getSystem().getDistortion();
 
 	shared_lock<shared_mutex> lockRead(mMap->getMutex());
@@ -363,6 +364,58 @@ MapWindow::DrawFrustumData MapWindow::prepareFrameFrustum(const Eigen::Matrix3fr
 	DrawFrustumData data;
     const float kFrustumDepth = 0.3f*mMapDrawScale;
 
+	data.texTarget = texTarget;
+	data.texId = texID;
+	data.color = StaticColors::Gray();
+
+	//Center
+	Eigen::Vector3f center = -R.transpose()*t;
+	data.center = center.homogeneous();
+	//Eigen::Vector3f vv = center + R.transpose()*Eigen::Vector3f(0,0,1);
+	//data.frameVertices.push_back(vv.homogeneous());
+	//data.frameVertices.push_back(data.center);
+	//Corners
+	const float kScale = 0.2f;
+	std::array<Eigen::Vector2f, 4> cornersImg = {
+		Eigen::Vector2f(0, 0), 
+		Eigen::Vector2f(mImageSize[0], 0), 
+		Eigen::Vector2f(mImageSize[0], mImageSize[1]),
+		Eigen::Vector2f(0, mImageSize[1])
+	};
+	for (int i = 0; i < cornersImg.size(); i++)
+	{
+		Eigen::Vector2f xn = mSystemCameraDistortion.undistortPoint((mSystemCameraKinv*cornersImg[i].homogeneous()).eval().hnormalized());
+		Eigen::Vector3f xc = R.transpose()*xn.homogeneous()*kScale + center;
+		data.corners[i] = xc.homogeneous();
+	}
+
+	//Border
+	std::vector<Eigen::Vector2f> imgPoints;
+	int x, y;
+	const int kBorderStep = 10;
+	for (x = 0, y = 0; x < mImageSize[0]; x += kBorderStep)
+	{
+		imgPoints.emplace_back(x,y);
+	}
+	for (x-=kBorderStep; y < mImageSize[1]; y+=kBorderStep)
+	{
+		imgPoints.emplace_back(x, y);
+	}
+	for (y-=kBorderStep; x > 0; x -= kBorderStep)
+	{
+		imgPoints.emplace_back(x, y);
+	}
+	for (x += kBorderStep; y > 0; y -= kBorderStep)
+	{
+		imgPoints.emplace_back(x, y);
+	}
+	for (int i = 0; i < imgPoints.size(); i++)
+	{
+		Eigen::Vector2f xn = mSystemCameraDistortion.undistortPoint((mSystemCameraKinv*imgPoints[i].homogeneous()).eval().hnormalized());
+		Eigen::Vector3f xc = R.transpose()*xn.homogeneous()*kScale + center;
+		data.borderVertices.push_back( xc.homogeneous() );
+	}
+
  //   data.tl = camera.unprojectToWorld(cv::Point2f(0, 0)) * kFrustumDepth;
 	//data.tr = camera.unprojectToWorld(cv::Point2f((float)camera.getImageSize().width, 0)) * kFrustumDepth;
 	//data.bl = camera.unprojectToWorld(cv::Point2f(0, (float)camera.getImageSize().height)) * kFrustumDepth;
@@ -375,30 +428,27 @@ MapWindow::DrawFrustumData MapWindow::prepareFrameFrustum(const Eigen::Matrix3fr
  //   data.br = pose.applyInv(data.br);
 
 	//if (regionId < 0)
-	//	data.color = StaticColors::Red();
 	//else
 	//    data.color = mRegionColors[regionId % mRegionColors.size()];
 
- //   data.useTex = useTex;
- //   data.texTarget = texTarget;
- //   data.texId = texID;
-
+ 
     return data;
 }
 
 void MapWindow::drawFrameFrustum(const DrawFrustumData &data)
 {
-	//std::array<cv::Vec4f,5> colors;
-	//colors.fill(data.color);
+	std::array<Eigen::Vector4f,5> colors;
+	colors.fill(data.color);
 
- //   cv::Vec4f vertices[5] =
- //   { cvutils::PointToHomogenous(data.tl), cvutils::PointToHomogenous(data.tr),
- //   		cvutils::PointToHomogenous(data.bl), cvutils::PointToHomogenous(data.br),
- //   		cvutils::PointToHomogenous(data.center)};
- //   unsigned int indices[8] =
- //   { 0, 1, 4, 0, 2, 4, 3, 1 };
+	Eigen::Vector4f vertices[5] =
+	{ data.corners[0], data.corners[1], data.corners[2], data.corners[3], data.center};
+    unsigned int indices[8] =
+    { 0, 4, 1, 4, 2, 4, 3, 4 };
 
- //   mShaders->getColor().drawVertices(GL_LINE_STRIP, indices, 8, vertices, colors.data());
+    mShaders->getColor().drawVertices(GL_LINES, indices, 8, vertices, colors.data());
+	//mShaders->getColor().drawVertices(GL_LINE_STRIP, data.frameVertices.data(), 2, StaticColors::Yellow());
+	//mShaders->getColor().drawVertices(GL_LINE_STRIP, data.frameVertices.data(), 2, StaticColors::Yellow());
+	mShaders->getColor().drawVertices(GL_LINE_LOOP, data.borderVertices.data(), data.borderVertices.size(), data.color);
 
  //   cv::Vec4f v2[] =
  //   { vertices[1], vertices[0], vertices[3], vertices[2] };
@@ -437,6 +487,10 @@ void MapWindow::performBATask()
 	//Profiler::Instance().setCurrentThreadName("mapBundleAdjuster");
 
 	mApp->getSystem().doFullBA();
+	{
+		shared_lock_guard<shared_mutex> lock(mApp->getSystem().getMap().getMutex());
+		updateState();
+	}
 }
 
 void MapWindow::forceNewKeyFrame()

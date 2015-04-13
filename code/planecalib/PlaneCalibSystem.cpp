@@ -298,7 +298,7 @@ void PlaneCalibSystem::doFullBA()
 	refFrame.mPose3DR(1, 2) = basis3[1];
 	refFrame.mPose3DR(2, 2) = basis3[2];
 
-	Eigen::Vector3f refCenter = basis3;
+	Eigen::Vector3f refCenter = -basis3;
 	refFrame.mPose3DT = -refFrame.mPose3DR*refCenter; //RefCenter = -R'*t = Normal (exactly one unit away from plane center) => t = -R*normal
 
 	//Invert K
@@ -382,6 +382,7 @@ void PlaneCalibSystem::doFullBA()
 		frame.mPose3DT[1] = (float)tvec[1];
 		frame.mPose3DT[2] = (float)tvec[2];
 	}
+	mMap->setIs3DValid(true);
 
 	//BAAAAA!!!
 	CalibratedBundleAdjuster ba;

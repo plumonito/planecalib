@@ -21,7 +21,8 @@ class FeatureProjectionInfo;
 class Map
 {
 public:
-	Map()
+	Map():
+		mIs3DValid(false)
 	{
 	}
 
@@ -31,6 +32,9 @@ public:
 
 	const std::vector<std::unique_ptr<Keyframe>> &getKeyframes() const { return mKeyframes; }
 	const std::vector<std::unique_ptr<Feature>> &getFeatures() const { return mFeatures; }
+
+	bool getIs3DValid() const { return mIs3DValid; }
+	void setIs3DValid(bool value) { mIs3DValid=value; }
 
 	void addKeyframe(std::unique_ptr<Keyframe> newKeyframe);
 
@@ -47,6 +51,8 @@ protected:
 	std::vector<std::unique_ptr<Keyframe>> mKeyframes;
 	std::vector<std::unique_ptr<Feature>> mFeatures;
 	std::vector<std::unique_ptr<Feature>> mGarbageFeatures;
+
+	bool mIs3DValid;
 };
 
 class Feature

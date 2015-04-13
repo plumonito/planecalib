@@ -21,6 +21,7 @@ struct MapWindow_DrawFrustumData
 	std::vector<Eigen::Vector4f> frameVertices;
 	std::vector<int> frameIndices;
 
+	std::vector<Eigen::Vector4f> borderVertices;
 	std::array<Eigen::Vector4f, 4> corners; //The four extreme corners of the frame
 	Eigen::Vector4f center;
 
@@ -71,6 +72,7 @@ protected:
     float mPointSize;
 
 	Eigen::Matrix3fr mSystemCameraK;
+	Eigen::Matrix3fr mSystemCameraKinv;
 	RadialCameraDistortionModel mSystemCameraDistortion;
 
     Eigen::Matrix3fr mViewerCameraK;

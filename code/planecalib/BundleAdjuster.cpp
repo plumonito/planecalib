@@ -8,7 +8,6 @@
 #include "BundleAdjuster.h"
 #include "gflags/gflags.h"
 
-#define GLOG_NO_ABBREVIATED_SEVERITIES
 #include <opencv2/calib3d.hpp>
 #include <ceres/ceres.h>
 #include <mutex>

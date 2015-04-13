@@ -2,7 +2,6 @@
 #include "CalibratedBundleAdjuster.h"
 #include "gflags/gflags.h"
 
-#define GLOG_NO_ABBREVIATED_SEVERITIES
 #include <opencv2/calib3d.hpp>
 #include <ceres/ceres.h>
 #include <ceres/rotation.h>
@@ -169,8 +168,9 @@ bool CalibratedBundleAdjuster::bundleAdjust()
 
 	//BA ceres problem
 	ceres::Solver::Options options;
-	options.linear_solver_type = ceres::CGNR;
-	//options.preconditioner_type = ceres::SCHUR_JACOBI;
+	//options.linear_solver_type = ceres::CGNR;
+	options.linear_solver_type = ceres::SPARSE_SCHUR;
+	options.preconditioner_type = ceres::SCHUR_JACOBI;
 	options.dense_linear_algebra_library_type = ceres::LAPACK;
 
 	options.max_num_iterations = 500;
@@ -180,7 +180,7 @@ bool CalibratedBundleAdjuster::bundleAdjust()
 
 	options.minimizer_progress_to_stdout = false;
 
-	//options.linear_solver_ordering.reset(new ceres::ParameterBlockOrdering());
+	options.linear_solver_ordering.reset(new ceres::ParameterBlockOrdering());
 
 	ceres::Problem problem;
 
@@ -217,8 +217,8 @@ bool CalibratedBundleAdjuster::bundleAdjust()
 				problem.AddParameterBlock(params.data(), 3);
 				problem.AddParameterBlock(params.data() + 3, 3);
 			}
-			//options.linear_solver_ordering->AddElementToGroup(params.data(), 1);
-			//options.linear_solver_ordering->AddElementToGroup(params.data()+3, 1);
+			options.linear_solver_ordering->AddElementToGroup(params.data(), 1);
+			options.linear_solver_ordering->AddElementToGroup(params.data()+3, 1);
 		}
 
 		//Prepare features
@@ -232,7 +232,7 @@ bool CalibratedBundleAdjuster::bundleAdjust()
 			//Add feature as parameter block
 			problem.AddParameterBlock(params.data(), 2);
 			//problem.SetParameterBlockConstant(params.data());
-			//options.linear_solver_ordering->AddElementToGroup(params.data(), 0);
+			options.linear_solver_ordering->AddElementToGroup(params.data(), 0);
 		}
 
 		//K params
@@ -242,11 +242,12 @@ bool CalibratedBundleAdjuster::bundleAdjust()
 		mParamsK[3] = mK(1, 2);
 		problem.AddParameterBlock(mParamsK.data(), mParamsK.size());
 		//problem.SetParameterBlockConstant(mParamsK.data());
-		//options.linear_solver_ordering->AddElementToGroup(kparams.data(), 1);
+		options.linear_solver_ordering->AddElementToGroup(mParamsK.data(), 1);
 
 		//Distortion params
 		mImageSize = (**mFramesToAdjust.begin()).getImageSize(); //Image size is needed to determine the maximum radius for distortion
 		problem.AddParameterBlock(mParamsDistortion.data(), mParamsDistortion.size());
+		options.linear_solver_ordering->AddElementToGroup(mParamsDistortion.data(), 1);
 
 		//Gather measurements
 		mMeasurementsInProblem.clear();
