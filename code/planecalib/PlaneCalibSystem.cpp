@@ -163,7 +163,8 @@ void PlaneCalibSystem::processImage(double timestamp, cv::Mat3b &imgColor, cv::M
 		mExpanderCheckPending = true;
 
 		//Check distance
-		const float kThreshold = 50 * 50;
+		const float kThreshold = 60;
+		const float kThresholdSq = kThreshold*kThreshold;
 		std::vector<Eigen::Vector2f> cornersOriginal;
 		cornersOriginal.push_back(Eigen::Vector2f(0, 0));
 		cornersOriginal.push_back(Eigen::Vector2f(0, mTracker->getImageSize().y()));
@@ -183,10 +184,10 @@ void PlaneCalibSystem::processImage(double timestamp, cv::Mat3b &imgColor, cv::M
 			for (auto &p : corners)
 			{
 				auto pp = eutils::HomographyPoint(frame.getPose(), p.second);
-				distSq += (p.first - pp).squaredNorm();
+				distSq = std::max(distSq,(p.first - pp).squaredNorm());
 			}
 
-			if (distSq < kThreshold)
+			if (distSq < kThresholdSq)
 			{
 				add = false;
 				break;
@@ -197,7 +198,7 @@ void PlaneCalibSystem::processImage(double timestamp, cv::Mat3b &imgColor, cv::M
 		{
 			createKeyframe();
 
-			doHomographyCalib();
+			//doHomographyCalib();
 		}
 	}
 }
@@ -297,7 +298,7 @@ void PlaneCalibSystem::doFullBA()
 	refFrame.mPose3DR(1, 2) = basis3[1];
 	refFrame.mPose3DR(2, 2) = basis3[2];
 
-	Eigen::Vector3f refCenter = basis3;
+	Eigen::Vector3f refCenter = -basis3;
 	refFrame.mPose3DT = -refFrame.mPose3DR*refCenter; //RefCenter = -R'*t = Normal (exactly one unit away from plane center) => t = -R*normal
 
 	//Invert K
@@ -381,6 +382,7 @@ void PlaneCalibSystem::doFullBA()
 		frame.mPose3DT[1] = (float)tvec[1];
 		frame.mPose3DT[2] = (float)tvec[2];
 	}
+	mMap->setIs3DValid(true);
 
 	//BAAAAA!!!
 	CalibratedBundleAdjuster ba;

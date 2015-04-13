@@ -57,8 +57,12 @@ public:
 		mMaxRadiusSq = maxRadiusSq;
 	}
 
-	Eigen::Vector2f getCoefficients() const { return mCoefficients; }
+	const Eigen::Vector2f &getCoefficients() const { return mCoefficients; }
 	void setCoefficients(const Eigen::Vector2f &coeff) { mCoefficients = coeff; }
+
+	static const int kParamCount = 2;
+	Eigen::Vector2d getParams() const { return mCoefficients.cast<double>(); }
+	void setParams(const Eigen::Vector2d &params) { mCoefficients = params.cast<float>(); }
 
 	float getMaxRadiusSq() const {return mMaxRadiusSq;}
 	void setMaxRadius(float maxRadiusSq)
@@ -97,6 +101,22 @@ public:
 		const TScalar factor = TScalar(1) + TScalar(coeff[0])*r2 + TScalar(coeff[1])*r4;
 		xd = factor*x;
 	}
+
+	template <class TCoeffMat, class TPointMatA, class TPointMatB>
+	static void DistortPoint(const Eigen::MatrixBase<TCoeffMat> &coeff, const Eigen::MatrixBase<TPointMatA> &x, Eigen::MatrixBase<TPointMatB> &xd)
+	{
+		static_assert(TCoeffMat::SizeAtCompileTime == 2, "Param coeff must be of size 2");
+		static_assert(TPointMatA::SizeAtCompileTime == 2, "Param x must be of size 2");
+		static_assert(TPointMatB::SizeAtCompileTime == 2, "Param xd must be of size 2");
+
+		typedef typename TPointMatA::Scalar TScalar;
+
+		TScalar r2 = x.squaredNorm();
+		const TScalar r4 = r2*r2;
+		const TScalar factor = TScalar(1) + TScalar(coeff[0])*r2 + TScalar(coeff[1])*r4;
+		xd = factor*x;
+	}
+
 
 	//Non-linear, uses ceres
 	Eigen::Vector2f undistortPoint(const Eigen::Vector2f &pd) const;

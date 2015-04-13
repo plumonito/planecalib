@@ -72,15 +72,15 @@ void PoseTracker::resetTracking(Map *map, const Eigen::Matrix3fr &initialPose)
 bool PoseTracker::trackFrame(std::unique_ptr<Keyframe> frame_)
 {
 	ProfileSection s("trackFrame");
-	
+
+
 	//Save old data 
-	std::unordered_set<const Feature*> featuresToIgnore;
 	mLastFrame.reset(NULL);
 	mLastMatches.clear();
 	if (mFrame)
 	{
 		mLastFrame = std::move(mFrame);
-	
+
 		for (int i = 0, end = mMatches.size(); i != end; ++i)
 		{
 			if (mReprojectionErrors[i].isInlier)
@@ -90,7 +90,7 @@ bool PoseTracker::trackFrame(std::unique_ptr<Keyframe> frame_)
 			}
 		}
 	}
-	
+
 	//Reset new frame data
 	mFrame = std::move(frame_);
 	mFeaturesInView.clear();
@@ -99,57 +99,39 @@ bool PoseTracker::trackFrame(std::unique_ptr<Keyframe> frame_)
 	mMatchMap.clear();
 	mReprojectionErrors.clear();
 
-	//mCurrentPose = Eigen::Matrix3fr::Identity();
-	//cv::Mat1f cvPose(3,3,mCurrentPose.data());
-	//try
-	//{
-	//	ProfileSection s("estimateTransform");
+	//Matches
+	findMatches();
 
-	//	//auto &refImg = mMap->getKeyframes().front()->getSBI();
-	//	//auto &img = mFrame->getSBI();
-	//	auto &refImg = mMap->getKeyframes().front()->getImage(0);
-	//	auto &img = mFrame->getImage(0);
-	//	const int scale = mImageSize.x() / img.cols;
+	//Estimate pose
+	if (mMap->getIs3DValid())
+		trackFrame3D(std::move(frame_));
+	else
+		trackFrameHomography(std::move(frame_));
 
-	//	cv::Matx33f cvM = cvPose;
-	//	mCurrentPose(0, 2) /= scale;
-	//	mCurrentPose(1, 2) /= scale;
-	//	mCurrentPose(2, 0) *= scale;
-	//	mCurrentPose(2, 1) *= scale;
+	//Build match map
+	for (auto &match : mMatches)
+		mMatchMap.insert(std::make_pair(&match.getFeature(), &match));
 
-	//	cvM = cv::Matx33f::eye();
+	return !mIsLost;
+}
 
-	//	HomographyEstimation he;
-	//	//he.estimateSimilarityDirect(refImg, img, cvM);
-	//	//he.estimateHomographyDirect(refImg, img, cvM);
+void PoseTracker::findMatches()
+{
+	const int kMatchThresholdSq = 40 * 40;
+	const float kRatioThreshold = 0.8f;
 
-	//	cv::Mat1f mm(3, 3, cvM.val);
-	//	cv::findTransformECC(refImg, img, mm, cv::MOTION_HOMOGRAPHY, cv::TermCriteria(cv::TermCriteria::COUNT + cv::TermCriteria::EPS, 100,0.001));
-
-	//	((cv::Mat1f)cvM).copyTo(cvPose);
-
-	//	mCurrentPose(0, 2) *= scale;
-	//	mCurrentPose(1, 2) *= scale;
-	//	mCurrentPose(2, 0) /= scale;
-	//	mCurrentPose(2, 1) /= scale;
-	//}
-	//catch (...)
-	//{
-	//	MYAPP_LOG << "Error finding homography\n";
-	//}
-	//return false;
+	std::unordered_set<const Feature*> featuresToIgnore;
 
 	//Get features in view
 	mMap->getFeaturesInView(mCurrentPose, mImageSize, mOctaveCount, featuresToIgnore, mFeaturesInView);
 
 	//Match
-	//for (int octave = mOctaveCount - 1; octave >= 0; octave--)
-	int octave = 0;// mOctaveCount - 1;
+	for (int octave = mOctaveCount - 1; octave >= 0; octave--)
 	{
 		const int scale = 1 << octave;
 		{
 			ProfileSection sm("matching");
-			
+
 			auto &imgKeypoints = mFrame->getKeypoints(octave);
 			auto &imgDesc = mFrame->getDescriptors(octave);
 			//std::vector<cv::Point2f> refPoints, imgPoints;
@@ -162,7 +144,6 @@ bool PoseTracker::trackFrame(std::unique_ptr<Keyframe> frame_)
 				auto &refDesc_i = m.getDescriptor();
 
 				//Find best match
-				const int kMatchThresholdSq = 40 * 40;
 				int bestScore = std::numeric_limits<int>::max();
 				Eigen::Vector2f bestPosition;
 				const uchar *bestDescriptor;
@@ -192,7 +173,7 @@ bool PoseTracker::trackFrame(std::unique_ptr<Keyframe> frame_)
 				bool add = false;
 				if (bestScore < std::numeric_limits<int>::max())
 				{
-					if (bestScore < 0.8f * secondScore)
+					if (bestScore < kRatioThreshold * secondScore)
 						add = true;
 				}
 
@@ -202,88 +183,77 @@ bool PoseTracker::trackFrame(std::unique_ptr<Keyframe> frame_)
 				}
 			}
 		}
+	}
 
-		//Homography
-		//MYAPP_LOG << "Matches=" << refPoints.size() << "\n";
-		//if (mMatches.size() >= 4)
-		if (mMatches.size() < 50)
+	//MYAPP_LOG << "Matches=" << refPoints.size() << "\n";
+}
+
+bool PoseTracker::trackFrameHomography(std::unique_ptr<Keyframe> frame_)
+{
+	ProfileSection s("trackFrameHomography");
+
+	//Homography
+	if (mMatches.size() < 50)
+	{
+		mIsLost = true;
+	}
+	else
+	{
+		//Create cv vectors
+		std::vector<cv::Point2f> refPoints, imgPoints;
+		for (int i = 0; i < (int)mMatches.size(); i++)
 		{
-			mIsLost = true;
+			auto &match = mMatches[i];
+			refPoints.push_back(eutils::ToCVPoint(match.getFeature().getPosition()));
+			imgPoints.push_back(eutils::ToCVPoint(match.getPosition()));
+		}
+
+		Eigen::Matrix<uchar,Eigen::Dynamic,1> mask(refPoints.size());
+		cv::Mat1b mask_cv(refPoints.size(), 1, mask.data());
+
+		cv::Mat H;
+		{
+			ProfileSection s("findHomography");
+			//H = cv::findHomography(refPoints, imgPoints, cv::RANSAC, 2.5, mask_cv);
+		}
+
+		cv::Matx33f cvH;
+		if (H.empty())
+		{
+			//MYAPP_LOG << "findHomography failed \n";
+			cvH = eutils::ToCV(mCurrentPose);
 		}
 		else
+			cvH = H;
+
+		//Refine
+		HomographyEstimation hest;
+		std::vector<bool> inliersVec;
+		std::vector<int> octaveVec(imgPoints.size(), 0);
 		{
-			//Create cv vectors
-			std::vector<cv::Point2f> refPoints, imgPoints;
-			for (int i = 0; i < (int)mMatches.size(); i++)
-			{
-				auto &match = mMatches[i];
-				refPoints.push_back(eutils::ToCVPoint(match.getFeature().getPosition()));
-				imgPoints.push_back(eutils::ToCVPoint(match.getPosition()));
-			}
-
-			Eigen::Matrix<uchar,Eigen::Dynamic,1> mask(refPoints.size());
-			cv::Mat1b mask_cv(refPoints.size(), 1, mask.data());
-
-			cv::Mat H;
-			{
-				ProfileSection s("findHomography");
-				H = cv::findHomography(refPoints, imgPoints, cv::RANSAC, 2.5, mask_cv);
-			}
-
-			cv::Matx33f cvH;
-			if (H.empty())
-			{
-				MYAPP_LOG << "findHomography failed \n";
-				cvH = eutils::ToCV(mCurrentPose);
-
-				const int scale = 1 << octave;
-
-				cvH(0, 2) /= scale;
-				cvH(1, 2) /= scale;
-				cvH(2, 0) *= scale;
-				cvH(2, 1) *= scale;
-			}
-			else
-				cvH = H;
-
-			//Refine
-			HomographyEstimation hest;
-			std::vector<bool> inliersVec;
-			std::vector<int> octaveVec(imgPoints.size(), 0);
-			{
-				ProfileSection s("refineHomography");
-				cvH = hest.estimateCeres(cvH, imgPoints, refPoints, octaveVec, 2.5, inliersVec);
-			}
-			std::vector<FeatureMatch> goodMatches;
-			int inlierCountBefore = mask.sum();
-			int inlierCountAfter = 0;
-			for (int i = 0; i<(int)mMatches.size(); i++)
-			{
-				if (inliersVec[i])
-					goodMatches.push_back(mMatches[i]);
-			}
-			inlierCountAfter = goodMatches.size();
-			mMatches = std::move(goodMatches);
-			//MYAPP_LOG << "Inliers before=" << inlierCountBefore << ", inliers after=" << inlierCountAfter << "\n";
-
-			if (inlierCountAfter > 50)
-			{
-				mCurrentPose = eutils::FromCV(cvH);
-
-				//const int scale = mImageSize.x() / img.cols;
-				const int scale = 1<<octave;
-
-				mCurrentPose(0, 2) *= scale;
-				mCurrentPose(1, 2) *= scale;
-				mCurrentPose(2, 0) /= scale;
-				mCurrentPose(2, 1) /= scale;
-				mFrame->setPose(mCurrentPose);
-				//MYAPP_LOG << "H = " << H << "\n";
-				mIsLost = false;
-			}
-			else
-				mIsLost = true;
+			ProfileSection s("refineHomography");
+			cvH = hest.estimateCeres(cvH, imgPoints, refPoints, octaveVec, 2.5, inliersVec);
 		}
+		std::vector<FeatureMatch> goodMatches;
+		int inlierCountBefore = mask.sum();
+		int inlierCountAfter = 0;
+		for (int i = 0; i<(int)mMatches.size(); i++)
+		{
+			if (inliersVec[i])
+				goodMatches.push_back(mMatches[i]);
+		}
+		inlierCountAfter = goodMatches.size();
+		mMatches = std::move(goodMatches);
+		//MYAPP_LOG << "Inliers before=" << inlierCountBefore << ", inliers after=" << inlierCountAfter << "\n";
+
+		if (inlierCountAfter > 50)
+		{
+			mCurrentPose = eutils::FromCV(cvH);
+			mFrame->setPose(mCurrentPose);
+			mIsLost = false;
+		}
+		else
+			mIsLost = true;
 	}
 
 	//Eval
@@ -296,9 +266,70 @@ bool PoseTracker::trackFrame(std::unique_ptr<Keyframe> frame_)
 		mReprojectionErrors[i].isInlier = true;
 	}
 
-	//Build match map
-	for (auto &match : mMatches)
-		mMatchMap.insert(std::make_pair(&match.getFeature(), &match));
+	return !mIsLost;
+}
+
+bool PoseTracker::trackFrame3D(std::unique_ptr<Keyframe> frame_)
+{
+	ProfileSection s("trackFrame3D");
+
+	if (mMatches.size() < 50)
+	{
+		mIsLost = true;
+	}
+	else
+	{
+		//Create cv vectors
+		std::vector<cv::Point2f> refPoints, imgPoints;
+		for (int i = 0; i < (int)mMatches.size(); i++)
+		{
+			auto &match = mMatches[i];
+			refPoints.push_back(eutils::ToCVPoint(match.getFeature().getPosition()));
+			imgPoints.push_back(eutils::ToCVPoint(match.getPosition()));
+		}
+
+		Eigen::Matrix<uchar, Eigen::Dynamic, 1> mask(refPoints.size());
+		cv::Mat1b mask_cv(refPoints.size(), 1, mask.data());
+
+		//Refine
+		HomographyEstimation hest;
+		std::vector<bool> inliersVec;
+		std::vector<int> octaveVec(imgPoints.size(), 0);
+		{
+			ProfileSection s("refineHomography");
+			//cvH = hest.estimateCeres(cvH, imgPoints, refPoints, octaveVec, 2.5, inliersVec);
+		}
+		std::vector<FeatureMatch> goodMatches;
+		int inlierCountBefore = mask.sum();
+		int inlierCountAfter = 0;
+		for (int i = 0; i<(int)mMatches.size(); i++)
+		{
+			if (inliersVec[i])
+				goodMatches.push_back(mMatches[i]);
+		}
+		inlierCountAfter = goodMatches.size();
+		mMatches = std::move(goodMatches);
+		//MYAPP_LOG << "Inliers before=" << inlierCountBefore << ", inliers after=" << inlierCountAfter << "\n";
+
+		if (inlierCountAfter > 50)
+		{
+			//mCurrentPose = eutils::FromCV(cvH);
+			mFrame->setPose(mCurrentPose);
+			mIsLost = false;
+		}
+		else
+			mIsLost = true;
+	}
+
+	//Eval
+	int matchCount = mMatches.size();
+	mReprojectionErrors.resize(matchCount);
+	for (int i = 0; i < matchCount; i++)
+	{
+		auto &match = mMatches[i];
+
+		mReprojectionErrors[i].isInlier = true;
+	}
 
 	return !mIsLost;
 }

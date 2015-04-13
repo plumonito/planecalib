@@ -27,6 +27,8 @@ public:
 	int getMatcherSearchRadius() const {return mMatcherSearchRadius;}
 
 	bool trackFrame(std::unique_ptr<Keyframe> frame);
+	bool trackFrameHomography(std::unique_ptr<Keyframe> frame);
+	bool trackFrame3D(std::unique_ptr<Keyframe> frame);
 
 	void resync();
 
@@ -67,7 +69,9 @@ protected:
 
 	int mMatcherSearchRadius; //Contrary to the flag, this is in image pixel units
 
-	Eigen::Matrix3fr mCurrentPose;
+	Eigen::Matrix3fr mCurrentPose; //This is a homography, used before calibration
+	Eigen::Matrix3fr mCurrentPoseR; //This is a rotation, used after calibration
+	Eigen::Vector3f mCurrentPoseT; //This is a rotation, used after calibration
 
 	//Data from the previous frame
 	//Only inliers are kept here
@@ -89,16 +93,7 @@ protected:
 	/////////////////////////////////////////////////////
 	// Protected methods
 
-	typedef std::vector<FeatureProjectionInfo *> TSortedFeaturesCell;
-	void sortFeaturesInOctave(const std::vector<FeatureProjectionInfo> &previousMatches, 
-			const std::vector<FeatureProjectionInfo> &featuresInOctave,
-			std::vector<TSortedFeaturesCell> &featureGrid);
-	void matchFeaturesInOctave(int maxFeatureCount,
-			std::vector<TSortedFeaturesCell> &featureGrid);
-
-	void updateFeatureProjections(const Eigen::Matrix3fr &pose,
-			std::vector<FeatureProjectionInfo> &featureProjections);
-	void findMatches(const int octave, const std::vector<std::pair<Feature *, cv::KeyPoint*>> &matches);
+	void findMatches();
 };
 
 } /* namespace dtslam */
