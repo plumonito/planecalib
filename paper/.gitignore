@@ -1,4 +1,5 @@
 *.aux
+*.brf
 *.bbl
 *.blg
 *.log
