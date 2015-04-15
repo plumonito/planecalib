@@ -87,6 +87,7 @@ protected:
 
 public:
 	Eigen::Vector3f mPosition3D;
+	Eigen::Vector3f mGroundTruthPosition3D;
 };
 
 class FeatureMeasurement

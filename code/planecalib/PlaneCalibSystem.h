@@ -27,14 +27,16 @@ public:
 
 	bool isExpanderRunning() {return mExpanderFuture.valid() && !mExpanderFinished;}
 
+	float getExpectedPixelNoiseStd() { return mExpectedPixelNoiseStd; }
+	void setExpectedPixelNoiseStd(float value) { mExpectedPixelNoiseStd = value; }
+
 	Map &getMap() {return *mMap;}
 	void setMap(std::unique_ptr<Map> map);
 
 	PoseTracker &getTracker() { return *mTracker; }
 	
 	HomographyCalibration &getCalib() { return *mCalib; }
-	//SlamMapExpander &getMapExpander() {return *mMapExpander;}
-
+	
 	const Eigen::Matrix3fr &getK() const { return mK; }
 	const Eigen::Vector3f &getNormal() const { return mNormal; }
 	const RadialCameraDistortionModel &getDistortion() const { return *mActiveDistortion; }
@@ -48,9 +50,6 @@ public:
 	void doHomographyBA();
 	void doHomographyCalib();
 	void doFullBA();
-
-	//Testing
-	void generateSyntheticMap(const Eigen::Matrix3fr &k, const Eigen::Vector2f &distortion, const Eigen::Vector2i &imageSize, float measurementNoiseStd);
 
 protected:
 	////////////////////////////////////////////////////////

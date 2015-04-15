@@ -59,7 +59,7 @@ public:
 	TDistortionModel &getDistortionModel() {return mDistortionModel;}
 	const TDistortionModel &getDistortionModel() const {return mDistortionModel;}
 
-	float getMaxRadiusSq(const Eigen::Vector2i &imageSize) const;
+	float getMaxRadiusSq() const;
 
 	Eigen::Matrix3fr getK() const 
 	{ 
@@ -183,10 +183,10 @@ protected:
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 template<class TDistortionModel>
-float CameraModel_<TDistortionModel>::getMaxRadiusSq(const Eigen::Vector2i &imageSize) const
+float CameraModel_<TDistortionModel>::getMaxRadiusSq() const
 {
-	Eigen::Vector2f corners[] = { Eigen::Vector2f(0, 0), Eigen::Vector2f(0, imageSize[1]),
-		Eigen::Vector2f(imageSize[0], imageSize[1]), Eigen::Vector2f(imageSize[0], 0) };
+	Eigen::Vector2f corners[] = { Eigen::Vector2f(0, 0), Eigen::Vector2f(0, mImageSize[1]),
+		Eigen::Vector2f(mImageSize[0], mImageSize[1]), Eigen::Vector2f(mImageSize[0], 0) };
 
 	float maxRadiusSq = 0;
 	for(int i=0; i<4; ++i)

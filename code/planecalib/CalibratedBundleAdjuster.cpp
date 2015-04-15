@@ -152,8 +152,17 @@ Eigen::Vector2d &CalibratedBundleAdjuster::getFeatureParams(Feature *featurep)
 	if (itNew.second)
 	{
 		//Is new, create
-		params[0] = feature.mPosition3D[0];
-		params[1] = feature.mPosition3D[1];
+		if (mUseGroundTruthPoints)
+		{
+			params[0] = feature.mGroundTruthPosition3D[0];
+			params[1] = feature.mGroundTruthPosition3D[1];
+			assert(feature.mGroundTruthPosition3D[2] == 0);
+		}
+		else
+		{
+			params[0] = feature.mPosition3D[0];
+			params[1] = feature.mPosition3D[1];
+		}
 	}
 
 	return params;
@@ -231,7 +240,8 @@ bool CalibratedBundleAdjuster::bundleAdjust()
 
 			//Add feature as parameter block
 			problem.AddParameterBlock(params.data(), 2);
-			//problem.SetParameterBlockConstant(params.data());
+			if (mUseGroundTruthPoints)
+				problem.SetParameterBlockConstant(params.data());
 			options.linear_solver_ordering->AddElementToGroup(params.data(), 0);
 		}
 
