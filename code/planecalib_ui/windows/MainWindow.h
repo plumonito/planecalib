@@ -44,6 +44,8 @@ public:
 	void doFullBA();
 	void loadBouguetCalib();
 	void synthTest();
+	void synthTest2();
+	void storeSceneToMat(const Map &map);
 
 protected:
     ViewportTiler mTiler;

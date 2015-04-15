@@ -4,11 +4,87 @@
 #include "planecalib/CameraModel.h"
 #include "planecalib/HomographyEstimation.h"
 #include <opencv2/calib3d.hpp>
+#include "planecalib/HomographyCalibration.h"
 
 namespace planecalib
 {
 
-std::unique_ptr<Map> SceneGenerator::generateSyntheticMap(const CameraModel &camera, float measurementNoiseStd)
+std::unique_ptr<Map> SceneGenerator::generateSyntheticMap(const CameraModel &camera)
+{
+	//Frame poses
+	std::vector<Eigen::Matrix3fr> posesR;
+	std::vector<Eigen::Vector3f> posesCenter;
+
+	posesR.push_back(Eigen::Matrix3fr::Identity());
+	posesCenter.push_back(Eigen::Vector3f(0, 0, -1));
+
+	for (float dx = -0.5; dx <= 0.5; dx += 0.25)
+		for (float dy = -0.5; dy <= 0.5; dy += 0.25)
+		{
+			if (dx == 0 || dy == 0)
+				continue;
+			//posesR.push_back(Eigen::Matrix3fr::Identity());
+			//posesCenter.push_back(Eigen::Vector3f(dx, dy, -1));
+		}
+	for (float alpha = -45; alpha < 45; alpha += 10)
+	{
+		float rad = alpha*M_PI / 180;
+		posesR.push_back(eutils::RotationY(rad));
+		posesCenter.push_back(Eigen::Vector3f(1 * sin(rad), 0, -1 * cos(rad)));
+	}
+	for (float alpha = -45; alpha < 45; alpha += 10)
+	{
+		float rad = alpha*M_PI / 180;
+		posesR.push_back(eutils::RotationX(rad));
+		posesCenter.push_back(Eigen::Vector3f(0, -1 * sin(rad), -1 * cos(rad)));
+	}
+
+	return generateFromPoses(camera, posesR, posesCenter);
+}
+
+std::unique_ptr<Map> SceneGenerator::generateRandomPoses(const CameraModel &camera, int frameCount)
+{
+	//Frame poses
+	std::vector<Eigen::Matrix3fr> posesR;
+	std::vector<Eigen::Vector3f> posesCenter;
+
+	posesR.push_back(Eigen::Matrix3fr::Identity());
+	posesCenter.push_back(Eigen::Vector3f(0, 0, -1));
+
+	std::uniform_real_distribution<float> uniformTarget(-0.5f, +0.5f);
+	std::uniform_real_distribution<float> uniformCenterZ(-1.5f, -0.5f);
+	std::uniform_real_distribution<float> uniformCenterXY(-0.8f, +0.8f);
+
+	for (int i = 0; i < frameCount; i++)
+	{
+		//Choose a point to look at
+		Eigen::Vector3f lookTarget(uniformTarget(mRandomDevice), uniformTarget(mRandomDevice), 0);
+
+		//Point to define up vector
+		Eigen::Vector3f upTarget(uniformTarget(mRandomDevice), uniformTarget(mRandomDevice), 0);
+
+		//Choose camera center
+		Eigen::Vector3f center(uniformCenterXY(mRandomDevice), uniformCenterXY(mRandomDevice), uniformCenterZ(mRandomDevice));
+
+		//Build rotation
+		Eigen::Matrix3fr R;
+		Eigen::Vector3f a, b, c;
+		c = (lookTarget - center).normalized();
+		HomographyCalibrationError::GetBasis(c.data(), a, b);
+		R.col(0) = a;
+		R.col(1) = b;
+		R.col(2) = c;
+		//R.col(1) = (lookTarget - R.col(2).dot(lookTarget)*R.col(2)).normalized();
+		//assert(abs(R.col(2).dot(R.col(1))) < 1e-6);
+		//R.col(0) = R.col(1).cross(R.col(2));
+
+		posesR.push_back(R.transpose());
+		posesCenter.push_back(center);
+	}
+
+	return generateFromPoses(camera, posesR, posesCenter);
+}
+std::unique_ptr<Map> SceneGenerator::generateFromPoses(const CameraModel &camera, const std::vector<Eigen::Matrix3fr> &posesR, const std::vector<Eigen::Vector3f> &posesCenter)
 {
 	std::unique_ptr<Map> newMap(new Map());
 
@@ -17,7 +93,7 @@ std::unique_ptr<Map> SceneGenerator::generateSyntheticMap(const CameraModel &cam
 	Eigen::Matrix<uchar, 1, 32> nullDescr;
 	nullDescr.setZero();
 
-	float expectedPixelNoiseStd = std::max(0.3f, measurementNoiseStd);
+	float expectedPixelNoiseStd = std::max(0.3f, mNoiseStd);
 
 	//Features
 	const int kFeatureCount = 1000;
@@ -38,42 +114,23 @@ std::unique_ptr<Map> SceneGenerator::generateSyntheticMap(const CameraModel &cam
 		newMap->addFeature(std::move(newFeature));
 	}
 
-	//Frame poses
-	std::vector<Eigen::Matrix3fr> posesR;
-	std::vector<Eigen::Vector3f> posesCenter;
-
-	posesR.push_back(Eigen::Matrix3fr::Identity());
-	posesCenter.push_back(Eigen::Vector3f(0, 0, -1));
-
-	for (float alpha = -45; alpha < 45; alpha += 10)
+	//Matlab log of poses
+	Eigen::MatrixX3f points(newMap->getFeatures().size(), 3);
+	for (int i = 0; i < points.rows(); i++)
 	{
-		float rad = alpha*M_PI / 180;
-		posesR.push_back(eutils::RotationY(rad));
-		posesCenter.push_back(Eigen::Vector3f(1 * sin(rad), 0, -1 * cos(rad)));
+		points.row(i) = newMap->getFeatures()[i]->mPosition3D.transpose();
 	}
-	for (float alpha = -45; alpha < 45; alpha += 10)
+	MatlabDataLog::Instance().AddValue("K", camera.getK());
+	MatlabDataLog::Instance().AddValue("X", points.transpose());
+	for (int i = 0; i < posesR.size(); i++)
 	{
-		float rad = alpha*M_PI / 180;
-		posesR.push_back(eutils::RotationX(rad));
-		posesCenter.push_back(Eigen::Vector3f(0, -1 * sin(rad), -1 * cos(rad)));
+		MatlabDataLog::Instance().AddCell("R", posesR[i]);
+		MatlabDataLog::Instance().AddCell("center", posesCenter[i]);
 	}
-
-	////Matlab log
-	//Eigen::MatrixX3f points(newMap->getFeatures().size(),3);
-	//for (int i = 0; i < points.rows(); i++)
-	//{
-	//	points.row(i) = newMap->getFeatures()[i]->mPosition3D.transpose();
-	//}
-	//MatlabDataLog::Instance().AddValue("K", k);
-	//MatlabDataLog::Instance().AddValue("X",points.transpose());
-	//for (int i = 0; i < posesR.size(); i++)
-	//{
-	//	MatlabDataLog::Instance().AddCell("R",posesR[i]);
-	//	MatlabDataLog::Instance().AddCell("center", posesCenter[i]);
-	//}
+	//return std::unique_ptr<Map>();
 
 	//Frames
-	std::normal_distribution<float> error_distribution(0, (measurementNoiseStd==0) ? std::numeric_limits<float>::epsilon() : measurementNoiseStd);
+	std::normal_distribution<float> error_distribution(0, mNoiseStd);
 	for (int i = 0; i < (int)posesR.size(); i++)
 	{
 		std::unique_ptr<Keyframe> newFrame(new Keyframe());
@@ -120,9 +177,11 @@ std::unique_ptr<Map> SceneGenerator::generateSyntheticMap(const CameraModel &cam
 		}
 
 		//Write stats
+		MYAPP_LOG << "Frame " << i << "\n";
+		if (newFrame->getMeasurements().empty())
+			MYAPP_LOG << "AAAAHHHH NO MEASUREMENTS!\n";
 		Eigen::Map<Eigen::ArrayXf> _distortionError(distortionError.data(), distortionError.size());
 		Eigen::Map<Eigen::ArrayXf> _noiseError(noiseError.data(), noiseError.size());
-		MYAPP_LOG << "Frame " << i << "\n";
 		MYAPP_LOG << "  Measurement count: " << newFrame->getMeasurements().size() << "\n";
 		MYAPP_LOG << "  Max distortion error: " << _distortionError.maxCoeff() << "\n";
 		MYAPP_LOG << "  Max noise error: " << _noiseError.maxCoeff() << "\n";

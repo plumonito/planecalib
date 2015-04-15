@@ -317,9 +317,18 @@ where the position of the points is constrained so that $z=0$.
 - Augmented reality of a plane (images + video)
 
 \begin{figure}
+\centering
 \includegraphics[width=\linewidth]{images/resultsPointNoise.pdf}
-\caption{Synthetic tests results. Error in the intrinsic parameters under noisy point correspondences. y-axis is median over 50 experiments. x-axis is the $\sigma$ of gaussian noise applied to the point correspondences. Preliminary curves for now, will take more samples to get smoother lines.}
+\caption{Synthetic tests results. Error in the intrinsic parameters under noisy point correspondences. y-axis is median over 50 experiments. x-axis is the $\sigma$ of gaussian noise applied to the point correspondences. Blue: all cameras pointing at the center of the scene. Green: rotated and translated cameras. Red: using ground truth for 3D point position (\cite{zhang1999}).}
 \label{fig:synth_results}
+\end{figure}
+
+\begin{figure}
+\centering
+\includegraphics[width=0.45\linewidth]{images/synthCameraPosesRotation.pdf}
+\includegraphics[width=0.45\linewidth]{images/synthCameraPosesTranslation.pdf}
+\caption{Synthetically generated scenes used for testing.}
+\label{fig:synth_poses}
 \end{figure}
 
 \section{Conclusions}
