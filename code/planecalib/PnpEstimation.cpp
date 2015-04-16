@@ -1,5 +1,6 @@
 #include "PnpEstimation.h"
 #include <ceres/ceres.h>
+#include <opencv2/calib3d.hpp>
 #include "CeresParametrization.h"
 #include "CeresUtils.h"
 #include "ReprojectionError3D.h"
@@ -7,6 +8,99 @@
 #include "flags.h"
 
 namespace planecalib {
+
+/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// PnPRansac
+/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+PnPRansac::PnPRansac()
+{
+}
+
+PnPRansac::~PnPRansac()
+{
+}
+
+void PnPRansac::setData(const std::vector<FeatureMatch> *matches, const CameraModel *camera)
+{
+	assert(matches!=NULL);
+	assert(matches->size()!=0);
+
+	mMatchCount = matches->size();
+	mMatches = matches;
+
+	mConstraintCount = mMatchCount;
+
+	//Normalize
+	//TODO: this will break with fish-eye lenses, but cv::triangulate and cv:solvePnP can only take 2D points
+	mImageXnNormalized.resize(mMatchCount);
+	for (int i = 0; i != mMatchCount; ++i)
+	{
+		const FeatureMatch &match = mMatches->at(i);
+		auto &norm = mImageXnNormalized[i];
+
+		norm = eutils::ToCVPoint( camera->unprojectToWorld(match.getPosition()).hnormalized().eval() );
+
+		//Create error functor
+		mErrorFunctors.emplace_back(new PoseReprojectionError3D(camera, match));
+	}
+}
+
+std::vector<std::pair<Eigen::Matrix3dr, Eigen::Vector3d>> PnPRansac::modelFromMinimalSet(const std::vector<int> &constraintIndices)
+{
+	assert(constraintIndices.size()==4);
+
+	std::vector<cv::Point3f> refp(4);
+	std::vector<cv::Point2f> imgp(4);
+	for(int i=0; i<4; ++i)
+	{
+		const int idx = constraintIndices[i];
+		const FeatureMatch &match = mMatches->at(idx);
+		refp[i] = eutils::ToCVPoint( match.getFeature().mPosition3D );
+		imgp[i] = mImageXnNormalized[idx];
+	}
+
+	std::vector<std::pair<Eigen::Matrix3dr, Eigen::Vector3d>> solutions;
+
+	cv::Vec3d rvec,tvec;
+	if(cv::solvePnP(refp, imgp, cv::Matx33f::eye(), cv::noArray(), rvec, tvec, false, cv::SOLVEPNP_P3P))
+	{
+		cv::Matx33d R;
+		cv::Rodrigues(rvec, R);
+
+		Eigen::Matrix3dr eR = eutils::FromCV(R);
+		Eigen::Vector3d eT = eutils::FromCV(tvec);;
+
+		solutions.push_back(std::make_pair(eR, eT));
+	}
+    return solutions;
+}
+
+void PnPRansac::getInliers(const std::pair<Eigen::Matrix3dr, Eigen::Vector3d> &model, int &inlierCount, float &errorSumSq, PnPIterationData &data)
+{
+	inlierCount = 0;
+	errorSumSq = 0;
+
+	ceres::CauchyLoss robustLoss(mOutlierErrorThreshold);
+
+	data.reprojectionErrors.resize(mMatchCount);
+
+	for (int i = 0; i<mMatchCount; ++i)
+	{
+		auto &errorFunctor = *mErrorFunctors[i];
+		auto &errors = data.reprojectionErrors[i];
+
+		errors.reprojectionErrorsSq = errorFunctor.evalToDistanceSq(model.first, model.second);
+		errors.isInlier = (errors.reprojectionErrorsSq < mOutlierErrorThresholdSq);
+			
+
+		if(errors.isInlier)
+			inlierCount++;
+
+		double robustError[3];
+		robustLoss.Evaluate(errors.reprojectionErrorsSq, robustError);
+		errorSumSq += (float)robustError[0];
+	}
+}
 
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////
 // PnPRefiner

@@ -6,6 +6,7 @@
 #include <Eigen/Dense>
 #include "CameraModel.h"
 #include "Map.h"
+#include "BaseRansac.h"
 #include "FeatureMatcher.h"
 #include "cvutils.h"
 #include "PoseEstimationCommon.h"
@@ -13,8 +14,34 @@
 namespace planecalib {
 
 class PoseReprojectionError3D;
-class PoseReprojectionError2D;
-class EpipolarSegmentErrorForPose;
+
+/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// PnPRansac
+/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+struct PnPIterationData
+{
+	std::vector<MatchReprojectionErrors> reprojectionErrors;
+};
+
+class PnPRansac: public BaseRansac<std::pair<Eigen::Matrix3dr, Eigen::Vector3d>, PnPIterationData, 4>
+{
+public:
+	PnPRansac();
+	~PnPRansac();
+
+	void setData(const std::vector<FeatureMatch> *matches, const CameraModel *camera);
+
+	std::vector<std::pair<Eigen::Matrix3dr, Eigen::Vector3d>> modelFromMinimalSet(const std::vector<int> &constraintIndices);
+	void getInliers(const std::pair<Eigen::Matrix3dr, Eigen::Vector3d> &model, int &inlierCount, float &errorSumSq, PnPIterationData &data);
+
+protected:
+	int mMatchCount;
+
+	const std::vector<FeatureMatch> *mMatches;
+	std::vector<cv::Point2f> mImageXnNormalized;
+
+	std::vector<std::unique_ptr<PoseReprojectionError3D>> mErrorFunctors;
+};
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 // PnPRefiner

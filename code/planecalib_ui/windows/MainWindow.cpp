@@ -39,6 +39,7 @@ bool MainWindow::init(PlaneCalibApp *app, const Eigen::Vector2i &imageSize)
 	mKeyBindings.addBinding(false, 'h', static_cast<KeyBindingHandler<BaseWindow>::SimpleBindingFunc>(&MainWindow::doHomographyBA), "Homography BA.");
 	mKeyBindings.addBinding(false, 't', static_cast<KeyBindingHandler<BaseWindow>::SimpleBindingFunc>(&MainWindow::synthTest), "Synthetic test.");
 	mKeyBindings.addBinding(false, 'y', static_cast<KeyBindingHandler<BaseWindow>::SimpleBindingFunc>(&MainWindow::synthTestCompareUsingGroundTruth), "Synthetic test. Compare the metric BA of self-calib and calib.");
+	mKeyBindings.addBinding(false, 'u', static_cast<KeyBindingHandler<BaseWindow>::SimpleBindingFunc>(&MainWindow::synthTestNormalAngle), "Synthetic test for sensitivity to normal angle.");
 	
 	mRefTexture.create(GL_RGB, eutils::ToSize(imageSize));
 	mRefTexture.update(mSystem->getMap().getKeyframes()[0]->getColorImage());
@@ -83,6 +84,7 @@ void MainWindow::updateState()
 	mImageLines.clear();
 	mImageLineColors.clear();
 	mFrameHomographies.clear();
+	mFrameColors.clear();
 
 	mTrackerPose = mTracker->getCurrentPose();
 	mIsLost = mTracker->isLost();
@@ -395,13 +397,15 @@ public:
 
 void MainWindow::synthTest()
 {
-	SceneGenerator generator;
-
 	CameraModel camera;
 	camera.init(600, 600, 320, 240, 640, 480);
 	camera.getDistortionModel().init(Eigen::Vector2f(0.1, -0.01), camera.getMaxRadiusSq());
 	//camera.getDistortionModel().init(Eigen::Vector2f(0.0, 0.0), camera.getMaxRadiusSq());
 	float noiseStd = 3/3;
+
+	SceneGenerator generator;
+	generator.setCamera(&camera);
+	generator.setNoiseStd(noiseStd);
 
 	//size_t varDims[2];
 	//mat_t *mat = Mat_Create("vars.mat",NULL);
@@ -420,8 +424,7 @@ void MainWindow::synthTest()
 		for (kk = 0; kk < 300; kk++)
 		{
 			MYAPP_LOG << "-------------Synth test, frameCount=" << frameCount << ", iter=" << kk << "----------------\n";
-			generator.setNoiseStd(noiseStd);
-			std::unique_ptr<Map> map = generator.generateRandomPoses(camera, frameCount);
+			std::unique_ptr<Map> map = generator.generateRandomPoses(frameCount);
 			//std::unique_ptr<Map> map = generator.generateSyntheticMap(camera);
 
 		////Store scene
@@ -494,6 +497,59 @@ void MainWindow::synthTest()
 	updateState();
 }
 
+void MainWindow::synthTestNormalAngle()
+{
+	CameraModel camera;
+	camera.init(600, 600, 320, 240, 640, 480);
+	camera.getDistortionModel().init(Eigen::Vector2f(0.1, -0.01), camera.getMaxRadiusSq());
+	//camera.getDistortionModel().init(Eigen::Vector2f(0.0, 0.0), camera.getMaxRadiusSq());
+
+	float noiseStd = 3 / 3;
+
+	SceneGenerator generator;
+	generator.mVerbose = true;
+	generator.setCamera(&camera);
+	generator.setNoiseStd(noiseStd);
+
+	mSystem->setUse3DGroundTruth(false);
+	mSystem->setFix3DPoints(false);
+
+	CalibrationError error;
+
+	MatlabDataLog::AddValue("errorKeyName", "'normalAngle'");
+
+	float normalAngle = 10*M_PI/180;
+	for (normalAngle = 0; normalAngle < 45 * M_PI / 180; normalAngle+=1*M_PI/180)
+	{
+		int kk = 0;
+		for (kk = 0; kk < 300; kk++)
+		{
+			MYAPP_LOG << "-------------Synth test, normalAngle=" << (normalAngle*180/M_PI) << ", iter=" << kk << "----------------\n";
+			std::unique_ptr<Map> map = generator.generateVariableNormal(normalAngle);
+
+			//Calib
+			mSystem->setExpectedPixelNoiseStd(std::max(3 * noiseStd, 0.3f));
+			mSystem->setMap(std::move(map));
+			mSystem->doHomographyBA();
+			mSystem->doFullBA();
+
+			//Record noise
+			MatlabDataLog::AddValue("errorKey", normalAngle);
+			CalibrationError error;
+			error.compute(camera, mSystem->getCamera());
+			MatlabDataLog::AddValue("errorFocal", error.errorFocal);
+			MatlabDataLog::AddValue("errorP0", error.errorP0);
+			MatlabDataLog::AddValue("errorDist0", error.errorDist0);
+			MatlabDataLog::AddValue("errorDist1", error.errorDist1);
+
+			MatlabDataLog::Stream().flush();
+		}
+	}
+
+	mImageSize = camera.getImageSize();
+	updateState();
+}
+
 void MainWindow::storeSceneToMat(const Map &map)
 {
 
@@ -501,13 +557,15 @@ void MainWindow::storeSceneToMat(const Map &map)
 
 void MainWindow::synthTestCompareUsingGroundTruth()
 {
-	SceneGenerator generator;
-
 	CameraModel camera;
 	camera.init(600, 600, 320, 240, 640, 480);
 	camera.getDistortionModel().init(Eigen::Vector2f(0.1, -0.01), camera.getMaxRadiusSq());
 
 	float noiseStd = 3 / 3;
+
+	SceneGenerator generator;
+	generator.setCamera(&camera);
+	generator.setNoiseStd(noiseStd);
 
 	CalibrationError error;
 
@@ -520,8 +578,7 @@ void MainWindow::synthTestCompareUsingGroundTruth()
 		for (kk = 0; kk < 300; kk++)
 		{
 			MYAPP_LOG << "-------------Synth test, compare all, iter=" << kk << "----------------\n";
-			generator.setNoiseStd(noiseStd);
-			std::unique_ptr<Map> map = generator.generateRandomPoses(camera,frameCount);
+			std::unique_ptr<Map> map = generator.generateRandomPoses(frameCount);
 
 			//Record key
 			MatlabDataLog::AddValue("errorKey", frameCount);
@@ -577,12 +634,13 @@ void MainWindow::synthTestCompareUsingGroundTruth()
 
 void MainWindow::synthTest2()
 {
-	SceneGenerator generator;
-
 	CameraModel camera;
 	camera.init(600, 600, 320, 240, 640, 480);
 	camera.getDistortionModel().init(Eigen::Vector2f(0.1, -0.01), camera.getMaxRadiusSq());
 	float noiseStd = 3 / 3;
+
+	SceneGenerator generator;
+	generator.setCamera(&camera);
 
 	std::unique_ptr<Map> newMap;
 	//newMap = generator.generateSyntheticMap(camera, noiseStd);
@@ -609,7 +667,7 @@ void MainWindow::synthTest2()
 		{
 			MYAPP_LOG << "-------------Synth test, noiseStd=" << noiseStd << ", iter=" << kk << "----------------\n";
 			generator.setNoiseStd(noiseStd);
-			std::unique_ptr<Map> map = generator.generateSyntheticMap(camera);
+			std::unique_ptr<Map> map = generator.generateSyntheticMap();
 
 			////Store scene
 			//std::vector<matvar_t*> varFrames;

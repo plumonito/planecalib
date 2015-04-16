@@ -46,9 +46,10 @@ class Feature;
 class MapWindow: public BaseWindow
 {
 public:
-	MapWindow():
+	MapWindow() :
 		BaseWindow("MapWindow"),
 		mPointSize(4),
+		mMapDrawScale(1),
 		mActiveDragType(EDragType::NoDragging)
 	{
 	}

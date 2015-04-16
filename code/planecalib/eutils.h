@@ -96,6 +96,11 @@ public:
 	{
 		return cv::Point_<T>(p.x(), p.y());
 	}
+	template <class T>
+	static cv::Point3_<T> ToCVPoint(const Eigen::Matrix<T, 3, 1> &p)
+	{
+		return cv::Point3_<T>(p.x(), p.y(), p.z());
+	}
 
 	template <class T, int m, int n, int options>
 	static cv::Matx<T,m,n> ToCV(const Eigen::Matrix<T, m, n, options> &emat)

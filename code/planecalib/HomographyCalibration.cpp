@@ -83,6 +83,7 @@ void HomographyCalibration::calibrate(const Eigen::Vector2f &p0, const std::vect
 	//Shift pp
 	Eigen::Vector2f ppn = pp.cast<float>() + p0;
 	MYAPP_LOG << "PP=" << ppn.transpose() << "\n";
+	MYAPP_LOG << "Normal=" << mNormal.transpose() << "\n";
 
 	//Build final K
 	mK << (float)alpha, 0, ppn.x(), 0, (float)alpha, ppn.y(), 0, 0, 1;

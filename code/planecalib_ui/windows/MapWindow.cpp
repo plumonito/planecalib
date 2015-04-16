@@ -362,7 +362,7 @@ const TextureHelper &MapWindow::getFrameTexture(const Keyframe &frame)
 MapWindow::DrawFrustumData MapWindow::prepareFrameFrustum(const Eigen::Matrix3fr &R, Eigen::Vector3f &t, unsigned int texTarget, unsigned int texID)
 {
 	DrawFrustumData data;
-    const float kFrustumDepth = 0.3f*mMapDrawScale;
+    const float kFrustumDepth = 0.1f*mMapDrawScale;
 
 	data.texTarget = texTarget;
 	data.texId = texID;
@@ -375,7 +375,6 @@ MapWindow::DrawFrustumData MapWindow::prepareFrameFrustum(const Eigen::Matrix3fr
 	//data.frameVertices.push_back(vv.homogeneous());
 	//data.frameVertices.push_back(data.center);
 	//Corners
-	const float kScale = 0.2f;
 	std::array<Eigen::Vector2f, 4> cornersImg = {
 		Eigen::Vector2f(0, 0), 
 		Eigen::Vector2f(mImageSize[0], 0), 
@@ -385,7 +384,7 @@ MapWindow::DrawFrustumData MapWindow::prepareFrameFrustum(const Eigen::Matrix3fr
 	for (int i = 0; i < cornersImg.size(); i++)
 	{
 		Eigen::Vector2f xn = mSystemCameraDistortion.undistortPoint((mSystemCameraKinv*cornersImg[i].homogeneous()).eval().hnormalized());
-		Eigen::Vector3f xc = R.transpose()*xn.homogeneous()*kScale + center;
+		Eigen::Vector3f xc = R.transpose()*xn.homogeneous()*kFrustumDepth + center;
 		data.corners[i] = xc.homogeneous();
 	}
 
@@ -412,7 +411,7 @@ MapWindow::DrawFrustumData MapWindow::prepareFrameFrustum(const Eigen::Matrix3fr
 	for (int i = 0; i < imgPoints.size(); i++)
 	{
 		Eigen::Vector2f xn = mSystemCameraDistortion.undistortPoint((mSystemCameraKinv*imgPoints[i].homogeneous()).eval().hnormalized());
-		Eigen::Vector3f xc = R.transpose()*xn.homogeneous()*kScale + center;
+		Eigen::Vector3f xc = R.transpose()*xn.homogeneous()*kFrustumDepth + center;
 		data.borderVertices.push_back( xc.homogeneous() );
 	}
 
