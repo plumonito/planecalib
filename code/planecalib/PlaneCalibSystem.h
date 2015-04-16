@@ -6,7 +6,7 @@
 #include <future>
 #include "stdutils.h"
 #include "Map.h"
-#include "CameraDistortionModel.h"
+#include "CameraModel.h"
 
 namespace planecalib
 {
@@ -17,7 +17,7 @@ class HomographyCalibration;
 class PlaneCalibSystem
 {
 public:
-	PlaneCalibSystem() : mSingleThreaded(false), mExpectedPixelNoiseStd(1) {}
+	PlaneCalibSystem() : mSingleThreaded(false), mExpectedPixelNoiseStd(1), mUse3DGroundTruth(false), mFix3DPoints(false) {}
 	~PlaneCalibSystem();
 
 	bool init(double timestamp, cv::Mat3b &imgColor, cv::Mat1b &imgGray);
@@ -33,14 +33,18 @@ public:
 	Map &getMap() {return *mMap;}
 	void setMap(std::unique_ptr<Map> map);
 
+	bool getUse3DGroundTruth()  const { return mUse3DGroundTruth; }
+	void setUse3DGroundTruth(bool value)  { mUse3DGroundTruth = value; }
+
+	bool getFix3DPoints()  const { return mFix3DPoints; }
+	void setFix3DPoints(bool value)  { mFix3DPoints  = value; }
+
 	PoseTracker &getTracker() { return *mTracker; }
 	
 	HomographyCalibration &getCalib() { return *mCalib; }
 	
-	const Eigen::Matrix3fr &getK() const { return mK; }
+	const CameraModel &getCamera() const { return mCamera; }
 	const Eigen::Vector3f &getNormal() const { return mNormal; }
-	const RadialCameraDistortionModel &getDistortion() const { return *mActiveDistortion; }
-
 
 	void processImage(double timestamp, cv::Mat3b &imgColor, cv::Mat1b &imgGray);
 	
@@ -55,16 +59,17 @@ protected:
 	////////////////////////////////////////////////////////
 	// Members
 	bool mSingleThreaded;
+	bool mUse3DGroundTruth;
+	bool mFix3DPoints;
 
 	float mExpectedPixelNoiseStd;
 
 	Eigen::Vector2f mHomographyP0;
 	RadialCameraDistortionModel mHomographyDistortion;	
-	RadialCameraDistortionModel mCameraDistortion;
-	RadialCameraDistortionModel *mActiveDistortion;
 
 	Eigen::Vector3f mNormal;
-	Eigen::Matrix3fr mK;
+
+	CameraModel mCamera;
 
 	std::unique_ptr<Map> mMap;
 

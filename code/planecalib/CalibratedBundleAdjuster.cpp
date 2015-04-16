@@ -152,17 +152,9 @@ Eigen::Vector2d &CalibratedBundleAdjuster::getFeatureParams(Feature *featurep)
 	if (itNew.second)
 	{
 		//Is new, create
-		if (mUseGroundTruthPoints)
-		{
-			params[0] = feature.mGroundTruthPosition3D[0];
-			params[1] = feature.mGroundTruthPosition3D[1];
-			assert(feature.mGroundTruthPosition3D[2] == 0);
-		}
-		else
-		{
-			params[0] = feature.mPosition3D[0];
-			params[1] = feature.mPosition3D[1];
-		}
+		params[0] = feature.mPosition3D[0];
+		params[1] = feature.mPosition3D[1];
+		assert(feature.mPosition3D[2] == 0);
 	}
 
 	return params;
@@ -240,7 +232,7 @@ bool CalibratedBundleAdjuster::bundleAdjust()
 
 			//Add feature as parameter block
 			problem.AddParameterBlock(params.data(), 2);
-			if (mUseGroundTruthPoints)
+			if (mFix3DPoints)
 				problem.SetParameterBlockConstant(params.data());
 			options.linear_solver_ordering->AddElementToGroup(params.data(), 0);
 		}
@@ -312,7 +304,7 @@ bool CalibratedBundleAdjuster::bundleAdjust()
 	//Get inliers before
 	int inlierCount;
 	getInliers(inlierCount);
-	MYAPP_LOG << "BA inlier count: " << inlierCount << "/" << mMeasurementsInProblem.size() << "\n";
+	MYAPP_LOG << "Calibrated BA inlier count before: " << inlierCount << "/" << mMeasurementsInProblem.size() << "\n";
 
 	//No locks while ceres runs
 	//Non-linear minimization!
@@ -323,9 +315,10 @@ bool CalibratedBundleAdjuster::bundleAdjust()
 	}
 
 	MYAPP_LOG << "Calibrated BA report:\n" << summary.FullReport();
+	MYAPP_LOG << "3D Points fixed: " << mFix3DPoints << "\n";
 	MYAPP_LOG << "Calibrated BA K: " << mParamsK.transpose() << "\n";
 	MYAPP_LOG << "Calibrated BA distortion: " << mParamsDistortion.transpose() << "\n";
-	
+
 	//if (summary.termination_type == ceres::USER_FAILURE || (!mIsExpanderBA && mMap->getAbortBA()))
 	//{
 	//	DTSLAM_LOG << "\n\nBA aborted due to new key frame in map!!!\n\n";
@@ -338,7 +331,7 @@ bool CalibratedBundleAdjuster::bundleAdjust()
 	}
 
 	getInliers(inlierCount);
-	MYAPP_LOG << "BA inlier count: " << inlierCount << "/" << mMeasurementsInProblem.size() << "\n";
+	MYAPP_LOG << "Calibrated BA inlier count after: " << inlierCount << "/" << mMeasurementsInProblem.size() << "\n";
 
 	//Again
 	//problem.SetParameterBlockVariable(mParamsK.data());

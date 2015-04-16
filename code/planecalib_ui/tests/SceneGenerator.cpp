@@ -23,8 +23,8 @@ std::unique_ptr<Map> SceneGenerator::generateSyntheticMap(const CameraModel &cam
 		{
 			if (dx == 0 || dy == 0)
 				continue;
-			//posesR.push_back(Eigen::Matrix3fr::Identity());
-			//posesCenter.push_back(Eigen::Vector3f(dx, dy, -1));
+			posesR.push_back(Eigen::Matrix3fr::Identity());
+			posesCenter.push_back(Eigen::Vector3f(dx, dy, -1));
 		}
 	for (float alpha = -45; alpha < 45; alpha += 10)
 	{
@@ -96,6 +96,8 @@ std::unique_ptr<Map> SceneGenerator::generateFromPoses(const CameraModel &camera
 {
 	std::unique_ptr<Map> newMap(new Map());
 
+	newMap->mGroundTruthCamera.reset(new CameraModel(camera));
+
 	cv::Mat3b nullImg3(camera.getImageSize()[1], camera.getImageSize()[0]);
 	cv::Mat1b nullImg1(camera.getImageSize()[1], camera.getImageSize()[0]);
 	Eigen::Matrix<uchar, 1, 32> nullDescr;
@@ -123,19 +125,22 @@ std::unique_ptr<Map> SceneGenerator::generateFromPoses(const CameraModel &camera
 	}
 
 	//Matlab log of poses
-	Eigen::MatrixX3f points(newMap->getFeatures().size(), 3);
-	for (int i = 0; i < points.rows(); i++)
+	if (mLogScene)
 	{
-		points.row(i) = newMap->getFeatures()[i]->mPosition3D.transpose();
+		Eigen::MatrixX3f points(newMap->getFeatures().size(), 3);
+		for (int i = 0; i < points.rows(); i++)
+		{
+			points.row(i) = newMap->getFeatures()[i]->mPosition3D.transpose();
+		}
+		MatlabDataLog::Instance().AddValue("K", camera.getK());
+		MatlabDataLog::Instance().AddValue("X", points.transpose());
+		for (int i = 0; i < posesR.size(); i++)
+		{
+			MatlabDataLog::Instance().AddCell("R", posesR[i]);
+			MatlabDataLog::Instance().AddCell("center", posesCenter[i]);
+		}
+		//return std::unique_ptr<Map>();
 	}
-	MatlabDataLog::Instance().AddValue("K", camera.getK());
-	MatlabDataLog::Instance().AddValue("X", points.transpose());
-	for (int i = 0; i < posesR.size(); i++)
-	{
-		MatlabDataLog::Instance().AddCell("R", posesR[i]);
-		MatlabDataLog::Instance().AddCell("center", posesCenter[i]);
-	}
-	//return std::unique_ptr<Map>();
 
 	//Frames
 	std::normal_distribution<float> error_distribution(0, mNoiseStd);
@@ -169,9 +174,12 @@ std::unique_ptr<Map> SceneGenerator::generateFromPoses(const CameraModel &camera
 				continue;
 
 			//Save distortion and noise errors
-			Eigen::Vector2f imagePosNoDistortion = camera.projectFromDistorted(xn.hnormalized());
-			distortionError.push_back((imagePosClean - imagePosNoDistortion).norm());
-			noiseError.push_back(noise.norm());
+			if (mVerbose)
+			{
+				Eigen::Vector2f imagePosNoDistortion = camera.projectFromDistorted(xn.hnormalized());
+				distortionError.push_back((imagePosClean - imagePosNoDistortion).norm());
+				noiseError.push_back(noise.norm());
+			}
 
 			//Position
 			if (i == 0)
@@ -188,14 +196,17 @@ std::unique_ptr<Map> SceneGenerator::generateFromPoses(const CameraModel &camera
 		}
 
 		//Write stats
-		MYAPP_LOG << "Frame " << i << "\n";
-		if (newFrame->getMeasurements().empty())
-			MYAPP_LOG << "AAAAHHHH NO MEASUREMENTS!\n";
-		Eigen::Map<Eigen::ArrayXf> _distortionError(distortionError.data(), distortionError.size());
-		Eigen::Map<Eigen::ArrayXf> _noiseError(noiseError.data(), noiseError.size());
-		MYAPP_LOG << "  Measurement count: " << newFrame->getMeasurements().size() << "\n";
-		MYAPP_LOG << "  Max distortion error: " << _distortionError.maxCoeff() << "\n";
-		MYAPP_LOG << "  Max noise error: " << _noiseError.maxCoeff() << "\n";
+		if (mVerbose)
+		{
+			MYAPP_LOG << "Frame " << i << "\n";
+			if (newFrame->getMeasurements().empty())
+				MYAPP_LOG << "AAAAHHHH NO MEASUREMENTS!\n";
+			Eigen::Map<Eigen::ArrayXf> _distortionError(distortionError.data(), distortionError.size());
+			Eigen::Map<Eigen::ArrayXf> _noiseError(noiseError.data(), noiseError.size());
+			MYAPP_LOG << "  Measurement count: " << newFrame->getMeasurements().size() << "\n";
+			MYAPP_LOG << "  Max distortion error: " << _distortionError.maxCoeff() << "\n";
+			MYAPP_LOG << "  Max noise error: " << _noiseError.maxCoeff() << "\n";
+		}
 
 		//Get homography
 		Eigen::Matrix<uchar, Eigen::Dynamic, 1> mask(refPoints.size());

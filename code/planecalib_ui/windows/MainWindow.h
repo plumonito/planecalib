@@ -56,6 +56,7 @@ public:
 	void loadBouguetCalib();
 	void synthTest();
 	void synthTest2();
+	void synthTestCompareUsingGroundTruth();
 	void storeSceneToMat(const Map &map);
 
 protected:

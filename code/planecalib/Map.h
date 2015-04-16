@@ -7,6 +7,7 @@
 #include <Eigen/Dense>
 #include "eutils.h"
 #include "Keyframe.h"
+#include "CameraModel.h"
 #include "shared_mutex.h"
 
 namespace planecalib {
@@ -45,6 +46,8 @@ public:
 	void addFeature(std::unique_ptr<Feature> newFeature);
 
 	void moveToGarbage(Feature &feature);
+
+	std::unique_ptr<CameraModel> mGroundTruthCamera;
 
 protected:
 	shared_mutex mMutex;

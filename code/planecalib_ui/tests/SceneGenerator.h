@@ -18,7 +18,7 @@ class PoseTracker;
 class SceneGenerator
 {
 public:
-	SceneGenerator() : mNoiseStd(1)
+	SceneGenerator() : mNoiseStd(1), mLogScene(false), mVerbose(false)
 	{}
 
 	EIGEN_MAKE_ALIGNED_OPERATOR_NEW
@@ -33,6 +33,9 @@ public:
 
 	std::unique_ptr<Map> generateSyntheticMap(const CameraModel &camera);
 	std::unique_ptr<Map> generateRandomPoses(const CameraModel &camera, int frameCount);
+
+	bool mLogScene;
+	bool mVerbose;
 
 protected:
 	std::random_device mRandomDevice;

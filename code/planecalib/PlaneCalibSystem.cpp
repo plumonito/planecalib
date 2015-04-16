@@ -53,10 +53,9 @@ bool PlaneCalibSystem::init(double timestamp, cv::Mat3b &imgColor, cv::Mat1b &im
 	//Distortion
 	mHomographyP0 = imageSize.cast<float>() / 2;
 	mHomographyDistortion.init(Eigen::Vector2f::Zero(), imageSize);
-	mCameraDistortion.init(Eigen::Vector2f::Zero(), imageSize);
-	mActiveDistortion = &mHomographyDistortion;
+	mCamera.getDistortionModel().init(Eigen::Vector2f::Zero(), 1e10);
 
-	mK = Eigen::Matrix3fr::Zero();
+	mCamera.init(0,0,0,0,imageSize[0],imageSize[1]);
 	mNormal = Eigen::Vector3f::Zero();
 
 	//Reset map
@@ -240,7 +239,6 @@ void PlaneCalibSystem::doHomographyBA()
 
 	mHomographyP0 = ba.getP0().cast<float>();
 	mHomographyDistortion.setCoefficients(ba.getDistortion().cast<float>());
-	mActiveDistortion = &mHomographyDistortion;
 
 	//Calib
 	doHomographyCalib();
@@ -265,24 +263,27 @@ void PlaneCalibSystem::doHomographyCalib()
 
 	//Calibrate
 	mCalib->calibrate(mHomographyP0, allPoses);
-	mK = mCalib->getK().cast<float>();
+	mCamera.setFromK(mCalib->getK());
 	mNormal = mCalib->getNormal().cast<float>();
 	//mK << 600, 0, 320, 0, 600, 240, 0, 0, 1;
 	//mNormal << 0, 0, 1;
 
-	float fx2 = mK(0, 0)*mK(0, 0);
+	float fx2 = mCamera.getFx()*mCamera.getFx();
 	MYAPP_LOG << "Translated distortion: " << mHomographyDistortion.getCoefficients()[0] * fx2 << ", " << mHomographyDistortion.getCoefficients()[1] * fx2*fx2 << "\n";
 }
 
 void PlaneCalibSystem::doFullBA()
 {
-	bool useGroundTruth = false;
-
-	float fx2 = mK(0, 0) * mK(0, 0);
-	Eigen::Vector2f distortion(mHomographyDistortion.getCoefficients()[0] * fx2, mHomographyDistortion.getCoefficients()[1]*fx2*fx2);
-
-	if (useGroundTruth)
+	float fx2 = mCamera.getFx()*mCamera.getFx();
+	
+	Eigen::Matrix3fr k;
+	Eigen::Vector2f distortion;
+	
+	if (mUse3DGroundTruth)
 	{
+		k = mMap->mGroundTruthCamera->getK();
+		distortion = mMap->mGroundTruthCamera->getDistortionModel().getCoefficients();
+
 		for (auto &pfeature : mMap->getFeatures())
 		{
 			auto &feature = *pfeature;
@@ -297,6 +298,9 @@ void PlaneCalibSystem::doFullBA()
 	}
 	else
 	{
+		k = mCamera.getK();
+		distortion << mHomographyDistortion.getCoefficients()[0] * fx2, mHomographyDistortion.getCoefficients()[1] * fx2*fx2;
+
 		//Set pose for reference frame
 		Keyframe &refFrame = *mMap->getKeyframes()[0];
 
@@ -323,11 +327,11 @@ void PlaneCalibSystem::doFullBA()
 
 		//Invert K
 		Eigen::Matrix3fr Kinv;
-		float fxi = 1.0f / mK(0, 0);
-		float fyi = 1.0f / mK(1, 1);
-		Kinv << fxi, 0, -fxi*mK(0, 2), 0, fyi, -fyi*mK(1, 2), 0, 0, 1;
+		float fxi = 1.0f / k(0, 0);
+		float fyi = 1.0f / k(1, 1);
+		Kinv << fxi, 0, -fxi*k(0, 2), 0, fyi, -fyi*k(1, 2), 0, 0, 1;
 
-		cv::Mat1f cvK(3, 3, const_cast<float*>(mK.data()));
+		cv::Mat1f cvK(3, 3, const_cast<float*>(k.data()));
 
 		//Triangulate all features
 		for (auto &pfeature : mMap->getFeatures())
@@ -399,10 +403,10 @@ void PlaneCalibSystem::doFullBA()
 	//BAAAAA!!!
 	CalibratedBundleAdjuster ba;
 	ba.setUseLocks(false);
-	ba.setUseGroundTruthPoints(useGroundTruth);
+	ba.setFix3DPoints(mFix3DPoints);
 	ba.setOutlierThreshold(3 * mExpectedPixelNoiseStd);
 	ba.setDistortion(distortion.cast<double>());
-	ba.setK(mK.cast<double>());
+	ba.setK(k.cast<double>());
 	ba.setMap(mMap.get());
 	for (auto &framep : mMap->getKeyframes())
 	{
@@ -411,10 +415,8 @@ void PlaneCalibSystem::doFullBA()
 	//ba.addFrameToAdjust(**mMap->getKeyframes().begin());
 	ba.bundleAdjust();
 
-	mCameraDistortion.setCoefficients(ba.getDistortion().cast<float>());
-	mActiveDistortion = &mCameraDistortion;
-
-	mK = ba.getK().cast<float>();
+	mCamera.getDistortionModel().setCoefficients(ba.getDistortion().cast<float>());
+	mCamera.setFromK(ba.getK().cast<float>());
 
 	//Log
 	//MatlabDataLog::Instance().AddValue("K", ba.getK());

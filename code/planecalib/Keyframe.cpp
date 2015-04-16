@@ -13,6 +13,7 @@
 #include "Map.h"
 #include "flags.h"
 #include "cvutils.h"
+#include "FeatureIndexer.h"
 
 namespace planecalib {
 
@@ -55,22 +56,51 @@ void Keyframe::init(const cv::Mat3b &imageColor, const cv::Mat1b &imageGray)
 	mDescriptors.resize(mPyramid.getOctaveCount());
 	mDescriptorsEigen.reserve(mPyramid.getOctaveCount());
 
+	cv::ORB orb(2000, 2, 1);
+
 	for(int octave=0; octave<mPyramid.getOctaveCount(); octave++)
 	{
 	    const int scale = 1<<octave;
-		std::vector<cv::KeyPoint> &keypoints = mKeypoints->at(octave);
+
+		std::vector<cv::KeyPoint> keypointsAll;
+		cv::Mat1b descriptorsAll;
 
 	    //ORB features
-		cv::ORB orb(500, 2, 1);
-		orb(mPyramid[octave], cv::noArray(), keypoints, mDescriptors[octave]);
+		orb(mPyramid[octave], cv::noArray(), keypointsAll, descriptorsAll);
+
+		FeatureGridIndexer<IndexedCvKeypoint> indexer;
+		indexer.create(mPyramid[octave].size(), cv::Size2i(100, 100), 5);
+
 
 		//Fix scale features
-		for(auto &keypoint : keypoints)
+		for (int i = 0; i < (int)keypointsAll.size(); i++)
 	    {
+			auto &keypoint = keypointsAll[i];
+			void *descriptor = &descriptorsAll(i,0);
+
 			keypoint.octave = octave;
 			keypoint.pt = scale*keypoint.pt;
 			keypoint.size *= scale;
+
+			indexer.addFeature(IndexedCvKeypoint(&keypoint, descriptor));
 	    }
+
+		//Copy
+		std::vector<cv::KeyPoint> &keypoints = mKeypoints->at(octave);
+		cv::Mat1b &descriptors = mDescriptors[octave];
+
+		keypoints.resize(indexer.size());
+		descriptors.create(indexer.size(), 32);
+
+		int i = 0;
+		for (auto &feature : indexer)
+		{
+			keypoints[i] = *feature.keypoint;
+			memcpy(&descriptors(i, 0), feature.descriptor, 32);
+			i++;
+		}
+
+		//orb(mPyramid[octave], cv::noArray(), keypoints, descriptors);
 
 		if (mDescriptors[octave].empty())
 			mDescriptors[octave].create(1, 32);

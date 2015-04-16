@@ -46,9 +46,9 @@ void MapWindow::updateState()
 	mMap = &mApp->getSystem().getMap();
 	mTracker = &mApp->getSystem().getTracker();
 
-	mSystemCameraK = mApp->getSystem().getK();
+	mSystemCameraK = mApp->getSystem().getCamera().getK();
 	mSystemCameraKinv = mSystemCameraK.inverse();
-	mSystemCameraDistortion = mApp->getSystem().getDistortion();
+	mSystemCameraDistortion = mApp->getSystem().getCamera().getDistortionModel();
 
 	shared_lock<shared_mutex> lockRead(mMap->getMutex());
 

@@ -67,6 +67,10 @@ public:
 		k << mFx, 0, mU0, 0, mFy, mV0, 0, 0, 1; 
 		return k; 
 	}
+	void setFromK(const Eigen::Matrix3fr &K)
+	{
+		init(K(0, 0), K(1, 1), K(0, 2), K(1, 2), mImageSize[0], mImageSize[1]);
+	}
 
 	void initLUT();
 

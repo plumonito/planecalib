@@ -22,7 +22,7 @@ for k=1:length(noiseKeys);
     errorD1Keyed(k)=rms(m);
 end
 
-lineStyle='-g';
+lineStyle='-k';
 
 subplot(2,2,1);
 hold on

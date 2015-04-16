@@ -17,7 +17,7 @@ class CalibratedBundleAdjuster
 {
 public:
 	CalibratedBundleAdjuster() :
-		mUseLocks(true), mUseGroundTruthPoints(false), mParamsDistortion(0, 0), mK(Eigen::Matrix3dr::Identity()), mOutlierPixelThreshold(3), mOutlierPixelThresholdSq(9)
+		mUseLocks(true), mFix3DPoints(false), mParamsDistortion(0, 0), mK(Eigen::Matrix3dr::Identity()), mOutlierPixelThreshold(3), mOutlierPixelThresholdSq(9)
 	{}
 
 	void setOutlierThreshold(float pixelThreshold)
@@ -29,8 +29,8 @@ public:
 	bool getUseLocks() const {return mUseLocks;}
 	void setUseLocks(bool value) {mUseLocks = value;}
 
-	bool getUseGroundTruthPoints() const { return mUseGroundTruthPoints; }
-	void setUseGroundTruthPoints(bool value) { mUseGroundTruthPoints = value; }
+	bool getFix3DPoints() const { return mFix3DPoints; }
+	void setFix3DPoints(bool value) { mFix3DPoints = value; }
 
 	const std::unordered_set<Keyframe *> getFramesToAdjust() const {return mFramesToAdjust;}
 	const std::unordered_set<Feature *> getFeaturesToAdjust() const {return mFeaturesToAdjust;}
@@ -51,7 +51,7 @@ protected:
 	float mOutlierPixelThreshold;
 	float mOutlierPixelThresholdSq;
 	bool mUseLocks;
-	bool mUseGroundTruthPoints;
+	bool mFix3DPoints;
 
 	Map *mMap;
 	std::unordered_set<Keyframe *> mFramesToAdjust;

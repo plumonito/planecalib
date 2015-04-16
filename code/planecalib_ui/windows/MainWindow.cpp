@@ -38,7 +38,8 @@ bool MainWindow::init(PlaneCalibApp *app, const Eigen::Vector2i &imageSize)
 	mKeyBindings.addBinding(false, 'b', static_cast<KeyBindingHandler<BaseWindow>::SimpleBindingFunc>(&MainWindow::doFullBA), "Full BA.");
 	mKeyBindings.addBinding(false, 'h', static_cast<KeyBindingHandler<BaseWindow>::SimpleBindingFunc>(&MainWindow::doHomographyBA), "Homography BA.");
 	mKeyBindings.addBinding(false, 't', static_cast<KeyBindingHandler<BaseWindow>::SimpleBindingFunc>(&MainWindow::synthTest), "Synthetic test.");
-
+	mKeyBindings.addBinding(false, 'y', static_cast<KeyBindingHandler<BaseWindow>::SimpleBindingFunc>(&MainWindow::synthTestCompareUsingGroundTruth), "Synthetic test. Compare the metric BA of self-calib and calib.");
+	
 	mRefTexture.create(GL_RGB, eutils::ToSize(imageSize));
 	mRefTexture.update(mSystem->getMap().getKeyframes()[0]->getColorImage());
 	mDisplayTexture.create(GL_RGB, eutils::ToSize(imageSize));
@@ -81,6 +82,7 @@ void MainWindow::updateState()
 	mImagePointColors.clear();
 	mImageLines.clear();
 	mImageLineColors.clear();
+	mFrameHomographies.clear();
 
 	mTrackerPose = mTracker->getCurrentPose();
 	mIsLost = mTracker->isLost();
@@ -128,12 +130,12 @@ void MainWindow::updateState()
 		else
 			color = StaticColors::Gray();
 
-		mFrameHomographies.push_back(frame.getPose());
+		mFrameHomographies.push_back(frame.getPose().inverse());
 		mFrameColors.push_back(color);
 	}
 
 	Eigen::Vector4f color;
-	mFrameHomographies.push_back(mSystem->getTracker().getCurrentPose());
+	mFrameHomographies.push_back(mSystem->getTracker().getCurrentPose().inverse());
 	if (mSystem->getTracker().isLost())
 		color = StaticColors::Red();
 	else
@@ -229,7 +231,7 @@ void MainWindow::draw()
 	{
 		TextRendererStream ts(mShaders->getText());
 		ts << "Alpha0=" << mSystem->getCalib().getInitialAlpha() << "\n";
-		ts << "Normal=" << mSystem->getNormal() << "\nK=" << mSystem->getK() << "\nDistortion=" << mSystem->getDistortion().getCoefficients().transpose();
+		ts << "Normal=" << mSystem->getNormal() << "\nK=" << mSystem->getCamera().getK() << "\nDistortion=" << mSystem->getCamera().getDistortionModel().getCoefficients().transpose();
 	}
 }
 
@@ -366,11 +368,6 @@ void MainWindow::loadBouguetCalib()
 
 void MainWindow::doHomographyBA()
 {
-	//RadialCameraDistortionModel model;
-	//model.init(Eigen::Vector2f(0.16262f / (1759.9583f*1759.9583f), -0.67445f / (1759.9583f*1759.9583f*1759.9583f*1759.9583f)), mImageSize);
-	//RadialCameraDistortionModel invModel = model.createInverseModel();
-
-
 	mSystem->doHomographyBA();
 }
 
@@ -378,6 +375,23 @@ void MainWindow::doFullBA()
 {
 	mSystem->doFullBA();
 }
+
+class CalibrationError
+{
+public:
+	void compute(const CameraModel &ref, const CameraModel &exp)
+	{
+		errorFocal = Eigen::Vector2f(exp.getFx() - ref.getFx(), exp.getFy() - ref.getFy()).norm();
+		errorP0 = Eigen::Vector2f(exp.getU0() - ref.getU0(), exp.getV0() - ref.getV0()).norm();
+		errorDist0 = exp.getDistortionModel().getCoefficients()[0] - ref.getDistortionModel().getCoefficients()[0];
+		errorDist1 = exp.getDistortionModel().getCoefficients()[1] - ref.getDistortionModel().getCoefficients()[1];
+	}
+
+	float errorFocal;
+	float errorP0;
+	float errorDist0;
+	float errorDist1;
+};
 
 void MainWindow::synthTest()
 {
@@ -454,11 +468,13 @@ void MainWindow::synthTest()
 			mSystem->doFullBA();
 
 			//Record noise
-			noiseStdVec.push_back(noiseStd);
-			errorFocal.push_back(Eigen::Vector2f(mSystem->getK()(0, 0) - camera.getFx(), mSystem->getK()(1, 1) - camera.getFy()).norm());
-			errorP0.push_back(Eigen::Vector2f(mSystem->getK()(0, 2) - camera.getU0(), mSystem->getK()(1, 2) - camera.getV0()).norm());
-			errorDist0.push_back(mSystem->getDistortion().getCoefficients()[0] - camera.getDistortionModel().getCoefficients()[0]);
-			errorDist1.push_back(mSystem->getDistortion().getCoefficients()[1] - camera.getDistortionModel().getCoefficients()[1]);
+			noiseStdVec.push_back(frameCount);
+			CalibrationError error;
+			error.compute(camera, mSystem->getCamera());
+			errorFocal.push_back(error.errorFocal);
+			errorP0.push_back(error.errorP0);
+			errorDist0.push_back(error.errorDist0);
+			errorDist1.push_back(error.errorDist1);
 		}
 	}
 	//varDims[0] = varScenes.size(); varDims[1] = 1;
@@ -468,7 +484,7 @@ void MainWindow::synthTest()
 	//Mat_VarFree(varRoot);
 	//Mat_Close(mat);
 
-	MatlabDataLog::Instance().AddValue("noise", noiseStdVec);
+	MatlabDataLog::Instance().AddValue("frameCount", noiseStdVec);
 	MatlabDataLog::Instance().AddValue("errorFocal", errorFocal);
 	MatlabDataLog::Instance().AddValue("errorP0", errorP0);
 	MatlabDataLog::Instance().AddValue("errorDist0", errorDist0);
@@ -481,6 +497,82 @@ void MainWindow::synthTest()
 void MainWindow::storeSceneToMat(const Map &map)
 {
 
+}
+
+void MainWindow::synthTestCompareUsingGroundTruth()
+{
+	SceneGenerator generator;
+
+	CameraModel camera;
+	camera.init(600, 600, 320, 240, 640, 480);
+	camera.getDistortionModel().init(Eigen::Vector2f(0.1, -0.01), camera.getMaxRadiusSq());
+
+	float noiseStd = 3 / 3;
+
+	CalibrationError error;
+
+	MatlabDataLog::AddValue("errorKeyName", "'frameCount'");
+
+	int frameCount = 50;
+	for (frameCount = 3; frameCount <= 50; frameCount++)
+	{
+		int kk = 0;
+		for (kk = 0; kk < 300; kk++)
+		{
+			MYAPP_LOG << "-------------Synth test, compare all, iter=" << kk << "----------------\n";
+			generator.setNoiseStd(noiseStd);
+			std::unique_ptr<Map> map = generator.generateRandomPoses(camera,frameCount);
+
+			//Record key
+			MatlabDataLog::AddValue("errorKey", frameCount);
+
+			//Prepare scene
+			mSystem->setExpectedPixelNoiseStd(std::max(3 * noiseStd, 0.3f));
+			mSystem->setMap(std::move(map));
+
+			//Only BA
+			mSystem->setUse3DGroundTruth(false);
+			mSystem->setFix3DPoints(false);
+			mSystem->doHomographyBA();
+			mSystem->doFullBA();
+
+			//Record 
+			error.compute(camera, mSystem->getCamera());
+			MatlabDataLog::AddValue("errorFocal", error.errorFocal);
+			MatlabDataLog::AddValue("errorP0", error.errorP0);
+			MatlabDataLog::AddValue("errorDist0", error.errorDist0);
+			MatlabDataLog::AddValue("errorDist1", error.errorDist1);
+
+			//Only BA
+			mSystem->setUse3DGroundTruth(true);
+			mSystem->setFix3DPoints(false);
+			mSystem->doFullBA();
+
+			//Record 
+			error.compute(camera, mSystem->getCamera());
+			MatlabDataLog::AddValue("errorFocalBA", error.errorFocal);
+			MatlabDataLog::AddValue("errorP0BA", error.errorP0);
+			MatlabDataLog::AddValue("errorDist0BA", error.errorDist0);
+			MatlabDataLog::AddValue("errorDist1BA", error.errorDist1);
+
+			//Only BA fixed
+			mSystem->setUse3DGroundTruth(true);
+			mSystem->setFix3DPoints(true);
+			mSystem->doFullBA();
+
+			//Record 
+			error.compute(camera, mSystem->getCamera());
+			MatlabDataLog::AddValue("errorFocalBAFixed", error.errorFocal);
+			MatlabDataLog::AddValue("errorP0BAFixed", error.errorP0);
+			MatlabDataLog::AddValue("errorDist0BAFixed", error.errorDist0);
+			MatlabDataLog::AddValue("errorDist1BAFixed", error.errorDist1);
+
+			MatlabDataLog::Stream().flush();
+		}
+	}
+
+	mImageSize = camera.getImageSize();
+	updateState();
 }
 
 void MainWindow::synthTest2()
@@ -564,10 +656,12 @@ void MainWindow::synthTest2()
 
 			//Record noise
 			noiseStdVec.push_back(noiseStd);
-			errorFocal.push_back(Eigen::Vector2f(mSystem->getK()(0, 0) - camera.getFx(), mSystem->getK()(1, 1) - camera.getFy()).norm());
-			errorP0.push_back(Eigen::Vector2f(mSystem->getK()(0, 2) - camera.getU0(), mSystem->getK()(1, 2) - camera.getV0()).norm());
-			errorDist0.push_back(mSystem->getDistortion().getCoefficients()[0] - camera.getDistortionModel().getCoefficients()[0]);
-			errorDist1.push_back(mSystem->getDistortion().getCoefficients()[1] - camera.getDistortionModel().getCoefficients()[1]);
+			CalibrationError error;
+			error.compute(camera, mSystem->getCamera());
+			errorFocal.push_back(error.errorFocal);
+			errorP0.push_back(error.errorP0);
+			errorDist0.push_back(error.errorDist0);
+			errorDist1.push_back(error.errorDist1);
 		}
 	}
 	//varDims[0] = varScenes.size(); varDims[1] = 1;
