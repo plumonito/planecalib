@@ -51,7 +51,7 @@ First line of institution2 address\\
 
 %%%%%%%%% ABSTRACT
 \begin{abstract}
-We introduce a self-calibration method using a planar scene of unknown texture. Planar surfaces are everywhere but checkerboards are not, thus the method can be easily applied outside of the lab. We demonstrate that the accuracy is equivalent to a checkerboard-based calibration, so there is no need for printing checkerboards any more. Moreover, the use of a planar scene provides improved robustness and stronger constraints than a self-calibration with an arbitrary scene. We provide a closed-form initialization of the focal length with minimal and practical assumptions. The method recovers the intrinsic and extrinsic parameters of the camera and the metric structure of the planar scene. The method is implemented in a real-time calibration application for non-expert users that provides an easy and practical process to obtain high accuracy calibrations. 
+We introduce a self-calibration method using a planar scene of unknown texture. Planar surfaces are everywhere but checkerboards are not, thus the method can be more easily applied outside of the lab. We demonstrate that the accuracy is equivalent to a checkerboard-based calibration, so there is no need for printing checkerboards any more. Moreover, the use of a planar scene provides improved robustness and stronger constraints than a self-calibration with an arbitrary scene. We provide a closed-form initialization of the focal length with minimal and practical assumptions. The method recovers the intrinsic and extrinsic parameters of the camera and the metric structure of the planar scene. The method is implemented in a real-time calibration application for non-expert users that provides an easy and practical process to obtain high accuracy calibrations. 
 \end{abstract}
 
 %%%%%%%%% BODY TEXT	
@@ -59,17 +59,24 @@ We introduce a self-calibration method using a planar scene of unknown texture. 
 
 Calibrating a camera's intrinsics is a fundamental problem in computer vision. A calibrated camera is needed to perform a metric reconstruction of a scene, otherwise only a projective reconstruction is possible \cite{hartley2000}. Some of the most interesting applications of computer vision, like simultaneous localization and mapping, augmented reality, and 3D reconstruction, require a metric reconstruction of the scene. Nowadays, cameras are most often calibrated offline using a calibration target. A planar target with a checkerboard pattern of known structure is a well established and popular method for camera calibration \cite{zhang1999,bouguetMCT}.
 
-Why is homography-based calibration important? Practical (easy targets) and accurate (homographies are robust to point noise)
+%Why is homography-based calibration important? Practical (easy targets) and accurate (homographies are robust to point noise)
+Planar scenes are a very convenient calibration target because they are easy to detect, match, and the observed motion can be completely described by a homography. A planar target is much easier to manufacture than a 3D target of known structure, for example a paper checkerboard can be produced by a standard printer and attached to a table. Homography-based calibration methods like \cite{zhang1999} extract the intrinsic parameters of a camera from a set of homographies between the known points in metric space and the matched points in image space. This produces a very accurate calibration because the homographies are very robust to noise and outliers.
 
-Why is homography-based self-calibration important? Even more practical (targets everywhere) and still accurate (strong planar constraint)
+%Why is homography-based self-calibration important? Even more practical (targets everywhere) and still accurate (strong planar constraint)
+Although this is an accurate and practical method, it is not as practical as it can be. Checkerboard targets are often inconvenient and not always available, especially outside of the lab. We note that there are a myriad of well-textured planar targets in the wild (books, paintings, fa\c{c}ades) but the metric structure of their texture is not known a-priori and are thus not suited for a method like \cite{zhang1999}. We explore the problem of homography-based self-calibration which attempts to simultaneously calibrate the camera and recover the metric structure of the scene under the assumption that the scene is planar.
 
-Why is it hard? Generic self-calibration has linear solution, but planar doesn't.
+Homography-based self-calibration is attractive for several reasons. It is much more practical than a checkerboard based calibration because we can use any planar structure for calibration. On the other hand, when compared to a generic self-calibration approach, the planar-scene constraint significantly reduces the degrees of freedom of the problem and increases the robustness and accuracy of the calibration. Moreover, homography estimation is a much simpler and robust process than feature matching of arbitrary 3D points.
+
+%Why is it hard? Generic self-calibration has linear solution, but planar doesn't.
+So far, homography-based self-calibration has not been a viable option because the non-linearities introduced by the planar-scene constraint have prevented a closed-form solution. A closed-form solution for the camera intrinsics is fundamental to initialize a non-linear optimization of the self-calibration constraints. The initial solution must be sufficiently accurate to stop the optimization from being trapped in a local minimum. In this paper we show that a closed-form solution is possible by imposing a minor constraint on the camera motion: the scene plane should be close to fronto-parallel to at least one image in the dataset. We believe this limitation is insignificant in practice and results in a system that can be easily and robustly used in the wild to perform accurate calibration.
 
 ~\\ \noindent\textbf{Notation:}
 For clarity, we denote vector quantities as bold lowercase letters (\eg $\xv$,$\pv$,$\tv$), matrix quantities as bold uppercase letters (\eg $\Rm$,$\Km$), and scalars as lowercase italic letters (\eg $f_x$,$u_0$). We denote the homogeneous representation of a vector $\xv$ with $\homogeneous{\xv}$. The transformation back from homogeneous coordinates is performed by dividing a vector by its last component and discarding this component. This is denoted by $\hnorm(\xv)$. Equations in homogeneous coordinates are equal up to scale and this is denoted by the $\propto$ symbol.
 %We frequently change between homogeneous and inhomogeneous representation of vectors.
 
 \subsection{Previous work}
+
+The landmark paper of Zhang \cite{zhang1999} is nowadays the defacto standard for camera calibration and has been implemented for many platforms \citep{bouguetMCT,opencv_library}. It is interesting to notice that the calibration constraints used have the same nature as the ones presented here. However, because the metric structure of the world is known the equations simplify considerably and there are less degrees of freedom. Hartley and Zisserman \cite{hartley2000} present a comprehensive analysis of camera calibration AAAAHHHHH
 
 Papers to cite:
 
