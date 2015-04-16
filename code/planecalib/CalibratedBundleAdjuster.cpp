@@ -312,7 +312,7 @@ bool CalibratedBundleAdjuster::bundleAdjust()
 	//Get inliers before
 	int inlierCount;
 	getInliers(inlierCount);
-	MYAPP_LOG << "BA inlier count: " << inlierCount << "\n";
+	MYAPP_LOG << "BA inlier count: " << inlierCount << "/" << mMeasurementsInProblem.size() << "\n";
 
 	//No locks while ceres runs
 	//Non-linear minimization!
@@ -338,7 +338,7 @@ bool CalibratedBundleAdjuster::bundleAdjust()
 	}
 
 	getInliers(inlierCount);
-	MYAPP_LOG << "BA inlier count: " << inlierCount << "\n";
+	MYAPP_LOG << "BA inlier count: " << inlierCount << "/" << mMeasurementsInProblem.size() << "\n";
 
 	//Again
 	//problem.SetParameterBlockVariable(mParamsK.data());

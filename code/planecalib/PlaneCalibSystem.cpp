@@ -119,7 +119,7 @@ void PlaneCalibSystem::setMap(std::unique_ptr<Map> map)
 	//Calibrate
 	mHomographyP0 = frame.getImageSize().cast<float>() / 2;
 	mHomographyDistortion.init(Eigen::Vector2f::Zero(), frame.getImageSize());
-	mCalib->calibrate(mHomographyP0, allPoses);
+	//mCalib->calibrate(mHomographyP0, allPoses);
 }
 
 void PlaneCalibSystem::processImage(double timestamp, cv::Mat3b &imgColor, cv::Mat1b &imgGray)
@@ -267,6 +267,8 @@ void PlaneCalibSystem::doHomographyCalib()
 	mCalib->calibrate(mHomographyP0, allPoses);
 	mK = mCalib->getK().cast<float>();
 	mNormal = mCalib->getNormal().cast<float>();
+	//mK << 600, 0, 320, 0, 600, 240, 0, 0, 1;
+	//mNormal << 0, 0, 1;
 
 	float fx2 = mK(0, 0)*mK(0, 0);
 	MYAPP_LOG << "Translated distortion: " << mHomographyDistortion.getCoefficients()[0] * fx2 << ", " << mHomographyDistortion.getCoefficients()[1] * fx2*fx2 << "\n";
@@ -274,151 +276,123 @@ void PlaneCalibSystem::doHomographyCalib()
 
 void PlaneCalibSystem::doFullBA()
 {
-	bool useGroundTruth = true;
+	bool useGroundTruth = false;
 
 	float fx2 = mK(0, 0) * mK(0, 0);
 	Eigen::Vector2f distortion(mHomographyDistortion.getCoefficients()[0] * fx2, mHomographyDistortion.getCoefficients()[1]*fx2*fx2);
 
-	//Set pose for reference frame
-	Keyframe &refFrame = *mMap->getKeyframes()[0];
-
-	Eigen::Vector3f basis1, basis2, basis3;
-	basis3 = mNormal;
-	HomographyCalibrationError::GetBasis(basis3.data(), basis1, basis2);
-	basis1.normalize();
-	basis2.normalize();
-
-	refFrame.mPose3DR(0, 0) = basis1[0];
-	refFrame.mPose3DR(1, 0) = basis1[1];
-	refFrame.mPose3DR(2, 0) = basis1[2];
-
-	refFrame.mPose3DR(0, 1) = basis2[0];
-	refFrame.mPose3DR(1, 1) = basis2[1];
-	refFrame.mPose3DR(2, 1) = basis2[2];
-
-	refFrame.mPose3DR(0, 2) = basis3[0];
-	refFrame.mPose3DR(1, 2) = basis3[1];
-	refFrame.mPose3DR(2, 2) = basis3[2];
-
-	Eigen::Vector3f refCenter = -basis3;
-	refFrame.mPose3DT = -refFrame.mPose3DR*refCenter; //RefCenter = -R'*t = Normal (exactly one unit away from plane center) => t = -R*normal
-
-	//Invert K
-	Eigen::Matrix3fr Kinv;
-	float fxi = 1.0f / mK(0, 0);
-	float fyi = 1.0f / mK(1, 1);
-	Kinv << fxi, 0, -fxi*mK(0, 2), 0, fyi, -fyi*mK(1, 2), 0, 0, 1;
-
-	cv::Mat1f cvK(3, 3, const_cast<float*>(mK.data()));
-
-	//Triangulate all features
-	for (auto &pfeature : mMap->getFeatures())
-	{
-		auto &feature = *pfeature;
-		
-		Eigen::Vector2f m = mHomographyDistortion.undistortPoint(feature.getPosition() - mHomographyP0) + mHomographyP0;
-
-		Eigen::Vector3f xn = Kinv * m.homogeneous();
-
-		Eigen::Vector3f xdir = refFrame.mPose3DR.transpose()*xn;
-		
-		//Intersect with plane
-		//If point in line is x=a*t + b
-		//and point in plane is dot(x,n)-d = 0
-		//then t=(d-dot(b,n))/dot(a,n)
-		//and x = a*(d-dot(b,n))/dot(a,n) + b
-		//
-		//Here b=refCenter, a=xdir, n=[0,0,1]', d=0
-		feature.mPosition3D = refCenter - (refCenter[2]/xdir[2])*xdir; 
-		feature.mPosition3D[2] = 0; //Just in case
-
-		//Fix if we're using ground truth
-		if (useGroundTruth)
-			feature.mPosition3D = feature.mGroundTruthPosition3D;
-
-		//Check
-		//Eigen::Vector3f tl = xdir.cross(feature.mPosition3D-refCenter);
-		//float tp = feature.mPosition3D[2];
-		//Eigen::Vector3f mm = mCalib->getK() * (refFrame.mPose3DR*feature.mPosition3D + refFrame.mPose3DT);
-		//Eigen::Vector2f m2;
-		//m2 << mm[0] / mm[2], mm[1] / mm[2];
-
-		//float diff = (m2 - feature.getPosition()).norm();
-		//MatlabDataLog::Instance().AddValue("diffTest", diff);
-	}
-
-	//Restimate ref
 	if (useGroundTruth)
 	{
-		//Build constraints
-		std::vector<cv::Point3d> cvWorldPoints;
-		std::vector<cv::Point2d> cvImagePoints;
-		for (auto &mp : refFrame.getMeasurements())
+		for (auto &pfeature : mMap->getFeatures())
 		{
-			auto &m = *mp;
-			Eigen::Vector2f mu = mHomographyDistortion.undistortPoint(m.getPosition() - mHomographyP0) + mHomographyP0;
-			cvImagePoints.push_back(cv::Point2d(mu[0], mu[1]));
-			cvWorldPoints.push_back(cv::Point3d(m.getFeature().mPosition3D[0], m.getFeature().mPosition3D[1], m.getFeature().mPosition3D[2]));
+			auto &feature = *pfeature;
+			feature.mPosition3D = feature.mGroundTruthPosition3D;
 		}
-
-		//PnP
-		cv::Mat1d rvec, tvec;
-		cv::Matx33d cvR;
-		Eigen::Map<Eigen::Matrix3dr> mapR(cvR.val);
-
-		cv::solvePnPRansac(cvWorldPoints, cvImagePoints, cvK, cv::noArray(), rvec, tvec, false);
-		cv::solvePnP(cvWorldPoints, cvImagePoints, cvK, cv::noArray(), rvec, tvec, true, cv::SOLVEPNP_ITERATIVE);
-
-		//Save
-		cv::Rodrigues(rvec, cvR);
-
-		refFrame.mPose3DR = mapR.cast<float>();
-		refFrame.mPose3DT[0] = (float)tvec(0,0);
-		refFrame.mPose3DT[1] = (float)tvec(1, 0);
-		refFrame.mPose3DT[2] = (float)tvec(2, 0);
+		for (auto &framep : mMap->getKeyframes())
+		{
+			auto &frame = *framep;
+			frame.mPose3DR = frame.mGroundTruthPose3DR;
+			frame.mPose3DT = frame.mGroundTruthPose3DT;
+		}
 	}
-
-	//Estimate frame positions
-	for (auto &framep : mMap->getKeyframes())
+	else
 	{
-		auto &frame = *framep;
-		
-		//Skip ref frame
-		if (&frame == &refFrame)
-			continue;
+		//Set pose for reference frame
+		Keyframe &refFrame = *mMap->getKeyframes()[0];
 
-		//Build constraints
-		std::vector<cv::Point3f> cvWorldPoints;
-		std::vector<cv::Point2f> cvImagePoints;
-		for (auto &mp : frame.getMeasurements())
+		Eigen::Vector3f basis1, basis2, basis3;
+		basis3 = mNormal;
+		HomographyCalibrationError::GetBasis(basis3.data(), basis1, basis2);
+		basis1.normalize();
+		basis2.normalize();
+
+		refFrame.mPose3DR(0, 0) = basis1[0];
+		refFrame.mPose3DR(1, 0) = basis1[1];
+		refFrame.mPose3DR(2, 0) = basis1[2];
+
+		refFrame.mPose3DR(0, 1) = basis2[0];
+		refFrame.mPose3DR(1, 1) = basis2[1];
+		refFrame.mPose3DR(2, 1) = basis2[2];
+
+		refFrame.mPose3DR(0, 2) = basis3[0];
+		refFrame.mPose3DR(1, 2) = basis3[1];
+		refFrame.mPose3DR(2, 2) = basis3[2];
+
+		Eigen::Vector3f refCenter = -basis3;
+		refFrame.mPose3DT = -refFrame.mPose3DR*refCenter; //RefCenter = -R'*t = Normal (exactly one unit away from plane center) => t = -R*normal
+
+		//Invert K
+		Eigen::Matrix3fr Kinv;
+		float fxi = 1.0f / mK(0, 0);
+		float fyi = 1.0f / mK(1, 1);
+		Kinv << fxi, 0, -fxi*mK(0, 2), 0, fyi, -fyi*mK(1, 2), 0, 0, 1;
+
+		cv::Mat1f cvK(3, 3, const_cast<float*>(mK.data()));
+
+		//Triangulate all features
+		for (auto &pfeature : mMap->getFeatures())
 		{
-			auto &m = *mp;
-			Eigen::Vector2f mu = mHomographyDistortion.undistortPoint(m.getPosition() - mHomographyP0) + mHomographyP0;
-			cvImagePoints.push_back(cv::Point2f(mu[0], mu[1]));
-			cvWorldPoints.push_back(cv::Point3f(m.getFeature().mPosition3D[0], m.getFeature().mPosition3D[1], m.getFeature().mPosition3D[2]));
+			auto &feature = *pfeature;
+		
+			Eigen::Vector2f m = mHomographyDistortion.undistortPoint(feature.getPosition() - mHomographyP0) + mHomographyP0;
+
+			Eigen::Vector3f xn = Kinv * m.homogeneous();
+
+			Eigen::Vector3f xdir = refFrame.mPose3DR.transpose()*xn;
+		
+			//Intersect with plane
+			//If point in line is x=a*t + b
+			//and point in plane is dot(x,n)-d = 0
+			//then t=(d-dot(b,n))/dot(a,n)
+			//and x = a*(d-dot(b,n))/dot(a,n) + b
+			//
+			//Here b=refCenter, a=xdir, n=[0,0,1]', d=0
+			feature.mPosition3D = refCenter - (refCenter[2]/xdir[2])*xdir; 
+			feature.mPosition3D[2] = 0; //Just in case
 		}
 
-		//PnP
-		cv::Vec3d rvec, tvec;
-		cv::Matx33d cvR;
-		Eigen::Map<Eigen::Matrix3dr> mapR(cvR.val);
+		//Estimate frame positions
+		for (auto &framep : mMap->getKeyframes())
+		{
+			auto &frame = *framep;
 
-		mapR = refFrame.mPose3DR.cast<double>();
-		cv::Rodrigues(cvR, rvec);
-		tvec[0] = refFrame.mPose3DT[0];
-		tvec[1] = refFrame.mPose3DT[1];
-		tvec[2] = refFrame.mPose3DT[2];
+			//Skip ref frame
+			if (&frame == &refFrame)
+				continue;
 
-		//cv::Vec4f dist(0, 0, 0, 0);
-		cv::solvePnP(cvWorldPoints, cvImagePoints, cvK, cv::noArray(), rvec, tvec, true, cv::SOLVEPNP_ITERATIVE);
+			//Build constraints
+			std::vector<cv::Point3f> cvWorldPoints;
+			std::vector<cv::Point2f> cvImagePoints;
+			for (auto &mp : frame.getMeasurements())
+			{
+				auto &m = *mp;
+				Eigen::Vector2f mu = mHomographyDistortion.undistortPoint(m.getPosition() - mHomographyP0) + mHomographyP0;
+				cvImagePoints.push_back(cv::Point2f(mu[0], mu[1]));
+				cvWorldPoints.push_back(cv::Point3f(m.getFeature().mPosition3D[0], m.getFeature().mPosition3D[1], m.getFeature().mPosition3D[2]));
+			}
 
-		//Save
-		cv::Rodrigues(rvec, cvR);
+			//PnP
+			cv::Vec3d rvec, tvec;
+			cv::Matx33d cvR;
+			Eigen::Map<Eigen::Matrix3dr> mapR(cvR.val);
+
+			mapR = refFrame.mPose3DR.cast<double>();
+			cv::Rodrigues(cvR, rvec);
+			tvec[0] = refFrame.mPose3DT[0];
+			tvec[1] = refFrame.mPose3DT[1];
+			tvec[2] = refFrame.mPose3DT[2];
+
+			//cv::Vec4f dist(0, 0, 0, 0);
+			cv::solvePnP(cvWorldPoints, cvImagePoints, cvK, cv::noArray(), rvec, tvec, true, cv::SOLVEPNP_ITERATIVE);
+
+			//Save
+			cv::Rodrigues(rvec, cvR);
 		
-		frame.mPose3DR = mapR.cast<float>();
-		frame.mPose3DT[0] = (float)tvec[0];
-		frame.mPose3DT[1] = (float)tvec[1];
-		frame.mPose3DT[2] = (float)tvec[2];
+			frame.mPose3DR = mapR.cast<float>();
+			frame.mPose3DT[0] = (float)tvec[0];
+			frame.mPose3DT[1] = (float)tvec[1];
+			frame.mPose3DT[2] = (float)tvec[2];
+		}
 	}
 	mMap->setIs3DValid(true);
 

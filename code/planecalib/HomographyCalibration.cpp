@@ -78,7 +78,7 @@ void HomographyCalibration::calibrate(const Eigen::Vector2f &p0, const std::vect
 	ceres::Solve(options, &problem, &summary);
 	MYAPP_LOG << summary.FullReport();
 
-	MYAPP_LOG << "Initial alpha=" << alpha << ", final=" << alpha << "\n";
+	MYAPP_LOG << "Initial alpha=" << mInitialAlpha << ", final=" << alpha << "\n";
 
 	//Shift pp
 	Eigen::Vector2f ppn = pp.cast<float>() + p0;

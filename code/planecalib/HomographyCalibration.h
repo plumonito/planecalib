@@ -52,32 +52,32 @@ public:
 	{
 		const double kThreshold = 0.1;
 
-		//basis1 = cross(x,C)
-		//basis2 = cross(x,basis1)
+		//basis1 = cross(C,x)
+		//basis2 = cross(basis1,x)
 		//Check that the point we use is not colinear with x
-		const double x1val = CeresUtils::ToDouble(x[1]);
+		const double x0val = CeresUtils::ToDouble(x[0]);
 		const double x2val = CeresUtils::ToDouble(x[2]);
-		if (x1val > kThreshold || x1val < -kThreshold || x2val > kThreshold || x2val < -kThreshold)
+		if (x0val > kThreshold || x0val < -kThreshold || x2val > kThreshold || x2val < -kThreshold)
 		{
-			//Use C=[1,0,0]
-			basis1[0] = T(0);
-			basis1[1] = x[2];
-			basis1[2] = -x[1];
+			//Use C=[0,1,0]
+			basis1[0] = x[2];
+			basis1[1] = T(0);
+			basis1[2] = -x[0];
 
-			basis2[0] = -(x[1] * x[1] + x[2] * x[2]);
-			basis2[1] = x[0] * x[1];
-			basis2[2] = x[0] * x[2];
+			basis2[0] = -x[0] * x[1];
+			basis2[1] = x[0] * x[0] + x[2] * x[2];
+			basis2[2] = -x[1] * x[2];
 		}
 		else
 		{
-			//Use C=[0,1,0]
-			basis1[0] = -x[2];
-			basis1[1] = T(0);
-			basis1[2] = x[0];
+			//Use C=[1,0,0]
+			basis1[0] = T(0);
+			basis1[1] = -x[2];
+			basis1[2] = x[1];
 
-			basis2[0] = x[0] * x[1];
-			basis2[1] = -(x[0] * x[0] + x[2] * x[2]);
-			basis2[2] = x[1] * x[2];
+			basis2[0] = x[1] * x[1] + x[2] * x[2];
+			basis2[1] = -x[0] * x[1];
+			basis2[2] = -x[0] * x[2];
 		}
 		//basis1.normalize();
 		//basis2.normalize();

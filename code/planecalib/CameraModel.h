@@ -129,20 +129,6 @@ public:
 		return mUnprojectLUT(uv[1], uv[0]);
 	}
 
-protected:
-	//Four parameters of the intrinsic matrix
-	float mFx;
-	float mFy;
-	float mU0;
-	float mV0;
-	Eigen::Vector2i mImageSize;
-
-	//Distortion model
-	TDistortionModel mDistortionModel;
-
-	Eigen::Matrix<Eigen::Vector3f,Eigen::Dynamic,Eigen::Dynamic> mUnprojectLUT; //Unproject doesn't need an analytical formula. If it is slow we can cache it in a LUT.
-	Eigen::Matrix<Eigen::Matrix<float,3,2>, Eigen::Dynamic, Eigen::Dynamic> mProjectFromWorldJacobianLUT; //Can be cached if the pixel value is known
-
 	//////////////////////////////////////
 	// Project form distorted
 	// Same code, one using return value, one using args by-reference (for ceres)
@@ -167,7 +153,7 @@ protected:
 		auto &fy = cameraParams[1];
 		auto &u0 = cameraParams[2];
 		auto &v0 = cameraParams[3];
-		
+
 		p[0] = fx*xd[0] + u0;
 		p[1] = fy*xd[1] + v0;
 	}
@@ -176,6 +162,20 @@ protected:
 	{
 		return Eigen::Vector2f((uv[0] - mU0) / mFx, (uv[1] - mV0) / mFy);
 	}
+
+protected:
+	//Four parameters of the intrinsic matrix
+	float mFx;
+	float mFy;
+	float mU0;
+	float mV0;
+	Eigen::Vector2i mImageSize;
+
+	//Distortion model
+	TDistortionModel mDistortionModel;
+
+	Eigen::Matrix<Eigen::Vector3f,Eigen::Dynamic,Eigen::Dynamic> mUnprojectLUT; //Unproject doesn't need an analytical formula. If it is slow we can cache it in a LUT.
+	Eigen::Matrix<Eigen::Matrix<float,3,2>, Eigen::Dynamic, Eigen::Dynamic> mProjectFromWorldJacobianLUT; //Can be cached if the pixel value is known
 };
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -191,7 +191,7 @@ float CameraModel_<TDistortionModel>::getMaxRadiusSq() const
 	float maxRadiusSq = 0;
 	for(int i=0; i<4; ++i)
 	{
-		const Eigen::Vector2f xn = unprojectToWorld(corners[i]).hnormalized();
+		const Eigen::Vector2f xn = unprojectToDistorted(corners[i]);
 		const float r2 = xn.squaredNorm();
 		if(r2>maxRadiusSq)
 			maxRadiusSq = r2;

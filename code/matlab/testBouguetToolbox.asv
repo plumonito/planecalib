@@ -1,5 +1,0 @@
-scenes = load('d:\code\build\planecalib\code\planecalib_desktop\vars.mat');
-
-for k=1:length(scenes)
-    
-end

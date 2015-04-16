@@ -52,8 +52,9 @@ std::unique_ptr<Map> SceneGenerator::generateRandomPoses(const CameraModel &came
 	posesCenter.push_back(Eigen::Vector3f(0, 0, -1));
 
 	std::uniform_real_distribution<float> uniformTarget(-0.5f, +0.5f);
-	std::uniform_real_distribution<float> uniformCenterZ(-1.5f, -0.5f);
 	std::uniform_real_distribution<float> uniformCenterXY(-0.8f, +0.8f);
+	std::uniform_real_distribution<float> uniformCenterZ(-1.0f, -0.5f);
+	std::uniform_real_distribution<float> uniformAngle(0.0f, 2*M_PI);
 
 	for (int i = 0; i < frameCount; i++)
 	{
@@ -71,11 +72,18 @@ std::unique_ptr<Map> SceneGenerator::generateRandomPoses(const CameraModel &came
 		Eigen::Vector3f a, b, c;
 		c = (lookTarget - center).normalized();
 		HomographyCalibrationError::GetBasis(c.data(), a, b);
+		
+		Eigen::AngleAxisf aa(uniformAngle(mRandomDevice), c);
+		a = (aa*a).normalized();
+		b = (aa*b).normalized();
+
 		R.col(0) = a;
 		R.col(1) = b;
 		R.col(2) = c;
 		//R.col(1) = (lookTarget - R.col(2).dot(lookTarget)*R.col(2)).normalized();
-		//assert(abs(R.col(2).dot(R.col(1))) < 1e-6);
+		assert(abs(R.col(2).dot(R.col(1))) < 1e-6);
+		assert(abs(R.col(2).dot(R.col(0))) < 1e-6);
+		assert(abs(R.col(1).dot(R.col(0))) < 1e-6);
 		//R.col(0) = R.col(1).cross(R.col(2));
 
 		posesR.push_back(R.transpose());
@@ -136,6 +144,9 @@ std::unique_ptr<Map> SceneGenerator::generateFromPoses(const CameraModel &camera
 		std::unique_ptr<Keyframe> newFrame(new Keyframe());
 
 		newFrame->init(nullImg3, nullImg1);
+		
+		newFrame->mGroundTruthPose3DR = posesR[i];
+		newFrame->mGroundTruthPose3DT = -posesR[i]*posesCenter[i];
 
 		//Stats
 		std::vector<float> distortionError;
@@ -158,7 +169,7 @@ std::unique_ptr<Map> SceneGenerator::generateFromPoses(const CameraModel &camera
 				continue;
 
 			//Save distortion and noise errors
-			Eigen::Vector2f imagePosNoDistortion = camera.getDistortionModel().undistortPoint(imagePosClean);
+			Eigen::Vector2f imagePosNoDistortion = camera.projectFromDistorted(xn.hnormalized());
 			distortionError.push_back((imagePosClean - imagePosNoDistortion).norm());
 			noiseError.push_back(noise.norm());
 

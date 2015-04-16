@@ -95,6 +95,9 @@ protected:
 public:
 	Eigen::Matrix3fr mPose3DR;
 	Eigen::Vector3f mPose3DT;
+
+	Eigen::Matrix3fr mGroundTruthPose3DR;
+	Eigen::Vector3f mGroundTruthPose3DT;
 };
 
 } 

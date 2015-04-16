@@ -23,7 +23,7 @@ class MainWindow: public BaseWindow
 {
 public:
 	MainWindow():
-		BaseWindow("MainWindow")
+		BaseWindow("MainWindow"), mDisplayFrameIdx(-1)
 	{}
 
 	EIGEN_MAKE_ALIGNED_OPERATOR_NEW
@@ -39,6 +39,17 @@ public:
 //    void touchUp(int id, int x, int y);
 
     void draw();
+
+	void nextDisplayFrame() 
+	{ 
+		mDisplayFrameIdx++;
+		updateState();
+	}
+	void prevDisplayFrame()
+	{
+		mDisplayFrameIdx--;
+		updateState();
+	}
 
 	void doHomographyBA();
 	void doFullBA();
@@ -57,16 +68,24 @@ protected:
 	bool mIsLost;
 	Eigen::Matrix3fr mTrackerPose;
 
-	TextureHelper mRefTexture;
+	int mDisplayFrameIdx;
 
 	//Draw data
+	TextureHelper mRefTexture;
+
 	std::vector<Eigen::Vector2f> mImagePoints;
 	std::vector<Eigen::Vector4f> mImagePointColors;
 
 	std::vector<Eigen::Vector2f> mImageLines;
 	std::vector<Eigen::Vector4f> mImageLineColors;
+
+	std::vector<Eigen::Matrix3fr> mFrameHomographies;
+	std::vector<Eigen::Vector4f> mFrameColors;
+
+	TextureHelper mDisplayTexture;
+	std::vector<Eigen::Vector2f> mDisplayPoints;
 };
 
-} /* namespace dtslam */
+} 
 
-#endif /* ARWINDOW_H_ */
+#endif 

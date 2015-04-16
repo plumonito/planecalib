@@ -32,6 +32,8 @@ bool MainWindow::init(PlaneCalibApp *app, const Eigen::Vector2i &imageSize)
 	resize();
 
 	//mKeyBindings.addBinding(false, 't', static_cast<KeyBindingHandler<BaseWindow>::SimpleBindingFunc>(&ARWindow::toggleDisplayType), "Toggle display mode.");
+	mKeyBindings.addBinding(false, '+', static_cast<KeyBindingHandler<BaseWindow>::SimpleBindingFunc>(&MainWindow::nextDisplayFrame), "Show details on next frame.");
+	mKeyBindings.addBinding(false, '-', static_cast<KeyBindingHandler<BaseWindow>::SimpleBindingFunc>(&MainWindow::prevDisplayFrame), "Show details on prev frame.");
 	mKeyBindings.addBinding(false, 'l', static_cast<KeyBindingHandler<BaseWindow>::SimpleBindingFunc>(&MainWindow::loadBouguetCalib), "Load bouguet calibration data.");
 	mKeyBindings.addBinding(false, 'b', static_cast<KeyBindingHandler<BaseWindow>::SimpleBindingFunc>(&MainWindow::doFullBA), "Full BA.");
 	mKeyBindings.addBinding(false, 'h', static_cast<KeyBindingHandler<BaseWindow>::SimpleBindingFunc>(&MainWindow::doHomographyBA), "Homography BA.");
@@ -39,6 +41,7 @@ bool MainWindow::init(PlaneCalibApp *app, const Eigen::Vector2i &imageSize)
 
 	mRefTexture.create(GL_RGB, eutils::ToSize(imageSize));
 	mRefTexture.update(mSystem->getMap().getKeyframes()[0]->getColorImage());
+	mDisplayTexture.create(GL_RGB, eutils::ToSize(imageSize));
 
 	return true;
 }
@@ -46,9 +49,32 @@ bool MainWindow::init(PlaneCalibApp *app, const Eigen::Vector2i &imageSize)
 void MainWindow::updateState()
 {
 	shared_lock<shared_mutex> lockRead(mSystem->getMap().getMutex());
-
+	
 	mTracker = &mSystem->getTracker();
 	mMap = &mSystem->getMap();
+
+	//Display frame
+	Keyframe *displayFrame;
+	if (mDisplayFrameIdx < -1)
+		mDisplayFrameIdx = mMap->getKeyframes().size() - 1;
+	else if (mDisplayFrameIdx >= mMap->getKeyframes().size())
+		mDisplayFrameIdx = -1;
+
+	mDisplayPoints.clear();
+
+	if (mDisplayFrameIdx == -1)
+		displayFrame = NULL;
+	else
+	{
+		displayFrame = mMap->getKeyframes()[mDisplayFrameIdx].get();
+		mDisplayTexture.update(displayFrame->getColorImage());
+
+		for (auto &mPtr : displayFrame->getMeasurements())
+		{
+			auto &m = *mPtr;
+			mDisplayPoints.push_back(m.getPosition());
+		}
+	}
 
 	//Clear all
 	mImagePoints.clear();
@@ -93,7 +119,26 @@ void MainWindow::updateState()
 	//	mImageLineColors.push_back(StaticColors::Blue());
 	//}
 
-	const float pointAlpha = 0.6f;
+	for (auto &framep : mMap->getKeyframes())
+	{
+		auto &frame = *framep;
+		Eigen::Vector4f color;
+		if (&frame == displayFrame)
+			color = StaticColors::Blue();
+		else
+			color = StaticColors::Gray();
+
+		mFrameHomographies.push_back(frame.getPose());
+		mFrameColors.push_back(color);
+	}
+
+	Eigen::Vector4f color;
+	mFrameHomographies.push_back(mSystem->getTracker().getCurrentPose());
+	if (mSystem->getTracker().isLost())
+		color = StaticColors::Red();
+	else
+		color = StaticColors::White();
+	mFrameColors.push_back(color);
 }
 
 void MainWindow::resize()
@@ -117,9 +162,17 @@ void MainWindow::resize()
 
 void MainWindow::draw()
 {
-	mTiler.setActiveTile(1);
-	mShaders->getTexture().setMVPMatrix(mTiler.getMVP());
-	mShaders->getTexture().renderTexture(mRefTexture.getTarget(), mRefTexture.getId(), mImageSize, 1.0f);
+	glPointSize(3.0f);
+
+	if (mDisplayFrameIdx != -1)
+	{
+		mTiler.setActiveTile(1);
+		mShaders->getTexture().setMVPMatrix(mTiler.getMVP());
+		mShaders->getTexture().renderTexture(mDisplayTexture.getTarget(), mDisplayTexture.getId(), mImageSize, 1.0f);
+		
+		mShaders->getColor().setMVPMatrix(mTiler.getMVP());
+		mShaders->getColor().drawVertices(GL_POINTS, mDisplayPoints.data(), mDisplayPoints.size(), StaticColors::Green());
+	}
 
 	mTiler.setActiveTile(2);
 	mShaders->getTexture().setMVPMatrix(mTiler.getMVP());
@@ -131,7 +184,6 @@ void MainWindow::draw()
 		{
 			points.push_back(eutils::FromCV(kp.pt));
 		}
-		glPointSize(3.0f);
 		mShaders->getColor().setMVPMatrix(mTiler.getMVP());
 		mShaders->getColor().drawVertices(GL_POINTS, points.data(), points.size(), StaticColors::Blue());
 	}
@@ -154,20 +206,11 @@ void MainWindow::draw()
 
 	mShaders->getWarpPos().setMVPMatrix(mTiler.getMVP());
 
-	for (auto &framep : mMap->getKeyframes())
+	for (int i = 0; i < mFrameHomographies.size(); i++)
 	{
-		auto &frame = *framep;
-		mShaders->getWarpPos().setHomography(frame.getPose());
-		mShaders->getWarpPos().drawVertices(GL_LINE_LOOP, &pointsSrc[0], pointsSrc.size(), StaticColors::Gray());
+		mShaders->getWarpPos().setHomography(mFrameHomographies[i]);
+		mShaders->getWarpPos().drawVertices(GL_LINE_LOOP, &pointsSrc[0], pointsSrc.size(), mFrameColors[i]);
 	}
-
-	mShaders->getWarpPos().setHomography(mSystem->getTracker().getCurrentPose());
-	Eigen::Vector4f color;
-	if (mSystem->getTracker().isLost())
-		color = StaticColors::Red();
-	else
-		color = StaticColors::White();
-	mShaders->getWarpPos().drawVertices(GL_LINE_LOOP, &pointsSrc[0], pointsSrc.size(), color);
 
 	//Draw image lines
 	mShaders->getColor().drawVertices(GL_LINES, mImageLines.data(), mImageLineColors.data(), mImageLines.size());
@@ -343,6 +386,7 @@ void MainWindow::synthTest()
 	CameraModel camera;
 	camera.init(600, 600, 320, 240, 640, 480);
 	camera.getDistortionModel().init(Eigen::Vector2f(0.1, -0.01), camera.getMaxRadiusSq());
+	//camera.getDistortionModel().init(Eigen::Vector2f(0.0, 0.0), camera.getMaxRadiusSq());
 	float noiseStd = 3/3;
 
 	//size_t varDims[2];
@@ -355,13 +399,16 @@ void MainWindow::synthTest()
 	std::vector<float> errorP0;
 	std::vector<float> errorDist0;
 	std::vector<float> errorDist1;
-	for (int frameCount = 2; frameCount < 50; frameCount++)
+	int frameCount = 50;
+	for (frameCount = 2; frameCount < 50; frameCount++)
 	{
-		for (int kk = 0; kk < 300; kk++)
+		int kk = 0;
+		for (kk = 0; kk < 300; kk++)
 		{
 			MYAPP_LOG << "-------------Synth test, frameCount=" << frameCount << ", iter=" << kk << "----------------\n";
 			generator.setNoiseStd(noiseStd);
 			std::unique_ptr<Map> map = generator.generateRandomPoses(camera, frameCount);
+			//std::unique_ptr<Map> map = generator.generateSyntheticMap(camera);
 
 		////Store scene
 		//std::vector<matvar_t*> varFrames;
@@ -427,6 +474,7 @@ void MainWindow::synthTest()
 	MatlabDataLog::Instance().AddValue("errorDist0", errorDist0);
 	MatlabDataLog::Instance().AddValue("errorDist1", errorDist1);
 
+	mImageSize = camera.getImageSize();
 	updateState();
 }
 
