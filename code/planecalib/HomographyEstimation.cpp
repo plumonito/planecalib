@@ -19,6 +19,135 @@
 
 namespace planecalib {
 
+/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// HomographyRansac
+/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+HomographyRansac::HomographyRansac()
+{
+}
+
+HomographyRansac::~HomographyRansac()
+{
+}
+
+void HomographyRansac::setData(const std::vector<FeatureMeasurement*> &measurements)
+{
+	mOwnRefPoints.reset(new std::vector<Eigen::Vector2f>());
+	mOwnImgPoints.reset(new std::vector<Eigen::Vector2f>());
+	std::vector<int> octaves;
+
+	for (auto &mPtr : measurements)
+	{
+		auto &m = *mPtr;
+		mOwnRefPoints->push_back(m.getFeature().getPosition());
+		mOwnImgPoints->push_back(m.getPosition());
+		octaves.push_back(m.getOctave());
+	}
+
+	setData(mOwnRefPoints.get(), mOwnImgPoints.get(), &octaves);
+}
+void HomographyRansac::setData(const std::vector<FeatureMatch> &matches)
+{
+	mOwnRefPoints.reset(new std::vector<Eigen::Vector2f>());
+	mOwnImgPoints.reset(new std::vector<Eigen::Vector2f>());
+	std::vector<int> octaves;
+
+	for (auto &m : matches)
+	{
+		mOwnRefPoints->push_back(m.getFeature().getPosition());
+		mOwnImgPoints->push_back(m.getPosition());
+		octaves.push_back(m.getOctave());
+	}
+
+	setData(mOwnRefPoints.get(), mOwnImgPoints.get(), &octaves);
+}
+
+void HomographyRansac::setData(const std::vector<Eigen::Vector2f> *refPoints, const std::vector<Eigen::Vector2f> *imgPoints, const std::vector<int> *octaves)
+{
+	assert(refPoints != NULL && imgPoints!=NULL);
+	assert(refPoints->size() != 0);
+	assert(refPoints->size() == imgPoints->size());
+
+	mMatchCount = refPoints->size();
+	mRefPoints = refPoints;
+	mImgPoints = imgPoints;
+
+	mConstraintCount = mMatchCount;
+
+	//Error functors
+	//TODO: this will break with fish-eye lenses, but cv::triangulate and cv:solvePnP can only take 2D points
+	for (int i = 0; i != mMatchCount; ++i)
+	{
+		auto &ref = mRefPoints->at(i);
+		auto &img = mImgPoints->at(i);
+		auto &octave = octaves->at(i);
+
+		//Create error functor
+		mErrorFunctors.emplace_back(new HomographyReprojectionError(img[0], img[1], ref[0], ref[1], octave));
+	}
+}
+
+std::vector<Eigen::Matrix3dr> HomographyRansac::modelFromMinimalSet(const std::vector<int> &constraintIndices)
+{
+	assert(constraintIndices.size() == 4);
+
+	std::vector<cv::Point2d> refp(4);
+	std::vector<cv::Point2d> imgp(4);
+	for (int i = 0; i<4; ++i)
+	{
+		const int idx = constraintIndices[i];
+		auto &ref = mRefPoints->at(idx);
+		auto &img = mImgPoints->at(idx);
+		refp[i] = eutils::ToCVPoint(ref);
+		imgp[i] = eutils::ToCVPoint(img);
+	}
+
+	std::vector<Eigen::Matrix3dr> solutions;
+
+	cv::Mat cvH;
+	cvH = cv::findHomography(refp, imgp, 0, mOutlierErrorThreshold);
+	if (!cvH.empty())
+	{
+		solutions.push_back(eutils::FromCV<double,3,3>(cvH));
+	}
+	return std::move(solutions);
+}
+
+void HomographyRansac::getInliers(const Eigen::Matrix3dr &model, int &inlierCount, float &errorSumSq, HomographyIterationData &data)
+{
+	inlierCount = 0;
+	errorSumSq = 0;
+
+	ceres::CauchyLoss robustLoss(mOutlierErrorThreshold);
+
+	data.reprojectionErrors.resize(mMatchCount);
+
+	for (int i = 0; i<mMatchCount; ++i)
+	{
+		auto &errorFunctor = *mErrorFunctors[i];
+		auto &errors = data.reprojectionErrors[i];
+
+		errors.reprojectionErrorsSq = (float)errorFunctor.evalToDistanceSq(model);
+		if (_isnan(errors.reprojectionErrorsSq) || isinf(errors.reprojectionErrorsSq))
+			errors.reprojectionErrorsSq = 1e3;
+
+		errors.isInlier = (errors.reprojectionErrorsSq < mOutlierErrorThresholdSq);
+
+
+		if (errors.isInlier)
+			inlierCount++;
+
+		//double robustError[3];
+		//robustLoss.Evaluate(errors.reprojectionErrorsSq, robustError);
+		//errorSumSq += (float)robustError[0];
+		errorSumSq += errors.reprojectionErrorsSq;
+	}
+}
+
+/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// HomographyEstimation
+/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 cv::Matx33f HomographyEstimation::estimateCeres(const cv::Matx33f &initial, const std::vector<cv::Point2f> &left, const std::vector<cv::Point2f> &right, const std::vector<int> &octave, float threshold, std::vector<bool> &inliers)
 {
 	ceres::Problem problem;

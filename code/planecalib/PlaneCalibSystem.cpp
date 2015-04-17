@@ -263,6 +263,7 @@ void PlaneCalibSystem::doHomographyCalib()
 	}
 
 	//Calibrate
+	mCalib->setUseNormalizedConstraints(mUseNormalizedConstraints);
 	mCalib->calibrate(mHomographyP0, allPoses);
 	mCamera.setFromK(mCalib->getK());
 	mNormal = mCalib->getNormal().cast<float>();
@@ -270,7 +271,11 @@ void PlaneCalibSystem::doHomographyCalib()
 	//mNormal << 0, 0, 1;
 
 	float fx2 = mCamera.getFx()*mCamera.getFx();
-	MYAPP_LOG << "Translated distortion: " << mHomographyDistortion.getCoefficients()[0] * fx2 << ", " << mHomographyDistortion.getCoefficients()[1] * fx2*fx2 << "\n";
+	Eigen::Vector2f distortion;
+	distortion << mHomographyDistortion.getCoefficients()[0] * fx2, mHomographyDistortion.getCoefficients()[1] * fx2*fx2;
+	MYAPP_LOG << "Transformed distortion: " << distortion[0] * fx2 << ", " << distortion[1] * fx2*fx2 << "\n";
+
+	mCamera.getDistortionModel().setCoefficients(distortion);
 }
 
 void PlaneCalibSystem::doFullBA()
@@ -300,10 +305,7 @@ void PlaneCalibSystem::doFullBA()
 	else
 	{
 		k = mCamera.getK();
-
-		float fx2 = mCamera.getFx()*mCamera.getFx();
-		distortion << mHomographyDistortion.getCoefficients()[0] * fx2, mHomographyDistortion.getCoefficients()[1] * fx2*fx2;
-		mCamera.getDistortionModel().setCoefficients(distortion);
+		distortion = mCamera.getDistortionModel().getCoefficients();
 
 		//Set pose for reference frame
 		Keyframe &refFrame = *mMap->getKeyframes()[0];
@@ -398,7 +400,7 @@ void PlaneCalibSystem::doFullBA()
 			//cv::solvePnP(cvWorldPoints, cvImagePoints, cvK, cv::noArray(), rvec, tvec, true, cv::SOLVEPNP_ITERATIVE);
 
 			PnPRansac ransac;
-			ransac.setParams(3 * mExpectedPixelNoiseStd, 10, 100, 0.9f * frame.getMeasurements().size());
+			ransac.setParams(3 * mExpectedPixelNoiseStd, 10, 100, (int)(0.9f * frame.getMeasurements().size()));
 			ransac.setData(&matches, &mCamera);
 			ransac.doRansac();
 			//MYAPP_LOG << "Frame pnp inlier count: " << ransac.getBestInlierCount() << "/" << matches.size() << "\n";

@@ -58,6 +58,7 @@ public:
 	void synthTest2();
 	void synthTestCompareUsingGroundTruth();
 	void synthTestNormalAngle();
+	void synthTestNormalization();
 	void storeSceneToMat(const Map &map);
 
 protected:

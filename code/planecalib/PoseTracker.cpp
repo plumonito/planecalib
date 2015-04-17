@@ -208,23 +208,19 @@ bool PoseTracker::trackFrameHomography(std::unique_ptr<Keyframe> frame_)
 			imgPoints.push_back(eutils::ToCVPoint(match.getPosition()));
 		}
 
-		Eigen::Matrix<uchar,Eigen::Dynamic,1> mask(refPoints.size());
-		cv::Mat1b mask_cv(refPoints.size(), 1, mask.data());
-
-		cv::Mat H;
-		{
-			ProfileSection s("findHomography");
-			//H = cv::findHomography(refPoints, imgPoints, cv::RANSAC, 2.5, mask_cv);
-		}
+		//Eigen::Matrix<uchar,Eigen::Dynamic,1> mask(refPoints.size());
+		//cv::Mat1b mask_cv(refPoints.size(), 1, mask.data());
 
 		cv::Matx33f cvH;
-		if (H.empty())
 		{
-			//MYAPP_LOG << "findHomography failed \n";
-			cvH = eutils::ToCV(mCurrentPose);
+			ProfileSection s("homographyRansac");
+
+			HomographyRansac ransac;
+			ransac.setParams(3, 10, 100, (int)(0.9f * mMatches.size()));
+			ransac.setData(mMatches);
+			ransac.doRansac();
+			cvH = eutils::ToCV(ransac.getBestModel().cast<float>().eval());
 		}
-		else
-			cvH = H;
 
 		//Refine
 		HomographyEstimation hest;
@@ -235,7 +231,7 @@ bool PoseTracker::trackFrameHomography(std::unique_ptr<Keyframe> frame_)
 			cvH = hest.estimateCeres(cvH, imgPoints, refPoints, octaveVec, 2.5, inliersVec);
 		}
 		std::vector<FeatureMatch> goodMatches;
-		int inlierCountBefore = mask.sum();
+		//int inlierCountBefore = mask.sum();
 		int inlierCountAfter = 0;
 		for (int i = 0; i<(int)mMatches.size(); i++)
 		{

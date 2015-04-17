@@ -40,7 +40,8 @@ bool MainWindow::init(PlaneCalibApp *app, const Eigen::Vector2i &imageSize)
 	mKeyBindings.addBinding(false, 't', static_cast<KeyBindingHandler<BaseWindow>::SimpleBindingFunc>(&MainWindow::synthTest), "Synthetic test.");
 	mKeyBindings.addBinding(false, 'y', static_cast<KeyBindingHandler<BaseWindow>::SimpleBindingFunc>(&MainWindow::synthTestCompareUsingGroundTruth), "Synthetic test. Compare the metric BA of self-calib and calib.");
 	mKeyBindings.addBinding(false, 'u', static_cast<KeyBindingHandler<BaseWindow>::SimpleBindingFunc>(&MainWindow::synthTestNormalAngle), "Synthetic test for sensitivity to normal angle.");
-	
+	mKeyBindings.addBinding(false, 'i', static_cast<KeyBindingHandler<BaseWindow>::SimpleBindingFunc>(&MainWindow::synthTestNormalization), "Synthetic test for sensitivity to normalization.");
+
 	mRefTexture.create(GL_RGB, eutils::ToSize(imageSize));
 	mRefTexture.update(mSystem->getMap().getKeyframes()[0]->getColorImage());
 	mDisplayTexture.create(GL_RGB, eutils::ToSize(imageSize));
@@ -509,12 +510,78 @@ void MainWindow::synthTestNormalAngle()
 
 			//Record noise
 			MatlabDataLog::AddValue("errorKey", normalAngle);
-			CalibrationError error;
 			error.compute(camera, mSystem->getCamera());
 			MatlabDataLog::AddValue("errorFocal", error.errorFocal);
 			MatlabDataLog::AddValue("errorP0", error.errorP0);
 			MatlabDataLog::AddValue("errorDist0", error.errorDist0);
 			MatlabDataLog::AddValue("errorDist1", error.errorDist1);
+
+			MatlabDataLog::Stream().flush();
+		}
+	}
+
+	mImageSize = camera.getImageSize();
+	updateState();
+}
+
+void MainWindow::synthTestNormalization()
+{
+	CameraModel camera;
+	camera.init(600, 600, 320, 240, 640, 480);
+	camera.getDistortionModel().init(Eigen::Vector2f(0.1, -0.01), camera.getMaxRadiusSq());
+	//camera.getDistortionModel().init(Eigen::Vector2f(0.0, 0.0), camera.getMaxRadiusSq());
+
+	float noiseStd = 3 / 3;
+
+	SceneGenerator generator;
+	generator.mVerbose = true;
+	generator.setCamera(&camera);
+	generator.setNoiseStd(noiseStd);
+
+	mSystem->setUse3DGroundTruth(false);
+	mSystem->setFix3DPoints(false);
+
+	CalibrationError error;
+
+	MatlabDataLog::AddValue("errorKeyName", "'normalAngle'");
+
+	float normalAngle = 0 * M_PI / 180;
+	for (normalAngle = 0; normalAngle < 45 * M_PI / 180; normalAngle += 1 * M_PI / 180)
+	{
+		int kk = 0;
+		for (kk = 0; kk < 300; kk++)
+		{
+			MYAPP_LOG << "-------------Synth test for normalization, normalAngle=" << (normalAngle * 180 / M_PI) << ", iter=" << kk << "----------------\n";
+			std::unique_ptr<Map> map = generator.generateVariableNormal(normalAngle);
+
+			MatlabDataLog::AddValue("errorKey", normalAngle);
+
+			mSystem->setExpectedPixelNoiseStd(std::max(3 * noiseStd, 0.3f));
+			mSystem->setMap(std::move(map));
+
+			//Calib
+			mSystem->setUseNormalizedConstraints(true);
+			mSystem->doHomographyBA();
+			//mSystem->doFullBA();
+
+			//Record noise
+			error.compute(camera, mSystem->getCamera());
+			MatlabDataLog::AddValue("errorFocal", error.errorFocal);
+			MatlabDataLog::AddValue("errorP0", error.errorP0);
+			MatlabDataLog::AddValue("errorDist0", error.errorDist0);
+			MatlabDataLog::AddValue("errorDist1", error.errorDist1);
+
+			//Calib
+			mSystem->setUseNormalizedConstraints(false);
+			mSystem->doHomographyBA();
+			//mSystem->doFullBA();
+
+			//Record noise
+			error.compute(camera, mSystem->getCamera());
+			MatlabDataLog::AddValue("errorFocalNoNorm", error.errorFocal);
+			MatlabDataLog::AddValue("errorP0NoNorm", error.errorP0);
+			MatlabDataLog::AddValue("errorDist0NoNorm", error.errorDist0);
+			MatlabDataLog::AddValue("errorDist1NoNorm", error.errorDist1);
 
 			MatlabDataLog::Stream().flush();
 		}

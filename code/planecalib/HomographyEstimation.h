@@ -9,9 +9,49 @@
 #define HOMOGRAPHYREPROJECTIONERROR_H_
 
 #include "eutils.h"
+#include "PoseEstimationCommon.h"
+#include "FeatureMatcher.h"
+#include "CameraModel.h"
+#include "BaseRansac.h"
 #include <opencv2/core.hpp>
 
 namespace planecalib {
+
+class HomographyReprojectionError;
+
+/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// HomographyRansac
+/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+struct HomographyIterationData
+{
+	std::vector<MatchReprojectionErrors> reprojectionErrors;
+};
+
+class HomographyRansac : public BaseRansac<Eigen::Matrix3dr, HomographyIterationData, 4>
+{
+public:
+	HomographyRansac();
+	~HomographyRansac();
+
+	void setData(const std::vector<Eigen::Vector2f> *refPoints, const std::vector<Eigen::Vector2f> *imgPoints, const std::vector<int> *octaves);
+	void setData(const std::vector<FeatureMeasurement*> &measurements);
+	void setData(const std::vector<FeatureMatch> &matches);
+
+	std::vector<Eigen::Matrix3dr> modelFromMinimalSet(const std::vector<int> &constraintIndices);
+	void getInliers(const Eigen::Matrix3dr &model, int &inlierCount, float &errorSumSq, HomographyIterationData &data);
+
+protected:
+	int mMatchCount;
+
+	const std::vector<Eigen::Vector2f> *mRefPoints;
+	const std::vector<Eigen::Vector2f> *mImgPoints;
+
+	std::unique_ptr<std::vector<Eigen::Vector2f>> mOwnRefPoints;
+	std::unique_ptr<std::vector<Eigen::Vector2f>> mOwnImgPoints;
+
+	std::vector<std::unique_ptr<HomographyReprojectionError>> mErrorFunctors;
+};
+
 
 class HomographyEstimation
 {
@@ -98,6 +138,14 @@ public:
         residuals[1] = (T(mLeftY) - p[1]) / T(mScale);
         return true;
     }
+
+	double evalToDistanceSq(const Eigen::Matrix3dr &homography) const
+	{
+		Eigen::Vector2d residuals;
+
+		(*this)(homography.data(), residuals.data());
+		return residuals.squaredNorm();
+	}
 
 private:
     const double mLeftX;

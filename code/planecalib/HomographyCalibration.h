@@ -10,9 +10,12 @@ namespace planecalib {
 class HomographyCalibration
 {
 public:
-	HomographyCalibration() : mInitialAlpha(0), mNormal(0,0,0)
+	HomographyCalibration() : mUseNormalizedConstraints(true), mInitialAlpha(0), mNormal(0,0,0)
 	{
 	}
+
+	bool getUseNormalizedConstraints()  const { return mUseNormalizedConstraints; }
+	void setUseNormalizedConstraints(bool value)  { mUseNormalizedConstraints = value; }
 
 	double getInitialAlpha() const { return mInitialAlpha; }
 	
@@ -22,6 +25,8 @@ public:
 	void calibrate(const Eigen::Vector2f &p0, const std::vector<Eigen::Matrix3fr> &H);
 
 protected:
+	bool mUseNormalizedConstraints;
+
 	double mInitialAlpha;
 	Eigen::Matrix3fr mK;
 	Eigen::Vector3d mNormal;
@@ -32,8 +37,8 @@ protected:
 class HomographyCalibrationError
 {
 public:
-	HomographyCalibrationError(const Eigen::Matrix3d &H_)
-		: mH(H_)
+	HomographyCalibrationError(const Eigen::Matrix3d &H_, bool useNormalized)
+		: mH(H_), mUseNormalized(useNormalized)
 	{
 	}
 
@@ -129,13 +134,23 @@ public:
 		T norm2 = sqrt(norm2Sq);
 
 		//Residuals
-		residuals[0] = KiHC1.dot(KiHC2) / (norm1*norm2);
-		residuals[1] = T(1) - norm2Sq / norm1Sq;
+		if (mUseNormalized)
+		{
+			residuals[0] = KiHC1.dot(KiHC2) / (norm1*norm2);
+			residuals[1] = T(1) - norm2Sq / norm1Sq;
+		}
+		else
+		{
+			residuals[0] = KiHC1.dot(KiHC2);
+			residuals[1] = norm1Sq - norm2Sq;
+		}
+
 		return true;
 
 	}
 
 private:
+	const bool mUseNormalized;
 	const Eigen::Matrix3d &mH;
 };
 

@@ -62,11 +62,12 @@ void HomographyCalibration::calibrate(const Eigen::Vector2f &p0, const std::vect
 	{
 		problem.AddResidualBlock(
 			new ceres::AutoDiffCostFunction<HomographyCalibrationError, HomographyCalibrationError::kResidualCount, 1, 2, 3>(
-			new HomographyCalibrationError(Ht[i])),
+			new HomographyCalibrationError(Ht[i], mUseNormalizedConstraints)),
 			lossFunc, &alpha,pp.data(),mNormal.data());
 	}
 
 	ceres::Solver::Options options;
+	options.max_num_iterations = 200;
 	options.gradient_tolerance = 1e-25;
 	options.parameter_tolerance = 1e-25;
 	options.function_tolerance = 1e-25;
@@ -76,6 +77,8 @@ void HomographyCalibration::calibrate(const Eigen::Vector2f &p0, const std::vect
 	ceres::Solver::Summary summary;
 
 	ceres::Solve(options, &problem, &summary);
+	MYAPP_LOG << "Homography calib results\n";
+	MYAPP_LOG << "Use normalized constraints: " << mUseNormalizedConstraints << "\n";
 	MYAPP_LOG << summary.FullReport();
 
 	MYAPP_LOG << "Initial alpha=" << mInitialAlpha << ", final=" << alpha << "\n";

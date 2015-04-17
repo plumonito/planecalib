@@ -17,7 +17,7 @@ class HomographyCalibration;
 class PlaneCalibSystem
 {
 public:
-	PlaneCalibSystem() : mSingleThreaded(false), mExpectedPixelNoiseStd(1), mUse3DGroundTruth(false), mFix3DPoints(false) {}
+	PlaneCalibSystem() : mSingleThreaded(false), mExpectedPixelNoiseStd(1), mUse3DGroundTruth(false), mFix3DPoints(false), mUseNormalizedConstraints(true){}
 	~PlaneCalibSystem();
 
 	bool init(double timestamp, cv::Mat3b &imgColor, cv::Mat1b &imgGray);
@@ -38,6 +38,9 @@ public:
 
 	bool getFix3DPoints()  const { return mFix3DPoints; }
 	void setFix3DPoints(bool value)  { mFix3DPoints  = value; }
+
+	bool getUseNormalizedConstraints()  const { return mUseNormalizedConstraints; }
+	void setUseNormalizedConstraints(bool value)  { mUseNormalizedConstraints = value; }
 
 	PoseTracker &getTracker() { return *mTracker; }
 	
@@ -61,6 +64,7 @@ protected:
 	bool mSingleThreaded;
 	bool mUse3DGroundTruth;
 	bool mFix3DPoints;
+	bool mUseNormalizedConstraints;
 
 	float mExpectedPixelNoiseStd;
 

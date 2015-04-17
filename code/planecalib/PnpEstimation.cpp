@@ -72,7 +72,7 @@ std::vector<std::pair<Eigen::Matrix3dr, Eigen::Vector3d>> PnPRansac::modelFromMi
 
 		solutions.push_back(std::make_pair(eR, eT));
 	}
-    return solutions;
+    return std::move(solutions);
 }
 
 void PnPRansac::getInliers(const std::pair<Eigen::Matrix3dr, Eigen::Vector3d> &model, int &inlierCount, float &errorSumSq, PnPIterationData &data)
@@ -89,7 +89,7 @@ void PnPRansac::getInliers(const std::pair<Eigen::Matrix3dr, Eigen::Vector3d> &m
 		auto &errorFunctor = *mErrorFunctors[i];
 		auto &errors = data.reprojectionErrors[i];
 
-		errors.reprojectionErrorsSq = errorFunctor.evalToDistanceSq(model.first, model.second);
+		errors.reprojectionErrorsSq = (float)errorFunctor.evalToDistanceSq(model.first, model.second);
 		errors.isInlier = (errors.reprojectionErrorsSq < mOutlierErrorThresholdSq);
 			
 

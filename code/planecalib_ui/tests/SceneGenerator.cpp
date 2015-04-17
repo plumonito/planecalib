@@ -259,16 +259,12 @@ std::unique_ptr<Map> SceneGenerator::generateFromPoses(const std::vector<Eigen::
 		cv::Mat1b mask_cv(refPoints.size(), 1, mask.data());
 
 		cv::Mat H;
-		H = cv::findHomography(refPoints, imgPoints, cv::RANSAC, 3 * expectedPixelNoiseStd, mask_cv);
-		cv::Matx33f cvH = cv::Matx33f::eye();
-		if (!H.empty())
-		{
-			cvH = H;
-		}
-		else
-		{
-			MYAPP_LOG << "findHomography failed \n";
-		}
+		HomographyRansac ransac;
+		ransac.setParams(3 * expectedPixelNoiseStd, 10, 100, (int)(0.9f * newFrame->getMeasurements().size()));
+		ransac.setData(newFrame->getMeasurements());
+		ransac.doRansac();
+
+		cv::Matx33f cvH = eutils::ToCV(ransac.getBestModel().cast<float>().eval());
 
 		//Refine
 		HomographyEstimation hest;
