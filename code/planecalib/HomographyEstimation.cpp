@@ -83,7 +83,7 @@ void HomographyRansac::setData(const std::vector<Eigen::Vector2f> *refPoints, co
 		auto &octave = octaves->at(i);
 
 		//Create error functor
-		mErrorFunctors.emplace_back(new HomographyReprojectionError(img[0], img[1], ref[0], ref[1], octave));
+		mErrorFunctors.emplace_back(new HomographyReprojectionError(img[0], img[1], ref[0], ref[1], 1<<octave));
 	}
 }
 
@@ -128,19 +128,15 @@ void HomographyRansac::getInliers(const Eigen::Matrix3dr &model, int &inlierCoun
 		auto &errors = data.reprojectionErrors[i];
 
 		errors.reprojectionErrorsSq = (float)errorFunctor.evalToDistanceSq(model);
-		if (_isnan(errors.reprojectionErrorsSq) || isinf(errors.reprojectionErrorsSq))
-			errors.reprojectionErrorsSq = 1e3;
-
 		errors.isInlier = (errors.reprojectionErrorsSq < mOutlierErrorThresholdSq);
 
 
 		if (errors.isInlier)
 			inlierCount++;
 
-		//double robustError[3];
-		//robustLoss.Evaluate(errors.reprojectionErrorsSq, robustError);
-		//errorSumSq += (float)robustError[0];
-		errorSumSq += errors.reprojectionErrorsSq;
+		double robustError[3];
+		robustLoss.Evaluate(errors.reprojectionErrorsSq, robustError);
+		errorSumSq += (float)robustError[0];
 	}
 }
 
