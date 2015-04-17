@@ -25,8 +25,19 @@ if(exist('errorFocalBA','var'))
     fixedBA.errorDist0 = errorDist0BAFixed;
     fixedBA.errorDist1 = errorDist1BAFixed;
     labels{end+1} = 'Best self-calib';
-    errors{end+1} = planarBA;
+    errors{end+1} = fixedBA;
     colors(end+1) = 'k';
+end
+
+if(exist('errorFocalNoNorm','var'))
+    noNorm.errorFocal = errorFocalNoNorm;
+    noNorm.errorP0 = errorP0NoNorm;
+    noNorm.errorDist0 = errorDist0NoNorm;
+    noNorm.errorDist1 = errorDist1NoNorm;
+    
+    labels{end+1} = 'Self-calib no normalization';
+    errors{end+1} = noNorm;
+    colors(end+1) = 'y';
 end
 
 % labels = {'Ours', 'Best self-calib', 'Best calib'};
