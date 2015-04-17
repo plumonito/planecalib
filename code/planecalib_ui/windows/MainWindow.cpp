@@ -400,98 +400,72 @@ void MainWindow::synthTest()
 	CameraModel camera;
 	camera.init(600, 600, 320, 240, 640, 480);
 	camera.getDistortionModel().init(Eigen::Vector2f(0.1, -0.01), camera.getMaxRadiusSq());
-	//camera.getDistortionModel().init(Eigen::Vector2f(0.0, 0.0), camera.getMaxRadiusSq());
-	float noiseStd = 3/3;
+
+	float noiseStd = 3 / 3;
 
 	SceneGenerator generator;
 	generator.setCamera(&camera);
-	generator.setNoiseStd(noiseStd);
 
-	//size_t varDims[2];
-	//mat_t *mat = Mat_Create("vars.mat",NULL);
+	CalibrationError error;
 
-	//std::vector<matvar_t*> varScenes;
+	MatlabDataLog::AddValue("errorKeyName", "'noiseStd'");
 
-	std::vector<float> noiseStdVec;
-	std::vector<float> errorFocal;
-	std::vector<float> errorP0;
-	std::vector<float> errorDist0;
-	std::vector<float> errorDist1;
-	int frameCount = 50;
-	for (frameCount = 2; frameCount < 50; frameCount++)
+	for (noiseStd = 0; noiseStd <= 10; noiseStd+=0.5)
 	{
 		int kk = 0;
 		for (kk = 0; kk < 300; kk++)
 		{
-			MYAPP_LOG << "-------------Synth test, frameCount=" << frameCount << ", iter=" << kk << "----------------\n";
-			std::unique_ptr<Map> map = generator.generateRandomPoses(frameCount);
-			//std::unique_ptr<Map> map = generator.generateSyntheticMap(camera);
+			MYAPP_LOG << "-------------Synth test, compare all, noise=" << noiseStd << ", iter=" << kk << "----------------\n";
+			generator.setNoiseStd(noiseStd);
+			std::unique_ptr<Map> map = generator.generateSyntheticMap();
 
-		////Store scene
-		//std::vector<matvar_t*> varFrames;
-		//for (auto &framePtr : map->getKeyframes())
-		//{
-		//	auto &frame = *framePtr;
-		//	Eigen::MatrixXd imgPos, worldPos;
-		//	imgPos.resize(2, frame.getMeasurements().size());
-		//	worldPos.resize(3, frame.getMeasurements().size());
+			//Record key
+			MatlabDataLog::AddValue("errorKey", noiseStd);
 
-		//	for (int i = 0; i < imgPos.cols(); i++)
-		//	{
-		//		auto &m = *frame.getMeasurements()[i];
-		//		imgPos.col(i) = m.getPosition().cast<double>();
-		//		worldPos.col(i) = m.getFeature().mPosition3D.cast<double>();
-		//	}
-
-		//	Eigen::Matrix3d R = frame.mPose3DR.cast<double>();
-		//	Eigen::Vector3d T = frame.mPose3DT.cast<double>();
-
-		//	matvar_t *varsFrame[5];
-		//	varDims[0] = 2; varDims[1] = imgPos.cols();
-		//	varsFrame[0] = Mat_VarCreate("imgPos", MAT_C_DOUBLE, MAT_T_DOUBLE, 2, varDims, imgPos.data(), 0);
-		//	varDims[0] = 3; varDims[1] = worldPos.cols();
-		//	varsFrame[1] = Mat_VarCreate("worldPos", MAT_C_DOUBLE, MAT_T_DOUBLE, 2, varDims, worldPos.data(), 0);
-		//	varDims[0] = 3; varDims[1] = 3;
-		//	varsFrame[2] = Mat_VarCreate("R", MAT_C_DOUBLE, MAT_T_DOUBLE, 2, varDims, R.data(), 0);
-		//	varDims[0] = 3; varDims[1] = 1;
-		//	varsFrame[3] = Mat_VarCreate("t", MAT_C_DOUBLE, MAT_T_DOUBLE, 2, varDims, T.data(), 0);
-		//	varsFrame[4] = NULL;
-
-		//	varDims[0] = 1; varDims[1] = 1;
-		//	varFrames.push_back(Mat_VarCreate("frame", MAT_C_STRUCT, MAT_T_STRUCT, 2, varDims, varsFrame, 0));
-		//}
-		//varDims[0] = varFrames.size(); varDims[1] = 1;
-		//varFrames.push_back(NULL);
-		//varScenes.push_back(Mat_VarCreate("frames", MAT_C_CELL, MAT_T_CELL, 2, varDims, varFrames.data(), 0));
-
-			//Calib
+			//Prepare scene
 			mSystem->setExpectedPixelNoiseStd(std::max(3 * noiseStd, 0.3f));
 			mSystem->setMap(std::move(map));
+
+			//Only BA
+			mSystem->setUse3DGroundTruth(false);
+			mSystem->setFix3DPoints(false);
 			mSystem->doHomographyBA();
 			mSystem->doFullBA();
 
-			//Record noise
-			noiseStdVec.push_back(frameCount);
-			CalibrationError error;
+			//Record 
 			error.compute(camera, mSystem->getCamera());
-			errorFocal.push_back(error.errorFocal);
-			errorP0.push_back(error.errorP0);
-			errorDist0.push_back(error.errorDist0);
-			errorDist1.push_back(error.errorDist1);
+			MatlabDataLog::AddValue("errorFocal", error.errorFocal);
+			MatlabDataLog::AddValue("errorP0", error.errorP0);
+			MatlabDataLog::AddValue("errorDist0", error.errorDist0);
+			MatlabDataLog::AddValue("errorDist1", error.errorDist1);
+
+			//Only BA
+			mSystem->setUse3DGroundTruth(true);
+			mSystem->setFix3DPoints(false);
+			mSystem->doFullBA();
+
+			//Record 
+			error.compute(camera, mSystem->getCamera());
+			MatlabDataLog::AddValue("errorFocalBA", error.errorFocal);
+			MatlabDataLog::AddValue("errorP0BA", error.errorP0);
+			MatlabDataLog::AddValue("errorDist0BA", error.errorDist0);
+			MatlabDataLog::AddValue("errorDist1BA", error.errorDist1);
+
+			//Only BA fixed
+			mSystem->setUse3DGroundTruth(true);
+			mSystem->setFix3DPoints(true);
+			mSystem->doFullBA();
+
+			//Record 
+			error.compute(camera, mSystem->getCamera());
+			MatlabDataLog::AddValue("errorFocalBAFixed", error.errorFocal);
+			MatlabDataLog::AddValue("errorP0BAFixed", error.errorP0);
+			MatlabDataLog::AddValue("errorDist0BAFixed", error.errorDist0);
+			MatlabDataLog::AddValue("errorDist1BAFixed", error.errorDist1);
+
+			MatlabDataLog::Stream().flush();
 		}
 	}
-	//varDims[0] = varScenes.size(); varDims[1] = 1;
-	//varScenes.push_back(NULL);
-	//matvar_t *varRoot = Mat_VarCreate("scenes", MAT_C_CELL, MAT_T_CELL, 2, varDims, varScenes.data(), 0);
-	//Mat_VarWrite(mat, varRoot, MAT_COMPRESSION_NONE);
-	//Mat_VarFree(varRoot);
-	//Mat_Close(mat);
-
-	MatlabDataLog::Instance().AddValue("frameCount", noiseStdVec);
-	MatlabDataLog::Instance().AddValue("errorFocal", errorFocal);
-	MatlabDataLog::Instance().AddValue("errorP0", errorP0);
-	MatlabDataLog::Instance().AddValue("errorDist0", errorDist0);
-	MatlabDataLog::Instance().AddValue("errorDist1", errorDist1);
 
 	mImageSize = camera.getImageSize();
 	updateState();

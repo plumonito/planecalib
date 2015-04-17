@@ -4,19 +4,34 @@ ours.errorP0 = errorP0;
 ours.errorDist0 = errorDist0;
 ours.errorDist1 = errorDist1;
 
-planarBA.errorFocal = errorFocalBA;
-planarBA.errorP0 = errorP0BA;
-planarBA.errorDist0 = errorDist0BA;
-planarBA.errorDist1 = errorDist1BA;
+labels = {'Ours'};
+errors = {ours};
+colors = 'b';
 
-fixedBA.errorFocal = errorFocalBAFixed;
-fixedBA.errorP0 = errorP0BAFixed;
-fixedBA.errorDist0 = errorDist0BAFixed;
-fixedBA.errorDist1 = errorDist1BAFixed;
+if(exist('errorFocalBA','var'))
+    planarBA.errorFocal = errorFocalBA;
+    planarBA.errorP0 = errorP0BA;
+    planarBA.errorDist0 = errorDist0BA;
+    planarBA.errorDist1 = errorDist1BA;
+    
+    labels{end+1} = 'Best self-calib';
+    errors{end+1} = planarBA;
+    colors(end+1) = 'g';
+end
 
-labels = {'Ours', 'Best self-calib', 'Best calib'};
-errors = {ours, planarBA, fixedBA};
-colors = 'bgk';
+if(exist('errorFocalBA','var'))
+    fixedBA.errorFocal = errorFocalBAFixed;
+    fixedBA.errorP0 = errorP0BAFixed;
+    fixedBA.errorDist0 = errorDist0BAFixed;
+    fixedBA.errorDist1 = errorDist1BAFixed;
+    labels{end+1} = 'Best self-calib';
+    errors{end+1} = planarBA;
+    colors(end+1) = 'k';
+end
+
+% labels = {'Ours', 'Best self-calib', 'Best calib'};
+% errors = {ours, planarBA, fixedBA};
+% colors = 'bgk';
 
 keys = unique(errorKey);
 
@@ -24,7 +39,7 @@ clf;
 for kk=1:length(labels)
     err = errors{kk};
     
-    validMask = abs(err.errorFocal)<400;
+    validMask = abs(err.errorFocal)<60 & ~isinf(errorDist0);
     validKeys = errorKey(validMask);
     err.errorFocal = err.errorFocal(validMask);
     err.errorP0 = err.errorP0(validMask);
@@ -40,11 +55,11 @@ for kk=1:length(labels)
         invalidCount(k) = sum(~validMask(errorKey==keys(k)));
         m=err.errorFocal(validKeys==keys(k)); 
         errorFocalKeyed(k)=rms(m) / 600;
-        m=errorP0(validKeys==keys(k)); 
+        m=err.errorP0(validKeys==keys(k)); 
         errorP0Keyed(k)=rms(m)/280;
-        m=errorDist0(validKeys==keys(k)); 
+        m=err.errorDist0(validKeys==keys(k)); 
         errorDist0Keyed(k)=rms(m)/0.1;
-        m=errorDist1(validKeys==keys(k)); 
+        m=err.errorDist1(validKeys==keys(k)); 
         errorDist1Keyed(k)=rms(m)/0.01;
     end
 
