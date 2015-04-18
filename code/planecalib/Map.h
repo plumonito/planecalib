@@ -48,6 +48,7 @@ public:
 	void moveToGarbage(Feature &feature);
 
 	std::unique_ptr<CameraModel> mGroundTruthCamera;
+	std::unique_ptr<CameraModel> mCamera;
 
 protected:
 	shared_mutex mMutex;

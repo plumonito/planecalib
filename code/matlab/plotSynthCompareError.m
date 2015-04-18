@@ -14,7 +14,7 @@ if(exist('errorFocalBA','var'))
     planarBA.errorDist0 = errorDist0BA;
     planarBA.errorDist1 = errorDist1BA;
     
-    labels{end+1} = 'Best self-calib';
+    labels{end+1} = 'Best self';
     errors{end+1} = planarBA;
     colors(end+1) = 'g';
 end
@@ -24,7 +24,7 @@ if(exist('errorFocalBA','var'))
     fixedBA.errorP0 = errorP0BAFixed;
     fixedBA.errorDist0 = errorDist0BAFixed;
     fixedBA.errorDist1 = errorDist1BAFixed;
-    labels{end+1} = 'Best self-calib';
+    labels{end+1} = 'Best calib';
     errors{end+1} = fixedBA;
     colors(end+1) = 'k';
 end
@@ -76,33 +76,44 @@ for kk=1:length(labels)
 
     lineStyle=['-' colors(kk)];
 
-    subplot(2,3,1);
+    subrows=2;
+    subcols=2;
+    subplot(subrows,subcols,1);
     hold on
-    plot(keys,errorFocalKeyed,lineStyle)
+    plot(keys,errorFocalKeyed,lineStyle,'DisplayName',labels{kk})
     title('Focal error (%)')
-    xlabel(errorKeyName)
+%     xlabel(errorKeyName)
 
-    subplot(2,3,2);
+    %This for angles
+    %xlim([0,45])
+    %l = get(gca,'XTickLabel');
+    %extraL = '°';
+    %l(:,end+1:end+length(extraL)) = repmat(extraL,size(l,1),1);
+    %set(gca,'XTickLabel',l)
+    
+    subplot(subrows,subcols,2);
     hold on
-    plot(keys,errorP0Keyed,lineStyle)
-    title('P0 error (%)')
-    xlabel(errorKeyName)
+    plot(keys,errorP0Keyed,lineStyle,'DisplayName',labels{kk})
+    title('P_0 error (%)')
+%     xlabel(errorKeyName)
+    %set(gca,'XTickLabel',l)
 
-    subplot(2,3,3);
+    subplot(subrows,subcols,3);
     hold on
-    plot(keys,errorDist0Keyed,lineStyle)
-    title('D0error (%)')
-    xlabel(errorKeyName)
+    plot(keys,errorDist0Keyed,lineStyle,'DisplayName',labels{kk})
+    title('d_0 error (%)')
+%     xlabel(errorKeyName)
 
-    subplot(2,3,4);
+    subplot(subrows,subcols,4);
     hold on
-    plot(keys,errorDist1Keyed,lineStyle)
-    title('D1 error (%)')
-    xlabel(errorKeyName)
+    plot(keys,errorDist1Keyed,lineStyle,'DisplayName',labels{kk})
+    title('d_1 error (%)')
+    %xlim([0,45])
+%     xlabel(errorKeyName)
 
-    subplot(2,3,5);
-    hold on
-    plot(keys,invalidCount,lineStyle)
-    title('Missed calibrations count')
-    xlabel(errorKeyName)
+%     subplot(subrows,subcols,5);
+%     hold on
+%     plot(keys,invalidCount,lineStyle,'DisplayName',labels{kk})
+%     title('Missed calibrations count')
+%     xlabel(errorKeyName)
 end

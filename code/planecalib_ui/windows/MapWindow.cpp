@@ -95,7 +95,7 @@ void MapWindow::updateState()
     }
 
     //Draw currently tracked frame
-	//mFrustumsToDraw.push_back(prepareFrameFrustum(mTracker->getCurrentPose(), mTracker->getCamera(), -1, true, mCurrentImageTextureTarget, mCurrentImageTextureId));
+	mFrustumsToDraw.push_back(prepareFrameFrustum(mTracker->mCurrentPoseR, mTracker->mCurrentPoseT, mCurrentImageTextureTarget, mCurrentImageTextureId));
 }
 
 bool MapWindow::isFeatureMatched(const Feature &feature)

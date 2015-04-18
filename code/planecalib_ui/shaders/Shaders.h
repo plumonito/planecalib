@@ -14,6 +14,7 @@
 #include "TextureWarpShader.h"
 #include "TextRenderer.h"
 #include "WarpPosShader.h"
+#include "ColorCameraShader.h"
 #include "StaticColors.h"
 
 namespace planecalib
@@ -32,6 +33,7 @@ public:
 		res &= mText.init();
 		res &= mTextRenderer.init(&mText);
 		res &= mWarpPos.init();
+		res &= mColorCamera.init();
 		return res;
 	}
 
@@ -42,6 +44,7 @@ public:
 		mTexture.free();
 		mTextureWarp.free();
 		mWarpPos.free();
+		mColorCamera.free();
 	}
 
 	ColorShader &getColor() {return mColor;}
@@ -49,6 +52,7 @@ public:
 	TextureWarpShader &getTextureWarp() {return mTextureWarp;}
 	TextRenderer &getText() {return mTextRenderer;}
 	WarpPosShader &getWarpPos() { return mWarpPos; }
+	ColorCameraShader &getColorCamera() { return mColorCamera; }
 
 protected:
 	ColorShader mColor;
@@ -57,6 +61,7 @@ protected:
 	TextShader mText;
     TextRenderer mTextRenderer;
 	WarpPosShader mWarpPos;
+	ColorCameraShader mColorCamera;
 };
 
 }

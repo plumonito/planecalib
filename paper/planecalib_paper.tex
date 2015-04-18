@@ -8,9 +8,12 @@
 \usepackage{amssymb}
 \usepackage{mathtools}
 \usepackage{bm}
+\usepackage{subcaption}
 
 % Include other packages here, before hyperref.
 \input{notation.tex}
+
+\graphicspath{{images/}}
 
 % If you comment hyperref and then uncomment it, you should delete
 % egpaper.aux before re-running latex.  (Or just hit 'q' on the first latex
@@ -68,7 +71,7 @@ Although this is an accurate and practical method, it is not as practical as it 
 Homography-based self-calibration is attractive for several reasons. It is much more practical than a checkerboard based calibration because we can use any planar structure for calibration. On the other hand, when compared to a generic self-calibration approach, the planar-scene constraint significantly reduces the degrees of freedom of the problem and increases the robustness and accuracy of the calibration. Moreover, homography estimation is a much simpler and robust process than feature matching of arbitrary 3D points.
 
 %Why is it hard? Generic self-calibration has linear solution, but planar doesn't.
-So far, homography-based self-calibration has not been a viable option because the non-linearities introduced by the planar-scene constraint have prevented a closed-form solution. A closed-form solution for the camera intrinsics is fundamental to initialize a non-linear optimization of the self-calibration constraints. The initial solution must be sufficiently accurate to stop the optimization from being trapped in a local minimum. In this paper we show that a closed-form solution is possible by imposing a minor constraint on the camera motion: the scene plane should be close to fronto-parallel to at least one image in the dataset. We believe this limitation is insignificant in practice and results in a system that can be easily and robustly used in the wild to perform accurate calibration.
+So far, homography-based self-calibration has not been a viable option because the non-linearities introduced by the planar-scene constraint have prevented a closed-form solution. A closed-form solution for the camera intrinsics is fundamental to initialize a non-linear optimization of the self-calibration constraints which is easily trapped in local minima. In this paper we show that a closed-form solution is possible by imposing a minor constraint on the camera motion: the scene plane should be close to fronto-parallel to at least one image in the dataset. We believe this limitation is insignificant in practice and results in a system that can be easily and robustly used in the wild to perform accurate calibration.
 
 ~\\ \noindent\textbf{Notation:}
 For clarity, we denote vector quantities as bold lowercase letters (\eg $\xv$,$\pv$,$\tv$), matrix quantities as bold uppercase letters (\eg $\Rm$,$\Km$), and scalars as lowercase italic letters (\eg $f_x$,$u_0$). We denote the homogeneous representation of a vector $\xv$ with $\homogeneous{\xv}$. The transformation back from homogeneous coordinates is performed by dividing a vector by its last component and discarding this component. This is denoted by $\hnorm(\xv)$. Equations in homogeneous coordinates are equal up to scale and this is denoted by the $\propto$ symbol.
@@ -198,6 +201,11 @@ We encode the Euclidean structure of the plane with two orthogonal basis vectors
 \av^\top \bv = 0, \label{eq:ortho_constraint_ref} \\
 \av^\top \av - \bv^\top \bv = 0. \label{eq:norm_constraint_ref}
 \end{align}
+
+\begin{figure}
+\input{images/basisVectors.pdf_tex}
+\caption{Planar self-calibration geometry.}
+\end{figure}
 
 We can derive these basis vectors from the plane's normal. To ensure orthogonality, we select $\av$ as the cross product of $\nv$ with an auxiliary fixed vector $\ev$
 \begin{align}
@@ -331,16 +339,32 @@ where the position of the points is constrained so that $z=0$.
 \begin{figure}
 \centering
 \includegraphics[width=\linewidth]{images/resultsPointNoise.pdf}
-\caption{Synthetic tests results. Error in the intrinsic parameters under noisy point correspondences. y-axis is median over 50 experiments. x-axis is the $\sigma$ of gaussian noise applied to the point correspondences. Blue: all cameras pointing at the center of the scene. Green: rotated and translated cameras. Red: using ground truth for 3D point position (\cite{zhang1999}).}
-\label{fig:synth_results}
+\caption{RMS error of camera intrinsics with increasing point correspondence noise. Synthetic scene Fixed-B was used. Horizontal axis is the std. dev. of gaussian noise applied to the point correspondences. Blue is our calibration system. Green is the result of the final metric BA initialized with the ground truth values. Black also uses the ground truth as initialization but keeps the 3D points fixed to the ground truth.}
+\label{fig:results_noise}
 \end{figure}
 
 \begin{figure}
 \centering
-\includegraphics[width=0.32\linewidth]{images/synthCameraPosesRotation.pdf}
-\includegraphics[width=0.32\linewidth]{images/synthCameraPosesTranslation.pdf}
-\includegraphics[width=0.32\linewidth]{images/synthCameraPosesRandom.pdf}
-\caption{Synthetically generated scenes used for testing.}
+\includegraphics[width=\linewidth]{images/resultsNormalAngle.pdf}
+\caption{Robustness of the calibration system to violations of the perpendicular reference camera assumption. The calibration system is robust to angles of up to $35^\circ$ between the reference image and the scene plane. Tests run with scene Fixed-B and point correspondence noise with $\sigma=1$. The reference camera was randomly sampled to have the desired angle with the scene plane.}
+\label{fig:results_normal_angle}
+\end{figure}
+
+\begin{figure}
+\centering
+\begin{subfigure}[b]{0.32\linewidth}
+	\includegraphics[width=\linewidth]{images/synthCameraPosesRotation.pdf}
+	\caption{Scene Fixed-A}
+\end{subfigure}
+\begin{subfigure}[b]{0.32\linewidth}
+	\includegraphics[width=\linewidth]{images/synthCameraPosesTranslation.pdf}
+	\caption{Scene Fixed-B}
+\end{subfigure}
+\begin{subfigure}[b]{0.32\linewidth}
+\includegraphics[width=\linewidth]{images/synthCameraPosesRandom.pdf}
+	\caption{Scene Random}
+\end{subfigure}
+\caption{Synthetically generated scenes used for testing. For all scenes $f_x=f_y=600$, $u_0=320$, $v_0=240$, $d_0=0.1$, and $d_1=-0.01$.}
 \label{fig:synth_poses}
 \end{figure}
 
@@ -382,7 +406,7 @@ Refocus during video & $d_0$ & 0.388 & 0.139 & 0.099 \\
 \centering
 \includegraphics[height=2cm]{images/sampleOldCam.jpg}
 \includegraphics[height=2cm]{images/sampleBookCoverNexus.png}
-\caption{Sample images used for calibration. Left: checkerboard captured with the PD1000 camera. Right: book cover captured with the Nexus camera.}
+\caption{Sample images used for real camera calibration. Left: checkerboard captured with the PD1000 camera. Notice the distortion. Right: book cover captured with the Nexus camera.}
 \end{figure}  
 
 

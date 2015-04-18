@@ -40,6 +40,7 @@
 
 #include "windows/MainWindow.h"
 #include "windows/MapWindow.h"
+#include "windows/ARWindow.h"
 
 namespace planecalib
 {
@@ -120,6 +121,7 @@ bool PlaneCalibApp::init(void)
 	//Add windows
 	mWindows.push_back(std::unique_ptr<BaseWindow>(new MainWindow()));
 	mWindows.push_back(std::unique_ptr<BaseWindow>(new MapWindow()));
+	mWindows.push_back(std::unique_ptr<BaseWindow>(new ARWindow()));
 
 	//Add bindings
 	mKeyBindings.addBinding(true, GLUT_KEY_F5, static_cast<KeyBindingHandler<PlaneCalibApp>::SimpleBindingFunc>(&PlaneCalibApp::runVideo), "Run the video stream.");

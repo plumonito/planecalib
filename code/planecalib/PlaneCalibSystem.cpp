@@ -435,6 +435,8 @@ void PlaneCalibSystem::doFullBA()
 	mCamera.getDistortionModel().setCoefficients(ba.getDistortion().cast<float>());
 	mCamera.setFromK(ba.getK().cast<float>());
 
+	mMap->mCamera.reset(new CameraModel(mCamera));
+
 	//Log
 	//MatlabDataLog::Instance().AddValue("K", ba.getK());
 	//MatlabDataLog::Instance().AddValue("Kold", mCalib->getK());

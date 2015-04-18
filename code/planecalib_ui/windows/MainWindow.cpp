@@ -545,13 +545,14 @@ void MainWindow::synthTestNormalization()
 
 	MatlabDataLog::AddValue("errorKeyName", "'normalAngle'");
 
-	float normalAngle = 0 * M_PI / 180;
-	for (normalAngle = 0; normalAngle < 45 * M_PI / 180; normalAngle += 1 * M_PI / 180)
+	float normalAngle = 10 * M_PI / 180;
+	for (noiseStd = 0; noiseStd <= 10; noiseStd += 0.5)
+	//for (normalAngle = 0; normalAngle < 45 * M_PI / 180; normalAngle += 1 * M_PI / 180)
 	{
 		int kk = 0;
 		for (kk = 0; kk < 300; kk++)
 		{
-			MYAPP_LOG << "-------------Synth test for normalization, normalAngle=" << (normalAngle * 180 / M_PI) << ", iter=" << kk << "----------------\n";
+			MYAPP_LOG << "-------------Synth test for normalization, normalAngle=" << (normalAngle * 180 / M_PI) << ", noiseStd=" << noiseStd << ", iter=" << kk << "----------------\n";
 			std::unique_ptr<Map> map = generator.generateVariableNormal(normalAngle);
 
 			MatlabDataLog::AddValue("errorKey", normalAngle);
@@ -618,7 +619,7 @@ void MainWindow::synthTestCompareUsingGroundTruth()
 		int kk = 0;
 		for (kk = 0; kk < 300; kk++)
 		{
-			MYAPP_LOG << "-------------Synth test, compare all, iter=" << kk << "----------------\n";
+			MYAPP_LOG << "-------------Synth test, compare all, frameCount=" << frameCount << "iter=" << kk << "----------------\n";
 			std::unique_ptr<Map> map = generator.generateRandomPoses(frameCount);
 
 			//Record key

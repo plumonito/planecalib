@@ -70,8 +70,10 @@ protected:
 	int mMatcherSearchRadius; //Contrary to the flag, this is in image pixel units
 
 	Eigen::Matrix3fr mCurrentPose; //This is a homography, used before calibration
+public:
 	Eigen::Matrix3fr mCurrentPoseR; //This is a rotation, used after calibration
 	Eigen::Vector3f mCurrentPoseT; //This is a rotation, used after calibration
+protected:
 
 	//Data from the previous frame
 	//Only inliers are kept here

@@ -15,6 +15,7 @@
 #include "cvutils.h"
 #include "log.h"
 #include "HomographyEstimation.h"
+#include "PnpEstimation.h"
 #include "flags.h"
 
 namespace planecalib {
@@ -275,56 +276,36 @@ bool PoseTracker::trackFrame3D(std::unique_ptr<Keyframe> frame_)
 	}
 	else
 	{
-		//Create cv vectors
-		std::vector<cv::Point2f> refPoints, imgPoints;
-		for (int i = 0; i < (int)mMatches.size(); i++)
-		{
-			auto &match = mMatches[i];
-			refPoints.push_back(eutils::ToCVPoint(match.getFeature().getPosition()));
-			imgPoints.push_back(eutils::ToCVPoint(match.getPosition()));
-		}
+		PnPRansac ransac;
+		ransac.setParams(3, 10, 100, (int)(0.9f*mMatches.size()));
+		ransac.setData(&mMatches, mMap->mCamera.get());
+		ransac.doRansac();
+		mCurrentPoseR = ransac.getBestModel().first.cast<float>();
+		mCurrentPoseT = ransac.getBestModel().second.cast<float>();
 
-		Eigen::Matrix<uchar, Eigen::Dynamic, 1> mask(refPoints.size());
-		cv::Mat1b mask_cv(refPoints.size(), 1, mask.data());
+		int inlierCount;
+		PnPRefiner refiner;
+		refiner.setCamera(mMap->mCamera.get());
+		refiner.setOutlierThreshold(3);
+		refiner.refinePose(mMatches, mCurrentPoseR, mCurrentPoseT, inlierCount, mReprojectionErrors);
 
-		//Refine
-		HomographyEstimation hest;
-		std::vector<bool> inliersVec;
-		std::vector<int> octaveVec(imgPoints.size(), 0);
-		{
-			ProfileSection s("refineHomography");
-			//cvH = hest.estimateCeres(cvH, imgPoints, refPoints, octaveVec, 2.5, inliersVec);
-		}
-		std::vector<FeatureMatch> goodMatches;
-		int inlierCountBefore = mask.sum();
-		int inlierCountAfter = 0;
-		for (int i = 0; i<(int)mMatches.size(); i++)
-		{
-			if (inliersVec[i])
-				goodMatches.push_back(mMatches[i]);
-		}
-		inlierCountAfter = goodMatches.size();
-		mMatches = std::move(goodMatches);
 		//MYAPP_LOG << "Inliers before=" << inlierCountBefore << ", inliers after=" << inlierCountAfter << "\n";
+		HomographyRansac ransacH;
+		ransacH.setParams(3, 10, 100, (int)(0.9f * mMatches.size()));
+		ransacH.setData(mMatches);
+		ransacH.doRansac();
+		mCurrentPose = ransacH.getBestModel().cast<float>().eval();
 
-		if (inlierCountAfter > 50)
+		if (inlierCount > 50)
 		{
 			//mCurrentPose = eutils::FromCV(cvH);
+			mFrame->mPose3DR = mCurrentPoseR;
+			mFrame->mPose3DT = mCurrentPoseT;
 			mFrame->setPose(mCurrentPose);
 			mIsLost = false;
 		}
 		else
 			mIsLost = true;
-	}
-
-	//Eval
-	int matchCount = mMatches.size();
-	mReprojectionErrors.resize(matchCount);
-	for (int i = 0; i < matchCount; i++)
-	{
-		auto &match = mMatches[i];
-
-		mReprojectionErrors[i].isInlier = true;
 	}
 
 	return !mIsLost;
