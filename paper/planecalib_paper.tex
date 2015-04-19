@@ -148,55 +148,14 @@ It is also possible to model the distortion in pixel space instead of in metric 
 %
 where $\pv_0$ is the center of distortion and $\tilde{r}=\norm{\tilde{\pv}-\pv_0}$ is the distance of the point from this center. In the common case where the focal lengths of the camera are similar, \ie $f \approx f_x \approx f_y$, the distortion models $\Distortion$ and $\Distortion_{\text{px}}$ are equivalent when $d_0 = f^2 d'_0$, $d_1=f^4 d'_1$, and the center of distortion is the same as the principal point.
 
-\section{Planar self-calibration}
-The goal of the calibration algorithm is to recover the intrinsic parameters from a sequence of images of a planar scene. The structure of the method is shown in Figure \ref{fig:diagram}. It has three main stages: projective reconstruction, homography-based calibration, and metric reconstruction. The projective reconstruction calibrates the distortion and produces a set of homographies. The self-calibration algorithm uses these homographies to recover the intrinsic matrix and the pose of the reference camera. Finally, the metric reconstruction optimizes all parameters of the model using all available constraints, thus obtaining the optimal calibration. Each stage contains a closed-form solution and a non-linear optimization of all parameters involved (also known as bundle adjustment)
+\section{Homography-based self-calibration}
+We first derive the constraints for homography-based self-calibration. We take a different route than \cite{bocquillon2006} for clarity and to gain insight into the nature of the constraints. Yet, the constraints obtained in this section are equivalent to those of \cite{bocquillon2006}, as is shown in Section \ref{sec:calib:connection}. In Section \ref{sec:calib:normalization} we show that these constraints are biased and propose a new set of normalized constraints. We then derive a closed-form solution to obtain an initial guess for the focal length in Section \ref{sec:calib:closed}.
 
-The following sections describe each stage in detail. The feature matching stage is not described since it can be implemented with any standard feature descriptor and matching approach, \eg \cite{rublee2011orb}.
-
-\subsection{Projective reconstruction}
-
-Planar geometry is well understood and extensively documented. Here we provide a brief review of what is relevant to this paper. Further details can be found in \cite{hartley2000}. We first approach planar geometry using a pinhole camera with no distortion. Section \ref{sec:planar:distortion} addresses the effects of distortion.
-
-A planar scene induces a homography between two pinhole cameras. That is, the measurements of image $a$ are related to those of image $b$ by
-%
-\begin{align}
-\homogeneous{\pv}_b \propto \Hm \homogeneous{\pv}_a 
-\label{eq:homography}
-\end{align}
-%
-where $\Hm$ is a $3 \times 3$ full-rank matrix. The equation is up to scale because all elements are in homogeneous coordinates and thus $\Hm$ has only 8 DoF.
-
-The first step in our algorithm is to obtain a projective reconstruction of the scene. The reconstruction includes the position of the observed points in world coordinates and the poses of the cameras. The points can be represented with a 2D position vector $\yv=[x,y]^\top$ because the scene is planar. The poses of the cameras can be represented by a homography that translates the points from world to image space. 
-
-A projective reconstruction is defined up to a homography. Thus, without loss of generality we select one of the image frames as the reference frame $r$ which has the same coordinate frame as the world, \ie $\Hm_r = \Im_{3 \times 3}$. This also implicitly fixes the position of the world points $\yv=\pv_r$. The poses of the other frames can be determined independently by computing the homography between them and the reference frame.
-
-\subsubsection{Distortion}
-\label{sec:planar:distortion}
-
-The relation of Eq.~\eqref{eq:homography} only holds for a pinhole camera without distortion. We note that in the case of distortion, the undistorted measurements will still follow Eq.~\eqref{eq:homography}. We can thus estimate the distortion model by finding the coefficients that allow the measurements to be modelled by a homography. We use the distortion model from Eq.~\eqref{eq:distortion_pixels} to remove the distortion in image space.
-
-Although there are methods of estimating the distortion parameters from a set of uncalibrated images, we rely on robust homography estimation methods \cite{hartley2000} to obtain an initial projective reconstruction assuming no distortion. The distortion coefficients are then estimated during a projective bundle adjustment step. This has proven to work well with moderate distortion levels.
-
-\subsection{Projective bundle adjustment}
-\label{sec:projective:ba}
-
-The projective reconstruction obtained so far is biased due to the choice of reference frame and the distortion coefficients haven't been estimated. We perform a robust non-linear minimization \cite{ceres-solver} over all parameters to obtain the optimal projective reconstruction. The formulation of the minimization problem is as follows, 
-%
-\begin{align}
-\argmin_{\dv',\pv_0,\lbrace \Hm_i \rbrace, \lbrace \yv_j \rbrace} 
-%
-\sum_i \sum_j \rho(\norm{\pv_{ij} - \Distortion_{\text{px}}(\Hm_i \yv_j)})^2 + \norm{\pv_0 - \bar{\pv}_0}
-\end{align}
-%
-where $\rho(\cdot)$ is a robust function to reduce the influence of outliers (\eg the Cauchy loss function \cite{ceres-solver}). The homography of the reference camera is kept fixed to remove the projective ambiguity. However, all point coordinates $\yv_j$ are optimized to remove the bias towards the reference camera. The final term regularizes the center of distortion, biasing it towards the center of the image $\bar{\pv}_0$ in case of no distortion.
-
-\subsection{Homography-based self-calibration}
-
-We first derive the constraints for homography-based self-calibration. The take a different route than \cite{bocquillon2006} for clarity and to gain insight into the nature of the constraints. Yet, the constraints obtained in this section are equivalent to those of \cite{bocquillon2006}, as is shown in Section \ref{sec:calib:connection}. In Section \ref{sec:calib:normalization} we show that these constraints are biased and propose a new set of normalized constraints. We then derive a closed-form solution to obtain an initial guess for the focal length in Section \ref{sec:calib:closed}.
+The input to a homography-based self-calibration stage are a series of homographies $\lbrace \Hm_i \rbrace$ that relate all images to a reference image $r$. The calibration recovers the intrinsic parameters $f_x$,$f_y$, and $\pv_0$. It assumes no distortion since the distortion can be corrected beforehand during a projective reconstruction stage.
 
 The calibration constraints come from our knowledge of the metric structure of the world applied to the obtained projective reconstruction. To derive the constraints we arbitrarily choose our metric world coordinate frame to coincide with the camera frame of the reference image. We describe the scene plane in this reference frame by its normal vector $\nv=[n_x,n_y,n_z]^\top$ (with unit norm) and the distance to the origin.
 
-We encode the Euclidean structure of the plane with two orthogonal basis vectors with equal norm that span the plane: $\av$ and $\bv$. Like the normal vector, these vectors represent directions in 3D space. Note that these vectors are not unique since we can rotate them around $\nv$ and they are still orthonormal basis vectors. With this in mind, the following equations encode the orthogonality and equal norm constraints respectively
+We encode the Euclidean structure of the plane with two orthogonal basis vectors with equal norm that span the plane: $\av$ and $\bv$. Like the normal vector, these vectors represent directions in 3D space, see Fig.~\ref{fig:planar_structure}. Note that these vectors are not unique since we can rotate them around $\nv$ and they are still orthonormal basis vectors. With this in mind, the following equations encode the orthogonality and equal norm constraints respectively
 \begin{align}
 \av^\top \bv = 0, \label{eq:ortho_constraint_ref} \\
 \av^\top \av - \bv^\top \bv = 0. \label{eq:norm_constraint_ref}
@@ -205,6 +164,7 @@ We encode the Euclidean structure of the plane with two orthogonal basis vectors
 \begin{figure}
 \input{images/basisVectors.pdf_tex}
 \caption{Planar self-calibration geometry.}
+\label{fig:planar_structure}
 \end{figure}
 
 We can derive these basis vectors from the plane's normal. To ensure orthogonality, we select $\av$ as the cross product of $\nv$ with an auxiliary fixed vector $\ev$
@@ -214,7 +174,7 @@ We can derive these basis vectors from the plane's normal. To ensure orthogonali
 \end{align}
 Note that $\ev$ can be any vector as long as it is not parallel to $\nv$. A different $\ev$ will produce a different orientation for the basis but Equations \eqref{eq:ortho_constraint_ref} and \eqref{eq:norm_constraint_ref} will remain unchanged.
 
-The basis vectors are defined in the coordinate frame of the reference camera. It is possible to transform the basis vectors to the frame of camera $i$ through the previously obtained homography
+The basis vectors are defined in the coordinate frame of the reference camera. It is possible to transform the basis vectors to the frame of camera $i$ through its homography
 \begin{align}
 \av_i = \Km^{-1} \Hm_i \Km \av, \\
 \bv_i = \Km^{-1} \Hm_i \Km \bv.
@@ -271,9 +231,9 @@ These are the normalized planar self-calibration constraints.
 
 The normalized constraints can be readily used in an iterative non-linear minimization procedure to find the optimum values for the intrinsic parameters and the normal vector. However, we need an initial guess that we'd like to obtain in closed-form. A closed-form solution can be obtained if we assume a known plane normal and a simplified camera model. 
 
-We reduce the intrinsic matrix to have 1 DoF by assuming a single focal length and a known principal point. We use the distortion center obtained in Sec.~\ref{sec:projective:ba} as the principal point and translate the obtained homographies so that this point lies in the origin. The intrinsic matrix is then $\Km=\text{diag}(f, f, 0)$. We use the original constraints \eqref{eq:ortho_constraint} and \eqref{eq:norm_constraint} to avoid the non-linearities introduced by the normalization.
+We reduce the intrinsic matrix to have 1 DoF by assuming a single focal length and a known principal point. We use the distortion center obtained from a projective reconstruction as the principal point and translate the obtained homographies so that this point lies in the origin. The intrinsic matrix is then $\Km=\text{diag}(f, f, 0)$. We use the original constraints \eqref{eq:ortho_constraint} and \eqref{eq:norm_constraint} to avoid the non-linearities introduced by the normalization.
 
-To fix the plane normal we assume that the reference image was taken perpendicular to the plane, \ie $\nv=[0,0,1]^\top$. This is a strong assumption, however it is only used to obtain an initial guess of the focal length. The constraint is dropped during the optimization step and the real normal is found if the initial guess was good enough. Moreover, different initial guesses for the focal length can be obtained very cheaply by repeating this procedure with a different input image selected as the reference frame. The best initial guess from these can then be used for further optimization. The experiments presented in Section \ref{sec:results} explore the sensitivity of the algorithm to this assumption.
+To fix the plane normal we assume that the reference image was taken perpendicular to the plane, \ie $\nv=[0,0,1]^\top$. This seems like a strong assumption, however it is only used to obtain an initial guess of the focal length. The constraint is dropped during the optimization step and the real normal is found if the initial guess was good enough. Moreover, different initial guesses for the focal length can be obtained very cheaply by repeating this procedure with a different input image selected as the reference frame. The best initial guess from these can then be used for further optimization. The experiments presented in Section \ref{sec:results} demonstrate the robustness of the algorithm to violations of this assumption.
 
 Under these assumptions the constraints \eqref{eq:ortho_constraint} and \eqref{eq:norm_constraint} reduce to a pair of quadratic polynomials in one variable 
 \begin{align}
@@ -304,7 +264,56 @@ The closed-form solution provides an initial guess under the fixed-normal assump
 %
 where the normal vector is constrained to have unit norm and $\Km$ is allowed to have 4 DoF as in \eqref{eq:intrinsic_matrix}. We note that although this non-linear minimization is necessary to improve the initial guess, it is still not optimal because the camera poses are encoded into the homographies and cannot be optimized. The optimal solution will be obtained by optimizing in metric space.
 
+\section{Planar self-calibration system}
+
+The homography-based self-calibration stage is a key component but it is not enough to produce the best calibration results. A projective reconstruction stage is needed before it to prepare the homographies and a metric recronstruction stage is needed after it to perform a final bundle adjustment. The structure of the final system is shown in Figure \ref{fig:diagram}.
+
+The projective reconstruction stage receives the input images and extracts the homographies between them. It also gives an initial estimate of the distortion. It first estimates each homography individually and then performs a global bundle adjustment of all homographies, the distortion coefficients, and the observed points in projective space. Section \ref{sec:projective} describes this stage in detail.
+
+The homographies produced by the projective reconstruction are used to calibrate the camera as previously described. This allows a metric reconstruction of the scene. Once all camera poses and point positions are recovered in metric coordinates, a final bundle adjustment is performed to obtain the optimal calibration. Details of this reconstruction and final optimization are described in Section \ref{section:metric}.
+
+%The following sections describe each stage in detail. The feature matching stage is not described since it can be implemented with any standard feature descriptor and matching approach, \eg \cite{rublee2011orb}.
+
+\subsection{Projective reconstruction}
+\label{sec:projective}
+
+Planar geometry is well understood and extensively documented. Here we provide a brief review of what is relevant to this paper. Further details can be found in \cite{hartley2000}. We first approach planar geometry using a pinhole camera with no distortion. Section \ref{sec:planar:distortion} addresses the effects of distortion.
+
+A planar scene induces a homography between two pinhole cameras. That is, the measurements of image $i$ are related to those of image $j$ by
+%
+\begin{align}
+\homogeneous{\pv}_j \propto \Hm_{ij} \homogeneous{\pv}_i 
+\label{eq:homography}
+\end{align}
+%
+where $\Hm_{ij}$ is a $3 \times 3$ full-rank matrix. The equation is up to scale because all elements are in homogeneous coordinates and thus $\Hm_{ij}$ has only 8 DoF.
+
+The first step in our algorithm is to obtain a projective reconstruction of the scene. The reconstruction includes the position of the observed points in world coordinates and the poses of the cameras. The points can be represented with a 2D position vector $\yv=[x,y]^\top$ because the scene is planar. The pose of a camera $i$ can be represented by a homography $\Hm_i$ that translates the points from world to image space. 
+
+A projective reconstruction is defined up to a homography. Thus, without loss of generality we select one of the image frames as the reference frame $r$ which has the same coordinate frame as the world, \ie $\Hm_r = \Im_{3 \times 3}$. This also implicitly fixes the position of the world points $\yv=\pv_r$. The poses of the other frames can be determined independently by computing the homography between them and the reference frame.
+
+\subsubsection{Distortion}
+\label{sec:planar:distortion}
+
+The relation of Eq.~\eqref{eq:homography} only holds for a pinhole camera without distortion. We note that in the case of distortion, the undistorted measurements will still follow Eq.~\eqref{eq:homography}. We can thus estimate the distortion model by finding the coefficients that allow the measurements to be modelled by a homography. We use the distortion model from Eq.~\eqref{eq:distortion_pixels} to remove the distortion in image space.
+
+Although there are methods of estimating the distortion parameters from a set of uncalibrated images, for simplicity we rely here on robust homography estimation methods \cite{hartley2000} to obtain an initial projective reconstruction assuming no distortion. The distortion coefficients are then estimated during a projective bundle adjustment step. This has proven to work well with moderate distortion levels.
+
+\subsection{Projective bundle adjustment}
+\label{sec:projective:ba}
+
+The projective reconstruction obtained so far is biased due to the choice of reference frame and the distortion coefficients haven't been estimated. We perform a robust non-linear minimization \cite{ceres-solver} over all parameters to obtain the optimal projective reconstruction. The formulation of the minimization problem is as follows, 
+%
+\begin{align}
+\argmin_{\dv',\pv_0,\lbrace \Hm_i \rbrace, \lbrace \yv_j \rbrace} 
+%
+\sum_i \sum_j \rho(\norm{\pv_{ij} - \Distortion_{\text{px}}(\Hm_i \yv_j)})^2 + \norm{\pv_0 - \bar{\pv}_0}
+\end{align}
+%
+where $\rho(\cdot)$ is a robust function to reduce the influence of outliers (\eg the Cauchy loss function \cite{ceres-solver}). The homography of the reference camera is kept fixed to remove the projective ambiguity. However, all point coordinates $\yv_j$ are optimized to remove the bias towards the reference camera. The final term regularizes the center of distortion, biasing it towards the center of the image $\bar{\pv}_0$ in case of no distortion.
+
 \subsection{Metric reconstruction}
+\label{section:metric}
 
 Once the intrinsic parameters have been recovered, upgrading the projective reconstruction to a metric reconstruction is straightforward. We define a new world reference frame so that the scene's plane lies at $z=0$. Under this reference frame, the extrinsic parameters of the reference camera are $\Rm=[\av, \bv, \nv]^\top$ and $\tv= - \Rm \nv$, which positions the camera exactly one unit away from the plane center and aligns it with the recovered normal.
 
