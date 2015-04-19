@@ -299,6 +299,7 @@ The closed-form solution provides an initial guess under the fixed-normal assump
 \frac{\av_i \cdot \bv_i}{\norm{\av_i} \norm{\bv_i}} +
 \sum_i 
 1 - \frac{\norm{\bv_i}^2}{\norm{\av_i}^2}
+\label{eq:calib_ba}
 \end{align}
 %
 where the normal vector is constrained to have unit norm and $\Km$ is allowed to have 4 DoF as in \eqref{eq:intrinsic_matrix}. We note that although this non-linear minimization is necessary to improve the initial guess, it is still not optimal because the camera poses are encoded into the homographies and cannot be optimized. The optimal solution will be obtained by optimizing in metric space.
@@ -326,36 +327,9 @@ where the position of the points is constrained so that $z=0$.
 \section{Experimental results}
 \label{sec:results}
 
-- Synthetic tests, error in calibration with increasing noise in point position (compared to bouguet and ground truth). See Fig.~\ref{fig:synth_results}.
+We present a series of experiments that highlight the accuracy, robustness, and practicality of our calibration approach. Most of the experiments are done with synthetically generated datasets in order to have absolute ground truth for comparison. The final experiments use real cameras with both a checkerboard and an arbitrary planar surface to validate our method against a popular calibration toolbox.
 
-- Error in calibration with increasing angle to plane normal for reference image (shows robustness to main assumption)
-
-- Synthetic tests, error without scale normalization of residuals (shows why we are better than \cite{bocquillon2006}). Don't know if this will work.
-
-- Practical calibrations of real cameras (comapred to bouguet, no ground truth)
-
-- Augmented reality of a plane (images + video)
-
-\begin{figure}
-\centering
-\includegraphics[width=\linewidth]{images/resultsPointNoise.pdf}
-\caption{RMS error of camera intrinsics with increasing point correspondence noise. Synthetic scene Fixed-B was used. Horizontal axis is the std. dev. of gaussian noise applied to the point correspondences. Blue is our calibration system. Green is the result of the final metric BA initialized with the ground truth values. Black also uses the ground truth as initialization but keeps the 3D points fixed to the ground truth.}
-\label{fig:results_noise}
-\end{figure}
-
-\begin{figure}
-\centering
-\includegraphics[width=\linewidth]{images/resultsFrameCount.pdf}
-\caption{RMS error of camera intrinsics with increasing input frame count. Synthetic random scene was used. Gaussian noise with $\sigma=1$ was applied to the input point correspondences. Horizontal axis is the number of frames used for calibration. Notice .}
-\label{fig:results_noise}
-\end{figure}
-
-\begin{figure}
-\centering
-\includegraphics[width=\linewidth]{images/resultsNormalAngle.pdf}
-\caption{Robustness of the calibration system to violations of the perpendicular reference camera assumption. The calibration system is robust to angles of up to $35^\circ$ between the reference image and the scene plane. Tests run with scene Fixed-B and point correspondence noise with $\sigma=1$. The reference camera was randomly sampled to have the desired angle with the scene plane.}
-\label{fig:results_normal_angle}
-\end{figure}
+All synthetic tests were produced using a virtual camera with images of size $640 \times 480$ and intrinsic parameters $f_x=f_y=600$, $\pv_0=[320,240]^\top$, and $\dv=[0.1,-0.01]^\top$. We use three different position set-ups for the virtual cameras, shown in Fig.~\ref{fig:synth_poses}. Scene \texttt{Fixed-A} represents a common pattern by users capturing a plane from different angles. Although common, this motion is close to degenerate as described in \cite{sturm1997} and our experiments show that it should be avoided. Scene \texttt{Fixed-B} augments this camera arrangement with a series of cameras that are translated but not rotated, thus better constraining the problem. These scenes have a fixed number of cameras. To test the influence of the number of images used for calibration we use scene \texttt{Random} which samples cameras uniformly in space and points them at a random point in the plane. In all scenes the reference camera was positioned at a fixed central location and the angle between the optical axis and the plane normal was chosen according to the experiment. A uniformly distributed set of 1000 features was generated on the plane and projected onto the images, keeping only those measurements within the image bounds. Each experiment was repeated 300 times to obtain valid statistical results. All errors are calculated as the root-mean-squared value from these iterations and they are reported as a percentage of the ground truth value.
 
 \begin{figure}
 \centering
@@ -375,8 +349,49 @@ where the position of the points is constrained so that $z=0$.
 \label{fig:synth_poses}
 \end{figure}
 
+Figure \ref{fig:results_normal_angle} shows the robustness of the algorithm to violations of the assumption used to derive the closed-form solution. The reference camera was randomly sampled to have an increasing angle with the scene's plane. We observe that the closed-form focal length estimation was able to produce a good enough initial guess for the system to find the correct calibration with angles of up to $35^\circ$.  Scene \texttt{Fixed-B} was used with point correspondence noise of $\sigma=1\text{px}$.
+
+\begin{figure}
+\centering
+\includegraphics[width=\linewidth]{images/resultsNormalAngle.pdf}
+\caption{Robustness of the calibration system to violations of the perpendicular reference camera assumption. The calibration system is robust to angles of up to $35^\circ$ between the reference image and the scene plane.}
+\label{fig:results_normal_angle}
+\end{figure}
+
+Figure \ref{fig:results_no_norm} presents a comparison of our normalized constraints with the original formulation from \cite{bocquillon2006}. Scene \texttt{Fixed-B} was used and Gaussian noise with variable $\sigma$ was added  to the point correspondences. To show a direct comparison the metric reconstruction stage was disabled, Fig.~\ref{fig:results_no_norm} shows the results after the non-linear minimization of Eq.~\eqref{eq:calib_ba}. The angle between the reference camera and the plane was set to $20^\circ$. The results show that the normalized equations are more accurate and more robust to noise.
+
+\begin{figure}
+\centering
+\includegraphics[width=\linewidth]{images/resultsNoNorm.pdf}
+\caption{Comparison of our normalized constraints (blue) and those of Bocquillon \cite{bocquillon2006} (red). The normalized constraints are more robust to noise.}
+\label{fig:results_no_norm}
+\end{figure}
+
+Figure \ref{fig:results_noise} evaluates the accuracy of the calibration in the presence of noise. It also shows what are the best possible results for a planar self-calibration and for a known-target calibration. We generate a synthetic scene and add Gaussian noise to the point correspondences with increasing $\sigma$. We calibrate using our system (blue line for \texttt{Fixed-B} and red line for \texttt{Fixed-A}). We then initialize the final metric bundle adjustment with the ground truth values and perform the optimization. This produces the best self-calibration possible given the noisy measurements (green line). To compare with the approach of \cite{zhang1999} we run the final metric bundle adjustment again starting from the ground truth but keeping the 3D point positions fixed to the ground truth values (black line). 
+
+Figure \ref{fig:results_noise} shows the clear difference in accuracy between scenes \texttt{Fixed-A} and \texttt{Fixed-B}. The translated images help constrain the distortion coefficients and result in a more accurate calibration. We observe that the green line is barely visible, which means that our calibration is very close the theoretical optimum using planar self-calibration constraints. Self-calibration is more susceptible to noise than a known-scene calibration (\eg \cite{zhang1999}). This is to be expected because the problem has more degrees of freedom. However, we can correct this by using more images.
+
+\begin{figure}
+\centering
+\includegraphics[width=\linewidth]{images/resultsPointNoise.pdf}
+\caption{Comparison of our calibration accuracy with different scenes and increasing noise (blue and red). Results for the best possible calibrations using known (black) and unknown (green) scene structure also shown. Our result is only marginally off from the theoretical optimum for self-calibration.}
+\label{fig:results_noise}
+\end{figure}
+
+Figure \ref{fig:results_frames} shows the behavious of the algorithm with a varying number of images used for calibration. Noise was applied with a fixed $\sigma=1$ and random cameras were sampled for (scene \texttt{Random}). We see that the accuracy of the self-calibration converges to that of the known-scene calibration when more images are used. We note that for modern cameras it is trivial to capture more images for calibration. In fact, we routinely use a video of the camera moving around looking at a book cover for calibration.
+
+\begin{figure}
+\centering
+\includegraphics[width=\linewidth]{images/resultsFrameCount.pdf}
+\caption{Calibration accuracy with increasing number of images. The self-calibration results converge to those of the known-scene calibration when more images are used for calibration.}
+\label{fig:results_frames}
+\end{figure}
+
+Finally, we show the results of calibrating real cameras using the popular Bouguet toolbox \cite{bouguetMCT} and our method. Bouguet's calibration uses planar checkerboards of known structure to perform calibration. We can therefore use the same input data for our method by ignoring the scene structure and using only the detected image points. Additionally, for the cameras with video capability we perform calibration using a book cover with unknown texture structure. The results are shown in Table \ref{fig:results_real_numbers}. We observe that our method provides an equivalent calibration to that of \cite{bouguetMCT}. We note that although our method is able to calibrate a smartphone's camera, their intrinsics are variable due to autofocus and small variations are to be expected.
+
 \begin{table*}
 \caption{Comparison of obtained calibrations with real cameras. First column shows the results of calibrating with a checkerboard using Bouguet's toolbox \cite{bouguetMCT}. Second column uses the same detected checkerboard corners to calibrate using our algorithm (without knowledge of 3D structure). Third column uses the video of a book cover to calibrate using our algorithm.}
+\label{fig:results_real_numbers}
 \centering
 \begin{tabular}{|c|c|c|c|c|}
 \hline
@@ -416,9 +431,9 @@ Refocus during video & $d_0$ & 0.388 & 0.139 & 0.099 \\
 \caption{Sample images used for real camera calibration. Left: checkerboard captured with the PD1000 camera. Notice the distortion. Right: book cover captured with the Nexus camera.}
 \end{figure}  
 
-
-
 \section{Conclusions}
+
+We have presented a complete planar self-calibration system that rivals the state-of-the-art calibration algorithms in accuracy and is considerably more practical to use. We proposed a formulation of the planar self-calibration constraints that is more robust to noise due to proper normalization. We also introduced a closed-form solution to estimate the focal length with a minor assumption, namely that at least one of the cameras should be roughly perpendicular to the scene plane. The system proved to be very robust to violations of this assumption, obtaining correct calibrations with angles of up to $35^\circ$ between the reference camera and the scene plane. Finally, we showed that our system has a very high accuracy and with enough input images reaches the same accuracy as a known-scene calibration, thus eliminating the practical need of printing checkerboards for camera calibration.
 
 {\small
 \bibliographystyle{ieee}

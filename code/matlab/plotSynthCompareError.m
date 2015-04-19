@@ -1,3 +1,4 @@
+%%
 labels = {};
 errors = {};
 colors = [];
@@ -50,13 +51,13 @@ end
 % colors = 'bgk';
 
 keys = unique(errorKey);
-
+%%
 clf;
 for kk=1:length(labels)
     err = errors{kk};
     
     %validMask = abs(err.errorFocal)<60 & ~isinf(errorDist0);
-    validMask = ~isinf(errorDist0) & abs(err.errorFocal) > 1e3;
+    validMask = ~isinf(errorDist0) & abs(err.errorFocal) < 1e3;
     validKeys = errorKey(validMask);
     err.errorFocal = err.errorFocal(validMask);
     err.errorP0 = err.errorP0(validMask);
@@ -71,13 +72,13 @@ for kk=1:length(labels)
     for k=1:length(keys); 
         invalidCount(k) = sum(~validMask(errorKey==keys(k)));
         m=err.errorFocal(validKeys==keys(k)); 
-        errorFocalKeyed(k)=rms(m) / 600;
+        errorFocalKeyed(k)=rms(m) / 600 * 100;
         m=err.errorP0(validKeys==keys(k)); 
-        errorP0Keyed(k)=rms(m)/280;
+        errorP0Keyed(k)=rms(m)/280 * 100;
         m=err.errorDist0(validKeys==keys(k)); 
-        errorDist0Keyed(k)=rms(m)/0.1;
+        errorDist0Keyed(k)=rms(m)/0.1 * 100;
         m=err.errorDist1(validKeys==keys(k)); 
-        errorDist1Keyed(k)=rms(m)/0.01;
+        errorDist1Keyed(k)=rms(m)/0.01 * 100;
     end
 
     lineStyle=['-' colors(kk)];
@@ -100,20 +101,21 @@ for kk=1:length(labels)
     subplot(subrows,subcols,2);
     hold on
     plot(keys,errorP0Keyed,lineStyle,'DisplayName',labels{kk})
-    title('P_0 error (%)')
+    title('Principal point p_0 error (%)')
 %     xlabel(errorKeyName)
     %set(gca,'XTickLabel',l)
 
     subplot(subrows,subcols,3);
     hold on
     plot(keys,errorDist0Keyed,lineStyle,'DisplayName',labels{kk})
-    title('d_0 error (%)')
-%     xlabel(errorKeyName)
+    title('Distortion d_0 error (%)')
+    xlabel(errorKeyName)
 
     subplot(subrows,subcols,4);
     hold on
     plot(keys,errorDist1Keyed,lineStyle,'DisplayName',labels{kk})
-    title('d_1 error (%)')
+    title('Distortion d_1 error (%)')
+    xlabel(errorKeyName)
     %xlim([0,45])
     
     fprintf('Sum failed calibrations for %s: %d\n', labels{kk}, sum(invalidCount));
