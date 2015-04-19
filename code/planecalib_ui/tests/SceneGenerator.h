@@ -35,7 +35,9 @@ public:
 	}
 
 	std::unique_ptr<Map> generateSyntheticMap();
-	std::unique_ptr<Map> generateRandomPoses(int frameCount);
+	std::unique_ptr<Map> generateSyntheticMap(float normalAngle);
+	std::unique_ptr<Map> generateRandomMap(int frameCount);
+	std::unique_ptr<Map> generateRandomMap(int frameCount, float normalAngle);
 	std::unique_ptr<Map> generateVariableNormal(float normalAngle);
 
 	bool mLogScene;
@@ -45,6 +47,11 @@ protected:
 	std::random_device mRandomDevice;
 	CameraModel *mCamera;
 	float mNoiseStd;
+
+	void generateSyntheticPoses(std::vector<Eigen::Matrix3fr> &posesR, std::vector<Eigen::Vector3f> &posesCenter);
+	void generateRandomPoses(int frameCount, std::vector<Eigen::Matrix3fr> &posesR, std::vector<Eigen::Vector3f> &posesCenter);
+	
+	void generateRandomRef(float normalAngle, Eigen::Matrix3fr &R, Eigen::Vector3f &center);
 
 	std::unique_ptr<Map> generateFromPoses(const std::vector<Eigen::Matrix3fr> &posesR, const std::vector<Eigen::Vector3f> &posesCenter);
 };

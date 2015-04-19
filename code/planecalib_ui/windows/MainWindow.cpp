@@ -40,7 +40,8 @@ bool MainWindow::init(PlaneCalibApp *app, const Eigen::Vector2i &imageSize)
 	mKeyBindings.addBinding(false, 't', static_cast<KeyBindingHandler<BaseWindow>::SimpleBindingFunc>(&MainWindow::synthTest), "Synthetic test.");
 	mKeyBindings.addBinding(false, 'y', static_cast<KeyBindingHandler<BaseWindow>::SimpleBindingFunc>(&MainWindow::synthTestCompareUsingGroundTruth), "Synthetic test. Compare the metric BA of self-calib and calib.");
 	mKeyBindings.addBinding(false, 'u', static_cast<KeyBindingHandler<BaseWindow>::SimpleBindingFunc>(&MainWindow::synthTestNormalAngle), "Synthetic test for sensitivity to normal angle.");
-	mKeyBindings.addBinding(false, 'i', static_cast<KeyBindingHandler<BaseWindow>::SimpleBindingFunc>(&MainWindow::synthTestNormalization), "Synthetic test for sensitivity to normalization.");
+	mKeyBindings.addBinding(false, 'i', static_cast<KeyBindingHandler<BaseWindow>::SimpleBindingFunc>(&MainWindow::synthTestNormalizationWithNoise), "Synthetic test for sensitivity to normalization.");
+	mKeyBindings.addBinding(false, 'I', static_cast<KeyBindingHandler<BaseWindow>::SimpleBindingFunc>(&MainWindow::synthTestNormalizationWithFrames), "Synthetic test for sensitivity to normalization.");
 
 	mRefTexture.create(GL_RGB, eutils::ToSize(imageSize));
 	mRefTexture.update(mSystem->getMap().getKeyframes()[0]->getColorImage());
@@ -372,6 +373,7 @@ void MainWindow::loadBouguetCalib()
 void MainWindow::doHomographyBA()
 {
 	mSystem->doHomographyBA();
+	mSystem->doHomographyCalib(true);
 }
 
 void MainWindow::doFullBA()
@@ -431,6 +433,7 @@ void MainWindow::synthTest()
 			mSystem->setUse3DGroundTruth(false);
 			mSystem->setFix3DPoints(false);
 			mSystem->doHomographyBA();
+			mSystem->doHomographyCalib(true);
 			mSystem->doFullBA();
 
 			//Record 
@@ -506,6 +509,7 @@ void MainWindow::synthTestNormalAngle()
 			mSystem->setExpectedPixelNoiseStd(std::max(3 * noiseStd, 0.3f));
 			mSystem->setMap(std::move(map));
 			mSystem->doHomographyBA();
+			mSystem->doHomographyCalib(true);
 			mSystem->doFullBA();
 
 			//Record noise
@@ -524,7 +528,7 @@ void MainWindow::synthTestNormalAngle()
 	updateState();
 }
 
-void MainWindow::synthTestNormalization()
+void MainWindow::synthTestNormalizationWithNoise()
 {
 	CameraModel camera;
 	camera.init(600, 600, 320, 240, 640, 480);
@@ -543,26 +547,40 @@ void MainWindow::synthTestNormalization()
 
 	CalibrationError error;
 
-	MatlabDataLog::AddValue("errorKeyName", "'normalAngle'");
+	MatlabDataLog::AddValue("errorKeyName", "'noiseStd'");
 
-	float normalAngle = 10 * M_PI / 180;
+	float normalAngle = 20 * M_PI / 180;
 	for (noiseStd = 0; noiseStd <= 10; noiseStd += 0.5)
 	//for (normalAngle = 0; normalAngle < 45 * M_PI / 180; normalAngle += 1 * M_PI / 180)
 	{
 		int kk = 0;
 		for (kk = 0; kk < 300; kk++)
 		{
-			MYAPP_LOG << "-------------Synth test for normalization, normalAngle=" << (normalAngle * 180 / M_PI) << ", noiseStd=" << noiseStd << ", iter=" << kk << "----------------\n";
-			std::unique_ptr<Map> map = generator.generateVariableNormal(normalAngle);
+			MYAPP_LOG << "-------------Synth test for normalization, noiseStd=" << noiseStd << ", iter=" << kk << "----------------\n";
+			generator.setNoiseStd(noiseStd);
+			std::unique_ptr<Map> map = generator.generateSyntheticMap(normalAngle);
 
-			MatlabDataLog::AddValue("errorKey", normalAngle);
+			MatlabDataLog::AddValue("errorKey", noiseStd);
 
 			mSystem->setExpectedPixelNoiseStd(std::max(3 * noiseStd, 0.3f));
 			mSystem->setMap(std::move(map));
+			mSystem->doHomographyBA();
+
+			//Calib
+			mSystem->setUseNormalizedConstraints(false);
+			mSystem->doHomographyCalib(false);
+			//mSystem->doFullBA();
+
+			//Record noise
+			error.compute(camera, mSystem->getCamera());
+			MatlabDataLog::AddValue("errorFocalNoNorm", error.errorFocal);
+			MatlabDataLog::AddValue("errorP0NoNorm", error.errorP0);
+			MatlabDataLog::AddValue("errorDist0NoNorm", error.errorDist0);
+			MatlabDataLog::AddValue("errorDist1NoNorm", error.errorDist1);
 
 			//Calib
 			mSystem->setUseNormalizedConstraints(true);
-			mSystem->doHomographyBA();
+			mSystem->doHomographyCalib(false);
 			//mSystem->doFullBA();
 
 			//Record noise
@@ -572,10 +590,53 @@ void MainWindow::synthTestNormalization()
 			MatlabDataLog::AddValue("errorDist0", error.errorDist0);
 			MatlabDataLog::AddValue("errorDist1", error.errorDist1);
 
+			MatlabDataLog::Stream().flush();
+		}
+	}
+
+	mImageSize = camera.getImageSize();
+	updateState();
+}
+
+void MainWindow::synthTestNormalizationWithFrames()
+{
+	CameraModel camera;
+	camera.init(600, 600, 320, 240, 640, 480);
+	camera.getDistortionModel().init(Eigen::Vector2f(0.1, -0.01), camera.getMaxRadiusSq());
+	//camera.getDistortionModel().init(Eigen::Vector2f(0.0, 0.0), camera.getMaxRadiusSq());
+
+	float noiseStd = 3 / 3;
+
+	SceneGenerator generator;
+	generator.mVerbose = true;
+	generator.setCamera(&camera);
+	generator.setNoiseStd(noiseStd);
+
+	mSystem->setUse3DGroundTruth(false);
+	mSystem->setFix3DPoints(false);
+
+	CalibrationError error;
+
+	MatlabDataLog::AddValue("errorKeyName", "'frameCount'");
+
+	float normalAngle = 20 * M_PI / 180;
+	for (int frameCount = 0; frameCount <= 30; frameCount++)
+	{
+		int kk = 0;
+		for (kk = 0; kk < 300; kk++)
+		{
+			MYAPP_LOG << "-------------Synth test for normalization, frameCount=" << frameCount << ", noiseStd=" << noiseStd << ", iter=" << kk << "----------------\n";
+			std::unique_ptr<Map> map = generator.generateRandomMap(frameCount,normalAngle);
+
+			MatlabDataLog::AddValue("errorKey", frameCount);
+
+			mSystem->setExpectedPixelNoiseStd(std::max(3 * noiseStd, 0.3f));
+			mSystem->setMap(std::move(map));
+			mSystem->doHomographyBA();
+
 			//Calib
 			mSystem->setUseNormalizedConstraints(false);
-			mSystem->doHomographyBA();
-			//mSystem->doFullBA();
+			mSystem->doHomographyCalib(false);
 
 			//Record noise
 			error.compute(camera, mSystem->getCamera());
@@ -583,6 +644,18 @@ void MainWindow::synthTestNormalization()
 			MatlabDataLog::AddValue("errorP0NoNorm", error.errorP0);
 			MatlabDataLog::AddValue("errorDist0NoNorm", error.errorDist0);
 			MatlabDataLog::AddValue("errorDist1NoNorm", error.errorDist1);
+
+			//Calib
+			mSystem->setUseNormalizedConstraints(true);
+			mSystem->doHomographyCalib(false);
+
+			//Record noise
+			error.compute(camera, mSystem->getCamera());
+			MatlabDataLog::AddValue("errorFocal", error.errorFocal);
+			MatlabDataLog::AddValue("errorP0", error.errorP0);
+			MatlabDataLog::AddValue("errorDist0", error.errorDist0);
+			MatlabDataLog::AddValue("errorDist1", error.errorDist1);
+
 
 			MatlabDataLog::Stream().flush();
 		}
@@ -620,7 +693,7 @@ void MainWindow::synthTestCompareUsingGroundTruth()
 		for (kk = 0; kk < 300; kk++)
 		{
 			MYAPP_LOG << "-------------Synth test, compare all, frameCount=" << frameCount << "iter=" << kk << "----------------\n";
-			std::unique_ptr<Map> map = generator.generateRandomPoses(frameCount);
+			std::unique_ptr<Map> map = generator.generateRandomMap(frameCount);
 
 			//Record key
 			MatlabDataLog::AddValue("errorKey", frameCount);
@@ -633,6 +706,7 @@ void MainWindow::synthTestCompareUsingGroundTruth()
 			mSystem->setUse3DGroundTruth(false);
 			mSystem->setFix3DPoints(false);
 			mSystem->doHomographyBA();
+			mSystem->doHomographyCalib(true);
 			mSystem->doFullBA();
 
 			//Record 
@@ -752,6 +826,7 @@ void MainWindow::synthTest2()
 			mSystem->setExpectedPixelNoiseStd(std::max(3 * noiseStd, 0.3f));
 			mSystem->setMap(std::move(map));
 			mSystem->doHomographyBA();
+			mSystem->doHomographyCalib(true);
 			mSystem->doFullBA();
 
 			//Record noise

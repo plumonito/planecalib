@@ -33,6 +33,8 @@ public:
 	Map &getMap() {return *mMap;}
 	void setMap(std::unique_ptr<Map> map);
 
+	void resetCalib();
+
 	bool getUse3DGroundTruth()  const { return mUse3DGroundTruth; }
 	void setUse3DGroundTruth(bool value)  { mUse3DGroundTruth = value; }
 
@@ -55,7 +57,7 @@ public:
 	void idle();
 
 	void doHomographyBA();
-	void doHomographyCalib();
+	void doHomographyCalib(bool fixP0);
 	void doFullBA();
 
 protected:

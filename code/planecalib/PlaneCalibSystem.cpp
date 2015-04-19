@@ -106,6 +106,11 @@ void PlaneCalibSystem::setMap(std::unique_ptr<Map> map)
 {
 	mMap = std::move(map);
 	
+	resetCalib();
+}
+
+void PlaneCalibSystem::resetCalib()
+{
 	auto &frame = *mMap->getKeyframes().back();
 	mTracker->init(frame.getImageSize(), frame.getOctaveCount());
 	mTracker->resetTracking(mMap.get(), frame.getPose());
@@ -242,7 +247,7 @@ void PlaneCalibSystem::doHomographyBA()
 	mHomographyDistortion.setCoefficients(ba.getDistortion().cast<float>());
 
 	//Calib
-	doHomographyCalib();
+	//doHomographyCalib();
 
 	//Update homography distortion with the new principal point
 	//ba.setOnlyDistortion(true);
@@ -254,7 +259,7 @@ void PlaneCalibSystem::doHomographyBA()
 	//mActiveDistortion = &mHomographyDistortion;
 }
 
-void PlaneCalibSystem::doHomographyCalib()
+void PlaneCalibSystem::doHomographyCalib(bool fixP0)
 {
 	std::vector<Eigen::Matrix3fr> allPoses;
 	for (auto &frame : mMap->getKeyframes())
@@ -264,6 +269,7 @@ void PlaneCalibSystem::doHomographyCalib()
 
 	//Calibrate
 	mCalib->setUseNormalizedConstraints(mUseNormalizedConstraints);
+	mCalib->setFixPrincipalPoint(fixP0);
 	mCalib->calibrate(mHomographyP0, allPoses);
 	mCamera.setFromK(mCalib->getK());
 	mNormal = mCalib->getNormal().cast<float>();

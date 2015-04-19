@@ -56,7 +56,7 @@ for kk=1:length(labels)
     err = errors{kk};
     
     %validMask = abs(err.errorFocal)<60 & ~isinf(errorDist0);
-    validMask = ~isinf(errorDist0) & abs(err.errorFocal) > 1e3;
+    validMask = ~isinf(errorDist0) & abs(err.errorFocal) < 1e3;
     validKeys = errorKey(validMask);
     err.errorFocal = err.errorFocal(validMask);
     err.errorP0 = err.errorP0(validMask);
@@ -71,13 +71,13 @@ for kk=1:length(labels)
     for k=1:length(keys); 
         invalidCount(k) = sum(~validMask(errorKey==keys(k)));
         m=err.errorFocal(validKeys==keys(k)); 
-        errorFocalKeyed(k)=rms(m) / 600;
+        errorFocalKeyed(k)=rms(m) / 600 * 100;
         m=err.errorP0(validKeys==keys(k)); 
-        errorP0Keyed(k)=rms(m)/280;
+        errorP0Keyed(k)=rms(m)/280 * 100;
         m=err.errorDist0(validKeys==keys(k)); 
-        errorDist0Keyed(k)=rms(m)/0.1;
+        errorDist0Keyed(k)=rms(m)/0.1 * 100;
         m=err.errorDist1(validKeys==keys(k)); 
-        errorDist1Keyed(k)=rms(m)/0.01;
+        errorDist1Keyed(k)=rms(m)/0.01 * 100;
     end
 
     lineStyle=['-' colors(kk)];

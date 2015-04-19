@@ -14,7 +14,22 @@ std::unique_ptr<Map> SceneGenerator::generateSyntheticMap()
 	//Frame poses
 	std::vector<Eigen::Matrix3fr> posesR;
 	std::vector<Eigen::Vector3f> posesCenter;
+	generateSyntheticPoses(posesR, posesCenter);
+	return generateFromPoses(posesR, posesCenter);
+}
 
+std::unique_ptr<Map> SceneGenerator::generateSyntheticMap(float normalAngle)
+{
+	//Frame poses
+	std::vector<Eigen::Matrix3fr> posesR;
+	std::vector<Eigen::Vector3f> posesCenter;
+	generateSyntheticPoses(posesR, posesCenter);
+	generateRandomRef(normalAngle, posesR[0], posesCenter[0]);
+	return generateFromPoses(posesR, posesCenter);
+}
+
+void SceneGenerator::generateSyntheticPoses(std::vector<Eigen::Matrix3fr> &posesR, std::vector<Eigen::Vector3f> &posesCenter)
+{
 	posesR.push_back(Eigen::Matrix3fr::Identity());
 	posesCenter.push_back(Eigen::Vector3f(0, 0, -1));
 
@@ -38,16 +53,43 @@ std::unique_ptr<Map> SceneGenerator::generateSyntheticMap()
 		posesR.push_back(eutils::RotationX(rad));
 		posesCenter.push_back(Eigen::Vector3f(0, -1 * sin(rad), -1 * cos(rad)));
 	}
-
-	return generateFromPoses(posesR, posesCenter);
 }
 
-std::unique_ptr<Map> SceneGenerator::generateRandomPoses(int frameCount)
+std::unique_ptr<Map> SceneGenerator::generateRandomMap(int frameCount, float normalAngle)
 {
-	//Frame poses
 	std::vector<Eigen::Matrix3fr> posesR;
 	std::vector<Eigen::Vector3f> posesCenter;
 
+	generateRandomPoses(frameCount, posesR, posesCenter);
+	generateRandomRef(normalAngle, posesR[0], posesCenter[0]);
+	return generateFromPoses(posesR, posesCenter);
+}
+
+std::unique_ptr<Map> SceneGenerator::generateRandomMap(int frameCount)
+{
+	std::vector<Eigen::Matrix3fr> posesR;
+	std::vector<Eigen::Vector3f> posesCenter;
+
+	generateRandomPoses(frameCount, posesR, posesCenter);
+	return generateFromPoses(posesR, posesCenter);
+}
+
+void SceneGenerator::generateRandomRef(float normalAngle, Eigen::Matrix3fr &R, Eigen::Vector3f &center)
+{
+	//Ref
+	std::uniform_real_distribution<float> uniformAngle(0.0f, 2 * M_PI);
+	R = Eigen::AngleAxisf(normalAngle, Eigen::Vector3f::UnitY()) * Eigen::AngleAxisf(uniformAngle(mRandomDevice), Eigen::Vector3f::UnitZ());
+	center = Eigen::Vector3f(0, 0, -1);
+
+	//Test
+	Eigen::Vector3f n = R * Eigen::Vector3f::UnitZ();
+	float aa = acos(n.dot(Eigen::Vector3f::UnitZ()));
+	MYAPP_LOG << "GT normal=" << R.col(2).transpose() << "\n";
+	MYAPP_LOG << "aa=" << (aa * 180 / M_PI) << "\n";
+}
+
+void SceneGenerator::generateRandomPoses(int frameCount, std::vector<Eigen::Matrix3fr> &posesR, std::vector<Eigen::Vector3f> &posesCenter)
+{
 	posesR.push_back(Eigen::Matrix3fr::Identity());
 	posesCenter.push_back(Eigen::Vector3f(0, 0, -1));
 
@@ -89,8 +131,6 @@ std::unique_ptr<Map> SceneGenerator::generateRandomPoses(int frameCount)
 		posesR.push_back(R.transpose());
 		posesCenter.push_back(center);
 	}
-
-	return generateFromPoses(posesR, posesCenter);
 }
 
 std::unique_ptr<Map> SceneGenerator::generateVariableNormal(float normalAngle)
@@ -101,15 +141,11 @@ std::unique_ptr<Map> SceneGenerator::generateVariableNormal(float normalAngle)
 
 	//Ref
 	std::uniform_real_distribution<float> uniformAngle(0.0f, 2 * M_PI);
-	Eigen::Matrix3f refR( Eigen::AngleAxisf(normalAngle, Eigen::Vector3f::UnitY()) * Eigen::AngleAxisf(uniformAngle(mRandomDevice), Eigen::Vector3f::UnitZ()) );
+	Eigen::Matrix3fr refR;
+	Eigen::Vector3f refCenter;
+	generateRandomRef(normalAngle, refR, refCenter);
 	posesR.push_back(refR);
 	posesCenter.push_back(Eigen::Vector3f(0, 0, -1));
-
-	//Test
-	Eigen::Vector3f n = refR * Eigen::Vector3f::UnitZ();
-	float aa = acos(n.dot(Eigen::Vector3f::UnitZ()));
-	MYAPP_LOG << "GT normal=" << refR.col(2).transpose() << "\n";
-	MYAPP_LOG << "aa=" << (aa * 180 / M_PI) << "\n";
 
 	//Others
 	for (float dx = -0.5; dx <= 0.5; dx += 0.25)

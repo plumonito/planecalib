@@ -17,6 +17,9 @@ public:
 	bool getUseNormalizedConstraints()  const { return mUseNormalizedConstraints; }
 	void setUseNormalizedConstraints(bool value)  { mUseNormalizedConstraints = value; }
 
+	bool getFixPrincipalPoint()  const { return mFixPrincipalPoint; }
+	void setFixPrincipalPoint(bool value)  { mFixPrincipalPoint = value; }
+
 	double getInitialAlpha() const { return mInitialAlpha; }
 	
 	const Eigen::Matrix3fr &getK() const { return mK; }
@@ -26,6 +29,7 @@ public:
 
 protected:
 	bool mUseNormalizedConstraints;
+	bool mFixPrincipalPoint;
 
 	double mInitialAlpha;
 	Eigen::Matrix3fr mK;

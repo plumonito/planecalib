@@ -55,7 +55,8 @@ void HomographyCalibration::calibrate(const Eigen::Vector2f &p0, const std::vect
 
 	problem.AddParameterBlock(&alpha, 1);
 	problem.AddParameterBlock(pp.data(), 2);
-	problem.SetParameterBlockConstant(pp.data());
+	if (mFixPrincipalPoint)
+		problem.SetParameterBlockConstant(pp.data());
 	problem.AddParameterBlock(mNormal.data(), 3, new Fixed3DNormParametrization(1));
 	//problem.SetParameterBlockConstant(mNormal.data());
 	for (int i = 0; i<hcount; i++)

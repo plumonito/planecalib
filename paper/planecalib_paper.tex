@@ -345,6 +345,13 @@ where the position of the points is constrained so that $z=0$.
 
 \begin{figure}
 \centering
+\includegraphics[width=\linewidth]{images/resultsFrameCount.pdf}
+\caption{RMS error of camera intrinsics with increasing input frame count. Synthetic random scene was used. Gaussian noise with $\sigma=1$ was applied to the input point correspondences. Horizontal axis is the number of frames used for calibration. Notice .}
+\label{fig:results_noise}
+\end{figure}
+
+\begin{figure}
+\centering
 \includegraphics[width=\linewidth]{images/resultsNormalAngle.pdf}
 \caption{Robustness of the calibration system to violations of the perpendicular reference camera assumption. The calibration system is robust to angles of up to $35^\circ$ between the reference image and the scene plane. Tests run with scene Fixed-B and point correspondence noise with $\sigma=1$. The reference camera was randomly sampled to have the desired angle with the scene plane.}
 \label{fig:results_normal_angle}
