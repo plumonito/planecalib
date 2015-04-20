@@ -97,6 +97,8 @@ Our system combines the ideas from \cite{bocquillon2006} and \cite{gurdjos2003} 
 
 \item A direct comparison of the accuracy of planar known-target and self-calibration methods.
 
+\item An open source implementation of the planar self-calibration system.
+
 \end{itemize}
 
 \begin{figure}
@@ -187,7 +189,7 @@ where $\Hm_{ij}$ is a $3 \times 3$ full-rank matrix. The equation is up to scale
 
 The first step in our algorithm is to obtain a projective reconstruction of the scene. The reconstruction includes the position of the observed points in world coordinates and the poses of the cameras. The points can be represented with a 2D position vector $\yv=[x,y]^\top$ because the scene is planar. The pose of a camera $i$ can be represented by a homography $\Hm_i$ that translates the points from world to image space. 
 
-A projective reconstruction is defined up to a homography. Thus, without loss of generality we select one of the image frames as the reference frame $r$ which has the same coordinate frame as the world, \ie $\Hm_r = \Im_{3 \times 3}$. This also implicitly fixes the position of the world points $\yv=\pv_r$. The poses of the other frames can be determined independently by computing the homography between them and the reference frame.
+A projective reconstruction is defined up to a homography. Thus, without loss of generality we select one of the image frames as the reference frame, say image $0$, which has the same coordinate frame as the world, \ie $\Hm_0 = \Im_{3 \times 3}$. This also implicitly fixes the position of the world points $\yv=\pv_0$. The poses of the other frames can be determined independently by computing the homography between them and the reference frame.
 
 \subsection{Distortion}
 \label{sec:planar:distortion}
@@ -202,9 +204,9 @@ Although there are methods of estimating the distortion parameters from a set of
 The projective reconstruction obtained so far is biased due to the choice of reference frame and the distortion coefficients haven't been estimated. We perform a robust non-linear minimization \cite{ceres-solver} over all parameters to obtain the optimal projective reconstruction. The formulation of the minimization problem is as follows, 
 %
 \begin{align}
-\argmin_{\dv',\pv_0,\lbrace \Hm_i \rbrace, \lbrace \yv_j \rbrace} 
+\argmin_{\dv',\pv_0,\lbrace \Hm_i \rbrace, \lbrace \yv_k \rbrace} 
 %
-\sum_i \sum_j \rho(\norm{\pv_{ij} - \Distortion_{\text{px}}(\Hm_i \yv_j)})^2 + \norm{\pv_0 - \bar{\pv}_0}
+\sum_i \sum_k \rho(\norm{\pv_{ik} - \Distortion_{\text{px}}(\Hm_i \yv_k)})^2 + \norm{\pv_0 - \bar{\pv}_0}
 \end{align}
 %
 where $\rho(\cdot)$ is a robust function to reduce the influence of outliers (\eg the Cauchy loss function \cite{ceres-solver}). The homography of the reference camera is kept fixed to remove the projective ambiguity. However, all point coordinates $\yv_j$ are optimized to remove the bias towards the reference camera. The final term regularizes the center of distortion, biasing it towards the center of the image $\bar{\pv}_0$ in case of no distortion.
@@ -217,64 +219,60 @@ where $\rho(\cdot)$ is a robust function to reduce the influence of outliers (\e
 
 We first derive the constraints for homography-based self-calibration. We take a different route than \cite{bocquillon2006} for clarity and to gain insight into the nature of the constraints. Yet, the constraints obtained in this section are equivalent to those of \cite{bocquillon2006}, as is shown in Section \ref{sec:calib:connection}. In Section \ref{sec:calib:normalization} we show that these constraints are biased and propose a new set of normalized constraints. We then derive a closed-form solution to obtain an initial guess for the focal length in Section \ref{sec:calib:closed}.
 
-The input to a homography-based self-calibration stage are a series of homographies $\lbrace \Hm_i \rbrace$ that relate all images to a reference image $r$. The calibration recovers the intrinsic parameters $f_x$,$f_y$, and $\pv_0$. It assumes no distortion since the distortion can be corrected beforehand during a projective reconstruction stage.
+The input to a homography-based self-calibration stage are a series of homographies $\lbrace \Hm_i \rbrace$ that relate all images to a reference image. The calibration recovers the intrinsic parameters $f_x$,$f_y$, and $\pv_0$. It assumes no distortion since the distortion can be corrected beforehand during a projective reconstruction stage.
 
-The calibration constraints come from our knowledge of the metric structure of the world applied to the obtained projective reconstruction. To derive the constraints we arbitrarily choose our metric world coordinate frame to coincide with the camera frame of the reference image. We describe the scene plane in this reference frame by its normal vector $\nv=[n_x,n_y,n_z]^\top$ (with unit norm) and the distance to the origin.
+The calibration constraints come from our knowledge of the metric structure of the world applied to the obtained projective reconstruction. To derive the constraints we arbitrarily choose our metric world coordinate frame to coincide with the camera frame of the reference image. We describe the scene plane in this reference frame by its 3D normal vector $\nv_0$ (with unit norm) and the distance to the origin.
 
-We encode the Euclidean structure of the plane with two orthogonal basis vectors with equal norm that span the plane: $\av$ and $\bv$. Like the normal vector, these vectors represent directions in 3D space, see Fig.~\ref{fig:planar_structure}. Note that these vectors are not unique since we can rotate them around $\nv$ and they are still orthonormal basis vectors. With this in mind, the following equations encode the orthogonality and equal norm constraints respectively
+We encode the Euclidean structure of the plane with two orthogonal basis vectors with equal norm that span the plane: $\av_0$ and $\bv_0$. Like the normal vector, these vectors represent directions in 3D space, see Fig.~\ref{fig:planar_structure}. Note that these vectors are not unique since we can rotate them around $\nv_0$ and they are still orthonormal basis vectors. With this in mind, the following equations encode the orthogonality and equal norm constraints respectively
 \begin{align}
-\av^\top \bv = 0, \label{eq:ortho_constraint_ref} \\
-\av^\top \av - \bv^\top \bv = 0. \label{eq:norm_constraint_ref}
+\av_i^\top \bv_i = 0, \label{eq:ortho_constraint} \\
+\av_i^\top \av_i - \bv_i^\top \bv_i = 0, \label{eq:norm_constraint}
 \end{align}
+where the index $i$ has been kept variable because these constraints apply to all cameras.
 
 \begin{figure}
+\centering
 \input{images/basisVectors.pdf_tex}
 \caption{Planar self-calibration geometry.}
 \label{fig:planar_structure}
 \end{figure}
 
-We can derive these basis vectors from the plane's normal. To ensure orthogonality, we select $\av$ as the cross product of $\nv$ with an auxiliary fixed vector $\ev$
+By definition, we can derive these vectors for the reference camera. To ensure orthogonality, we select $\av_0$ as the cross product of $\nv_0$ with an auxiliary fixed vector $\ev$
 \begin{align}
-\av = \nv \times \ev = [\nv]_\times \ev \\
-\bv = \nv \times \av = [\nv]_\times^2 \ev
+\av_0 = \nv_0 \times \ev = [\nv_0]_\times \ev \\
+\bv_0 = \nv_0 \times \av_0 = [\nv_0]_\times^2 \ev
 \end{align}
-Note that $\ev$ can be any vector as long as it is not parallel to $\nv$. A different $\ev$ will produce a different orientation for the basis but Equations \eqref{eq:ortho_constraint_ref} and \eqref{eq:norm_constraint_ref} will remain unchanged.
+Note that $\ev$ can be any vector as long as it is not parallel to $\nv_0$. A different $\ev$ will produce a different orientation for the basis but Eqs.~\eqref{eq:ortho_constraint} and \eqref{eq:norm_constraint} will remain unchanged.
 
-The basis vectors are defined in the coordinate frame of the reference camera. It is possible to transform the basis vectors to the frame of camera $i$ through its homography
+Given the basis vectors in the reference camera they can be transformed to the frame of camera $i$ through its homography
 \begin{align}
-\av_i = \Km^{-1} \Hm_i \Km \av, \\
-\bv_i = \Km^{-1} \Hm_i \Km \bv.
+\av_i = \Km^{-1} \Hm_i \Km \av_0, \\
+\bv_i = \Km^{-1} \Hm_i \Km \bv_0.
 \end{align}
 %
-We may now enforce the same constraints (orthogonal and equal norm) on the transformed basis vectors
-\begin{align}
-\av_i^\top \bv_i = 0, \label{eq:ortho_constraint} \\
-\av_i^\top \av_i - \bv_i^\top \bv_i = 0. \label{eq:norm_constraint} 
-\end{align}
-%
-Note that Equations \eqref{eq:ortho_constraint_ref} and \eqref{eq:norm_constraint_ref} are satisfied by definition but Equations \eqref{eq:ortho_constraint} and \eqref{eq:norm_constraint} constrain $\Km$ using the reconstructed homographies. These are the self-calibration constraints that will allow us to recover $\Km$.
+Note that Eqs.~\eqref{eq:ortho_constraint} and \eqref{eq:norm_constraint} for the reference camera are satisfied by definition but the other cameras constrain $\Km$ using the reconstructed homographies. These are the self-calibration constraints that will allow us to recover $\Km$.
 
 \subsection{Connection with previous work}
 \label{sec:calib:connection}
 
-Although our derivation takes a different route, the constraints obtained so far are identical to those proposed in \cite{bocquillon2006}. The components of the \emph{circular points} in \cite{bocquillon2006} $\xv_1$ and $\xv_2$ are simply the images of the basis vectors (\ie $\xv_1=\Km \av$ and $\xv_2=\Km \bv$). By using the notation $\omega=\Km^{-\top}\Km^{-1}$, Equations \eqref{eq:ortho_constraint} and \eqref{eq:norm_constraint} can be expanded to be expressed as in \cite{bocquillon2006}
+Although our derivation takes a different route, the constraints obtained so far are identical to those proposed in \cite{bocquillon2006}. The components of the \emph{circular points} in \cite{bocquillon2006} $\xv_1$ and $\xv_2$ are simply the images of the basis vectors (\ie $\xv_1=\Km \av_0$ and $\xv_2=\Km \bv_0$). By using the notation $\omega=\Km^{-\top}\Km^{-1}$, Eqs.~\eqref{eq:ortho_constraint} and \eqref{eq:norm_constraint} can be expanded to be expressed as in \cite{bocquillon2006}
 %
 \begin{align}
-\av_i^\top \bv_i &= (\Km^{-1} \Hm_i \Km \av)^\top (\Km^{-1} \Hm_i \Km \bv) \notag \\
-&= (\Km^{-1} \Hm_i \xv_1)^\top (\Km^{-1} \Hm_i \xv_2) \notag \\
+\av_i^\top \bv_i &= (\Km^{-1} \Hm_i \Km \av_0)^\top (\Km^{-1} \Hm_i \Km \bv_0) \notag \\
+%&= (\Km^{-1} \Hm_i \xv_1)^\top (\Km^{-1} \Hm_i \xv_2) \notag \\
 &= \xv_1^\top \Hm_i^\top \omegav \Hm_i \xv_2 = 0 
 \\
-\av_i^\top \av_i - \bv_i^\top \bv_i &= (\Km^{-1} \Hm_i \Km \av)^\top (\Km^{-1} \Hm_i \Km \av) \notag 
+\av_i^\top \av_i - \bv_i^\top \bv_i &= (\Km^{-1} \Hm_i \Km \av_0)^\top (\Km^{-1} \Hm_i \Km \av_0) \notag 
 \\
-&\quad - (\Km^{-1} \Hm_i \Km \bv)^\top (\Km^{-1} \Hm_i \Km \bv) \notag 
+&\quad - (\Km^{-1} \Hm_i \Km \bv_0)^\top (\Km^{-1} \Hm_i \Km \bv_0) \notag 
 \\
-&= (\Km^{-1} \Hm_i \xv_1)^\top (\Km^{-1} \Hm_i \xv_1) \notag 
-\\
-&\quad - (\Km^{-1} \Hm_i \xv_2)^\top (\Km^{-1} \Hm_i \xv_1) \notag 
-\\
+%&= (\Km^{-1} \Hm_i \xv_1)^\top (\Km^{-1} \Hm_i \xv_1) \notag 
+%\\
+%&\quad - (\Km^{-1} \Hm_i \xv_2)^\top (\Km^{-1} \Hm_i \xv_1) \notag 
+%\\
 &= \xv_1^\top \Hm_i^\top \omegav \Hm_i \xv_1 - \xv_2^\top \Hm_i^\top \omegav \Hm_i \xv_2 = 0 
 \end{align}
-which are the exact same constraints and with the same parametrization as in Equation (4) of \cite{bocquillon2006}. The resulting unknowns are $\Km$ and $\nv$. The normal $\nv$ has 3 variables with 2 DoF. The intrinsic matrix $\Km$ varies between 5 DoF and 1 DoF depending on the camera model. Vector $\ev$ is not an unknown of the problem. It can be chosen arbitrarily and fixed as long as it is not parallel to the normal vector.
+which are the same constraints and with the same parametrization as in Eq.~(4) of \cite{bocquillon2006}. The resulting unknowns are $\Km$ and $\nv_0$. The normal $\nv_0$ has 3 variables with 2 DoF. The intrinsic matrix $\Km$ varies between 5 DoF and 1 DoF depending on the camera model. Vector $\ev$ is not an unknown of the problem. It can be chosen arbitrarily and fixed as long as it is not parallel to the normal vector.
 
 
 \subsection{Closed-form with a known plane normal}
@@ -284,7 +282,7 @@ The normalized constraints can be readily used in an iterative non-linear minimi
 
 We reduce the intrinsic matrix to have 1 DoF by assuming a single focal length and a known principal point. We use the distortion center obtained from a projective reconstruction as the principal point and translate the obtained homographies so that this point lies in the origin. The intrinsic matrix is then $\Km=\text{diag}(f, f, 0)$. 
 
-To fix the plane normal we assume that the reference image is fronto-parallel to the plane, \ie $\nv=[0,0,1]^\top$. This seems like a strong assumption, however it is only used to obtain an initial guess of the focal length. The constraint is dropped during the optimization step and the real normal is found. Moreover, different initial guesses for the focal length can be obtained very cheaply by repeating this procedure with a different input image selected as the reference frame. The best initial guess from these can then be used for further optimization. The experiments presented in Section \ref{sec:results} demonstrate the robustness of the algorithm to violations of this assumption.
+To fix the plane normal we assume that the reference image is fronto-parallel to the plane, \ie $\nv_0=[0,0,1]^\top$. This seems like a strong assumption, however it is only used to obtain an initial guess of the focal length. The constraint is dropped during the optimization step and the real normal is found. Moreover, different initial guesses for the focal length can be obtained very cheaply by repeating this procedure with a different input image selected as the reference frame. The best initial guess from these can then be used for further optimization. The experiments presented in Section \ref{sec:results} demonstrate the robustness of the algorithm to violations of this assumption.
 
 Under these assumptions the constraints \eqref{eq:ortho_constraint} and \eqref{eq:norm_constraint} reduce to a pair of quadratic polynomials in one variable 
 \begin{align}
@@ -294,14 +292,14 @@ h_{31}\, h_{32}\, f^2 + h_{11}\, h_{12} + h_{21}\, h_{22}=0
 f^2\, {h_{31}}^2 - f^2\, {h_{32}}^2 + {h_{11}}^2 + {h_{21}}^2 - {h_{12}}^2 - {h_{22}}^2=0
 \label{eq:closed_form_b}
 \end{align}
-Note that since $\nv$ is known the choice of $\ev$ vanishes. Choosing either $\ev=[1,0,0]^\top$ or $\ev=[0,1,0]^\top$ result in the same equations. However, choosing $\ev=[0,0,1]^\top$ (\ie $\ev=\nv$) results in the trivial constraint $0=0$. Each homography imposes two constraints on the focal length. Since the focal length only appears in quadratic form Eqs.~\eqref{eq:closed_form_a} and \eqref{eq:closed_form_b} simplify to linear constraints that can the be solved directly as an overdetermined linear system to obtain $f$. In case of outliers, a RANSAC approach can be used here to discard homographies that were poorly estimated.
+Note that since $\nv_0$ is known the choice of $\ev$ vanishes. Choosing either $\ev=[1,0,0]^\top$ or $\ev=[0,1,0]^\top$ result in the same equations. However, choosing $\ev=[0,0,1]^\top$ (\ie $\ev=\nv_0$) results in the trivial constraint $0=0$. Each homography imposes two constraints on the focal length. Since the focal length only appears in quadratic form Eqs.~\eqref{eq:closed_form_a} and \eqref{eq:closed_form_b} simplify to linear constraints that can the be solved directly as an overdetermined linear system to obtain $f$. In case of outliers, a RANSAC approach can be used here to discard homographies that were poorly estimated.
 
 \subsection{Scale and normalization}
 \label{sec:calib:normalization}
 
 The self-calibration constraints are homogeneous in the absence of noise. In this case their scale does not matter. However, with real data the constraints will have non-zero residuals and their scale affects the solution obtained. For example, Eq.~\eqref{eq:ortho_constraint} can also be expressed as
 \begin{align}
-\av_i^\top \bv_i = \norm{\av_i} \norm{\bv_i} \cos \theta_{a b}
+\av_i^\top \bv_i = \norm{\av_i} \norm{\bv_i} \cos \theta
 \end{align} 
 where $\theta$ is the angle between the vectors. We see that the scale of the residuals is directly proportional to the norm of the vectors. However, this constraint should only depend on the angle because it is an orthogonality constraint. Similarly, Eq.~\eqref{eq:norm_constraint} should only constrain the norms of the vectors to be equal regardless of their scale. The constraints from Gurdjos and Sturm \cite{gurdjos2003} suffer the same problem.
 
@@ -321,7 +319,7 @@ These are the normalized planar self-calibration constraints.
 The closed-form solution provides an initial guess under the fixed-normal assumption. Although rough, this is a suitable starting point for a non-linear optimization using the constraints \eqref{eq:ortho_constraint_normalized} and \eqref{eq:norm_constraint_normalized}. The formulation of the minimization problem is as follows, 
 %
 \begin{align}
-\argmin_{\Km,\nv} 
+\argmin_{\Km,\nv_0} 
 \sum_i 
 \frac{\av_i \cdot \bv_i}{\norm{\av_i} \norm{\bv_i}} +
 \sum_i 
@@ -341,16 +339,16 @@ Once the intrinsic parameters have been recovered, upgrading the projective reco
 
 The position $\xv$ of the observed points can be obtained by intersecting the optical ray of the reference camera with the scene plane at $z=0$. The extrinsic parameters of the other cameras are implicitly contained in the homographies and could be directly recovered from them using non-linear means. Alternatively, since the observed points are already triangulated and the camera is calibrated we can use well-known perspective-n-points techniques to estimate the extrinsics \cite{quan1999}.
 
-This produces a complete and calibrated 3D reconstruction of the scene and the cameras, including the intrinsic parameters ($\Km,\dv$), the extrinsic parameters ($\lbrace \Rm_i \rbrace,\lbrace \tv_i \rbrace$), and the point 3D positions ($\lbrace \xv_j \rbrace$).
+This produces a complete and calibrated 3D reconstruction of the scene and the cameras, including the intrinsic parameters ($\Km,\dv$), the extrinsic parameters ($\lbrace \Rm_i \rbrace,\lbrace \tv_i \rbrace$), and the point 3D positions ($\lbrace \xv_k \rbrace$).
 
 \subsection{Metric bundle adjustment}
 
 The final solution is obtained by a non-linear optimization which minimizes the reprojection errors of 3D points on image space. That is, the point coordinates are now in metric space and the quantity minimized is in pixel units. This implicitly enforces all known constraints about the scene and uses all available information. The formulation of the minimization problem is as follows, 
 %
 \begin{align}
-\argmin_{\Km,\dv,\lbrace \Rm_i \rbrace,\lbrace \tv_i \rbrace, \lbrace \xv_j \rbrace} 
+\argmin_{\Km,\dv,\lbrace \Rm_i \rbrace,\lbrace \tv_i \rbrace, \lbrace \xv_k \rbrace} 
 %
-\sum_i \sum_j \rho(\norm{\pv_{ij} - \Projection_i(\xv_j))})^2 
+\sum_i \sum_k \rho(\norm{\pv_{ik} - \Projection_i(\xv_k))})^2 
 \end{align}
 %
 where the position of the points is constrained so that $z=0$. 
@@ -412,7 +410,7 @@ Figure \ref{fig:results_noise} shows the clear difference in accuracy between sc
 \label{fig:results_noise}
 \end{figure}
 
-Self-calibration is more susceptible to noise than a known-target calibration. This is to be expected because the problem has more degrees of freedom. However, we can correct this by using more images. Figure \ref{fig:results_frames} shows the behaviour of the algorithm with a varying number of images used for calibration. Noise was applied with a fixed $\sigma=1$ and random cameras were sampled for scene \texttt{Random}. We see that the accuracy of the self-calibration converges to that of the known-target calibration when more images are used. We note that for modern cameras it is trivial to capture more images for calibration. In fact, we routinely use a video of the camera moving around looking at a book cover for calibration.
+Self-calibration is more susceptible to noise than a known-target calibration. This is to be expected because it has more degrees of freedom. However, we can correct this by using more images. Fig.~\ref{fig:results_frames} shows the behaviour of the algorithm with a varying number of images used for calibration. A fixed $\sigma=1$ was used and random cameras were sampled for scene \texttt{Random}. We see that the accuracy of the self-calibration converges to that of the known-target calibration when more images are used. We note that for modern cameras it is trivial to capture more images for calibration. In fact, we routinely use a video of the camera moving around looking at a book cover for calibration.
 
 \begin{figure}
 \centering
@@ -467,7 +465,9 @@ Refocus during video & $d_0$ & 0.388 & 0.139 & 0.099 \\
 
 \section{Conclusions}
 
-We have presented a complete planar self-calibration system that rivals the state-of-the-art calibration algorithms in accuracy and is considerably more practical to use. Our novel derivation of the planar self-calibration constraint shows that the previous formulations are biased. We proposed a set of normalized self-calibration constraints that eliminates this bias and is more robust to noise due to proper normalization. We demonstrated that the assumption used to obtain the closed-form solution to estimate the focal length is not very strict and for most practical purposes poses no limitations on the system. The system proved to be very robust to violations of this assumption, obtaining correct calibrations with angles of up to $35^\circ$ between the reference camera and the scene plane. Our calibration system improves the accuracy of calibration over a purely homography-based self-calibration by over an order of magnitude. Finally, we showed that our system has such a high accuracy that with enough input images it reaches the same accuracy as a known-target calibration, thus eliminating the practical need of printing checkerboards for camera calibration.
+We have presented a complete planar self-calibration system that rivals the state-of-the-art calibration algorithms in accuracy and is considerably more practical to use. Our novel derivation of the planar self-calibration constraint shows that the previous formulations are biased. We proposed a set of normalized self-calibration constraints that eliminates this bias and is more robust to noise due to proper normalization. We demonstrated that the assumption used to obtain the closed-form solution to estimate the focal length is not very strict and for most practical purposes poses no limitations on the system. The system proved to be very robust to violations of this assumption, obtaining correct calibrations with angles of up to $35^\circ$ between the reference camera and the scene plane. Our calibration system improves the accuracy of calibration over a purely homography-based self-calibration by over an order of magnitude. 
+
+We showed that our system has such a high accuracy that with enough input images it reaches the same accuracy as a known-target calibration, thus eliminating the practical need of printing checkerboards for camera calibration. Finally, we release the code of our calibration system so that the computer vision community can easily adopt this calibration method.
 
 \clearpage
 
