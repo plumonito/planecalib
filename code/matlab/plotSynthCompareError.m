@@ -56,8 +56,8 @@ clf;
 for kk=1:length(labels)
     err = errors{kk};
     
-    %validMask = abs(err.errorFocal)<60 & ~isinf(errorDist0);
-    validMask = ~isinf(errorDist0) & abs(err.errorFocal) < 1e3;
+    validMask = abs(err.errorFocal)<60 & ~isinf(errorDist0);
+%     validMask = ~isinf(errorDist0) & abs(err.errorFocal) < 1e3;
     validKeys = errorKey(validMask);
     err.errorFocal = err.errorFocal(validMask);
     err.errorP0 = err.errorP0(validMask);
@@ -88,22 +88,25 @@ for kk=1:length(labels)
     subplot(subrows,subcols,1);
     hold on
     plot(keys,errorFocalKeyed,lineStyle,'DisplayName',labels{kk})
-    title('Focal error (%)')
+    title('Focal length error (%)')
 %     xlabel(errorKeyName)
 
     %This for angles
-    %xlim([0,45])
-    %l = get(gca,'XTickLabel');
-    %extraL = '°';
-    %l(:,end+1:end+length(extraL)) = repmat(extraL,size(l,1),1);
-    %set(gca,'XTickLabel',l)
+%     xlim([0,45])
+%     l = get(gca,'XTickLabel');
+%     extraL = '°';
+%     for li=1:size(l)
+%         l{li} = [l{li} extraL];
+%     end
+%     set(gca,'XTickLabel',l)
     
     subplot(subrows,subcols,2);
     hold on
     plot(keys,errorP0Keyed,lineStyle,'DisplayName',labels{kk})
     title('Principal point p_0 error (%)')
 %     xlabel(errorKeyName)
-    %set(gca,'XTickLabel',l)
+%     xlim([0,45])
+%     set(gca,'XTickLabel',l)
 
     subplot(subrows,subcols,3);
     hold on

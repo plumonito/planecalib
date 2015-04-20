@@ -408,6 +408,7 @@ void MainWindow::synthTest()
 
 	SceneGenerator generator;
 	generator.setCamera(&camera);
+	generator.mVerbose = true;
 
 	CalibrationError error;
 

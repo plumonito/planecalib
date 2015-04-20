@@ -8,6 +8,7 @@
 \usepackage{amssymb}
 \usepackage{mathtools}
 \usepackage{bm}
+\usepackage{caption}
 \usepackage{subcaption}
 
 % Include other packages here, before hyperref.
@@ -54,46 +55,49 @@ First line of institution2 address\\
 
 %%%%%%%%% ABSTRACT
 \begin{abstract}
-We introduce a self-calibration method using a planar scene of unknown texture. Planar surfaces are everywhere but checkerboards are not, thus the method can be more easily applied outside of the lab. We demonstrate that the accuracy is equivalent to a checkerboard-based calibration, so there is no need for printing checkerboards any more. Moreover, the use of a planar scene provides improved robustness and stronger constraints than a self-calibration with an arbitrary scene. We provide a closed-form initialization of the focal length with minimal and practical assumptions. The method recovers the intrinsic and extrinsic parameters of the camera and the metric structure of the planar scene. The method is implemented in a real-time calibration application for non-expert users that provides an easy and practical process to obtain high accuracy calibrations. 
+We introduce a camera self-calibration method using a planar scene of unknown texture. Planar surfaces are everywhere but checkerboards are not, thus the method can be more easily applied outside of the lab. We demonstrate that the accuracy is equivalent to a checkerboard-based calibration, so there is no need for printing checkerboards any more. Moreover, the use of a planar scene provides improved robustness and stronger constraints than a self-calibration with an arbitrary scene. We utilize a closed-form initialization of the focal length with minimal and practical assumptions. The method recovers the intrinsic and extrinsic parameters of the camera and the metric structure of the planar scene. The method is implemented in a real-time calibration application for non-expert users that provides an easy and practical process to obtain high accuracy calibrations. 
 \end{abstract}
 
 %%%%%%%%% BODY TEXT	
 \section{Introduction}
 
-Calibrating a camera's intrinsics is a fundamental problem in computer vision. A calibrated camera is needed to perform a metric reconstruction of a scene, otherwise only a projective reconstruction is possible \cite{hartley2000}. Some of the most interesting applications of computer vision, like simultaneous localization and mapping, augmented reality, and 3D reconstruction, require a metric reconstruction of the scene. Nowadays, cameras are most often calibrated offline using a calibration target. A planar target with a checkerboard pattern of known structure is a well established and popular method for camera calibration \cite{zhang1999,bouguetMCT}.
+Calibrating a camera's intrinsics is a fundamental problem in computer vision. A calibrated camera is needed to perform a metric reconstruction of a scene, otherwise only a projective reconstruction is possible \cite{hartley2003}. Some of the most interesting applications of computer vision, like simultaneous localization and mapping, augmented reality, and 3D reconstruction, require a metric reconstruction of the scene. Nowadays, cameras are most often calibrated offline using a calibration target. A planar target with a checkerboard or circular pattern of known structure is a well established and popular method for camera calibration \cite{zhang1999,bouguetMCT,kannala2008}.
 
 %Why is homography-based calibration important? Practical (easy targets) and accurate (homographies are robust to point noise)
-Planar scenes are a very convenient calibration target because they are easy to detect, match, and the observed motion can be completely described by a homography. A planar target is much easier to manufacture than a 3D target of known structure, for example a paper checkerboard can be produced by a standard printer and attached to a table. Homography-based calibration methods like \cite{zhang1999} extract the intrinsic parameters of a camera from a set of homographies between the known points in metric space and the matched points in image space. This produces a very accurate calibration because the homographies are very robust to noise and outliers. 
+Planar scenes are a very convenient calibration target because they are easy to detect, match, and the observed motion can be completely described by a homography. A planar target is much easier to manufacture than a 3D target of known structure, for example a paper checkerboard can be produced by a standard printer and attached to a table. Homography-based known-target calibration methods like \cite{zhang1999} extract the intrinsic parameters of a camera from a set of homographies between the known points in metric space and the matched points in image space. This produces a very accurate calibration because the homographies are very robust to noise and outliers. 
 
 %Why is homography-based self-calibration important? Even more practical (targets everywhere) and still accurate (strong planar constraint)
 Although this is an accurate and practical method, it is not as practical as it can be. Checkerboard targets are often inconvenient and not always available, especially outside of the lab. We note that there are a myriad of well-textured planar targets in the wild (books, paintings, fa\c{c}ades) but the metric structure of their texture is not known a-priori and are thus not suited for a method like \cite{zhang1999}. We explore the problem of homography-based self-calibration which attempts to simultaneously calibrate the camera and recover the metric structure of the scene under the assumption that the scene is planar.
 
-Homography-based self-calibration is attractive for several reasons. It is much more practical than a checkerboard based calibration because we can use any planar structure for calibration. On the other hand, when compared to a generic self-calibration approach, the planar-scene constraint significantly reduces the degrees of freedom of the problem and increases the robustness and accuracy of the calibration. Moreover, homography estimation is a much simpler and robust process than feature matching of arbitrary 3D points.
+Homography-based self-calibration is attractive for several reasons. It is much more practical than a known-target calibration because we can use any planar structure for calibration. On the other hand, when compared to a generic self-calibration approach, the planar-scene constraint significantly reduces the degrees of freedom of the problem and increases the robustness and accuracy of the calibration. Moreover, homography estimation is a much simpler and robust process than feature matching of arbitrary 3D points.
 
 %Why is it hard? Generic self-calibration has linear solution, but planar doesn't.
-So far, homography-based self-calibration has not been a viable option because the non-linearities introduced by the planar-scene constraint have prevented a closed-form solution. A closed-form solution for the camera intrinsics is fundamental to initialize a non-linear optimization of the self-calibration constraints which is easily trapped in local minima. In this paper we show that a closed-form solution is possible by imposing a minor constraint on the camera motion: the scene plane should be close to fronto-parallel to at least one image in the dataset. We believe this limitation is insignificant in practice and results in a system that can be easily and robustly used in the wild to perform accurate calibration.
+So far, homography-based self-calibration has been proven possible \cite{triggs1998} but it has not led to a practical implementation that can replace known-target calibration methods. Checkerboard-based calibration is still the standard calibration technique due to several reasons. Homography-based self-calibration by itself cannot reach the accuracy of a known-target calibration because the camera poses are implicitly fixed within the homographies. There hasn't been a proper comparison of the performance of both calibration types that would prove that it is safe to use planar self-calibration without sacrificing accuracy. Moreover, there is no publicly available implementation as there is for known-target calibration, \eg \cite{bouguetMCT}. 
 
-~\\ \noindent\textbf{Notation:}
-For clarity, we denote vector quantities as bold lowercase letters (\eg $\xv$,$\pv$,$\tv$), matrix quantities as bold uppercase letters (\eg $\Rm$,$\Km$), and scalars as lowercase italic letters (\eg $f_x$,$u_0$). We denote the homogeneous representation of a vector $\xv$ with $\homogeneous{\xv}$. The transformation back from homogeneous coordinates is performed by dividing a vector by its last component and discarding this component. This is denoted by $\hnorm(\xv)$. Equations in homogeneous coordinates are equal up to scale and this is denoted by the $\propto$ symbol.
-%We frequently change between homogeneous and inhomogeneous representation of vectors.
+In this paper address these issues and describe a complete planar self-calibration system that rivals the performance of known-target calibration methods. We compare the limits of both calibration types and show that in almost any practical situation, planar self-calibration can be used to obtain calibrations with the same accuracy as that of known-target calibration methods.
+
+%not been a viable option because the non-linearities introduced by the planar-scene constraint have prevented a closed-form solution. A closed-form solution for the camera intrinsics, and for the focal length in particular, is fundamental to initialize a non-linear optimization of the self-calibration constraints which is easily trapped in local minima. In this paper we show that a closed-form solution for the focal length is possible by imposing a minor constraint on the camera motion: the scene plane should be close to fronto-parallel to at least one image in the dataset. We believe this limitation is insignificant in practice and results in a system that can be easily and robustly used in the wild to perform accurate calibration.
 
 \subsection{Previous work}
 
-The landmark paper of Zhang \cite{zhang1999} is nowadays the defacto standard for camera calibration and has been implemented for many platforms \cite{bouguetMCT,opencv_library}. It is interesting to notice that the calibration constraints used have the same nature as the ones presented here. However, because the metric structure of the world is known the equations simplify considerably and there are less degrees of freedom. Hartley and Zisserman \cite{hartley2000} present a comprehensive analysis of camera calibration AAAAHHHHH
+Hartley and Zisserman \cite{hartley2003} present a comprehensive analysis of camera calibration, including known-target and self-calibration methods. In the area of known-target calibration the landmark paper of Zhang \cite{zhang1999} is nowadays the defacto standard for camera calibration and has been implemented for many platforms \cite{bouguetMCT,opencv_library}. It is interesting to notice that the calibration constraints used have the same nature as the ones presented here. However, because the metric structure of the world is known the equations simplify considerably and there are less degrees of freedom. 
 
-Papers to cite:
+There has been considerable progress in the area of self-calibration when the observed scene has a 3D structure. Closed-form and linear solutions have been obtained to recover the focal length of a moving camera \cite{bougnoux1998}. However, these methods fail when the scene is planar. The planar self-calibration constraints were first introduced by Triggs \cite{triggs1998}. Triggs encoded the plane structure using two circular points, which resulted in 4 degrees of freedom (DoF) plus the camera intrinsics. Bocquillon \etal \cite{bocquillon2006} later reformulated these constraints to encode the plane structure using the plane normal and only 2 DoF. They solved the calibration problem using interval analysis which results in an exhaustive search through parameter space.
 
-- Checkerboard calibration \cite{zhang1999}. The same homography-based calibration constraints but metric reconstruction is directly possible.
+Gurdjos and Sturm \cite{gurdjos2003} took a different approach using the \emph{centre line constraint}. Their formulation keeps the DoF constant even with a varying focal length. However, it is less constrained than the formulation of \cite{bocquillon2006} and requires more images to reach the same accuracy. Gurdjos and Sturm also provide a closed-form solution under a minor assumption, namely that the reference image is close to fronto-parallel with the scene plane.
 
-- Matlab toolbox \cite{bouguetMCT}
+Our system combines the ideas from \cite{bocquillon2006} and \cite{gurdjos2003} and extends them into a complete planar self-calibration system. We take a novel approach to derivate the planar self-calibration constraints which highlights a weakness of the existing formulation. We solve this by providing a new set of normalized constraints. We use the same assumption as \cite{gurdjos2003} to obtain a closed-form solution and bootstrap the calibration. However, we obtain a significant improvement in the final accuracy by adding a final bundle adjustment in metric space. We summarize the contributions of our paper below
+\begin{itemize}
 
-- \cite{triggs1998} first formulation of the planar self-calibration constraints.
+\item A novel derivation of the planar self-calibration constraints that is more intuitive and provides insight into the nature of the constraints.
 
-- \cite{bocquillon2006} most recent and most relevant. Reduced the DoF to only 3 for focal length estimation. We build upon this formulation to show that a
+\item A new set of normalized planar self-calibration constraints that is more robust in the presence of noise.
 
-- \cite{gurdjos2003} equivalent to \cite{bocquillon2006}
+\item A complete planar self-calibration pipeline that robustly obtains a final metric reconstruction and calibration with an accuracy significantly higher than a homography-based self calibration.
 
-- \cite{bougnoux1998} closed-form solution to 3D self-calibration
+\item A direct comparison of the accuracy of planar known-target and self-calibration methods.
+
+\end{itemize}
 
 \begin{figure}
 \includegraphics[width=\linewidth]{images/pipeline.pdf}
@@ -101,8 +105,10 @@ Papers to cite:
 \label{fig:diagram}
 \end{figure}
 
-\subsection{Paper structure}
-asdf
+~\\ \noindent\textbf{Notation:}
+For clarity, we denote vector quantities as bold lowercase letters (\eg $\xv$,$\pv$,$\tv$), matrix quantities as bold uppercase letters (\eg $\Rm$,$\Km$), and scalars as lowercase italic letters (\eg $f_x$,$u_0$). We denote the homogeneous representation of a vector $\xv$ with $\homogeneous{\xv}$. The transformation back from homogeneous coordinates is performed by dividing a vector by its last component and discarding this component. This is denoted by $\hnorm(\homogeneous{\xv})$. 
+%Equations in homogeneous coordinates are equal up to scale and this is denoted by the $\propto$ symbol.
+%We frequently change between homogeneous and inhomogeneous representation of vectors.
 
 \section{Camera model}
 
@@ -148,6 +154,55 @@ It is also possible to model the distortion in pixel space instead of in metric 
 %
 where $\pv_0$ is the center of distortion and $\tilde{r}=\norm{\tilde{\pv}-\pv_0}$ is the distance of the point from this center. In the common case where the focal lengths of the camera are similar, \ie $f \approx f_x \approx f_y$, the distortion models $\Distortion$ and $\Distortion_{\text{px}}$ are equivalent when $d_0 = f^2 d'_0$, $d_1=f^4 d'_1$, and the center of distortion is the same as the principal point.
 
+\section{The planar self-calibration system}
+
+The homography-based self-calibration stage is a key component but it is not enough to produce the best calibration results. A projective reconstruction stage is needed before it to prepare the homographies and a metric recronstruction stage is needed after it to perform a final bundle adjustment. The structure of the final system is shown in Fig.~\ref{fig:diagram}.
+
+The projective reconstruction stage receives the input images and extracts the homographies between them. It also gives an initial estimate of the distortion. It first estimates each homography individually and then performs a global bundle adjustment of all homographies, the distortion coefficients, and the observed points in projective space. Section \ref{sec:projective} describes this stage in detail.
+
+The homographies produced by the projective reconstruction are used to calibrate the camera as previously described. This allows a metric reconstruction of the scene. Once all camera poses and point positions are recovered in metric coordinates, a final bundle adjustment is performed to obtain the optimal calibration. Details of this reconstruction and final optimization are described in Section \ref{section:metric}.
+
+%The following sections describe each stage in detail. The feature matching stage is not described since it can be implemented with any standard feature descriptor and matching approach, \eg \cite{rublee2011orb}.
+
+\section{Projective reconstruction}
+\label{sec:projective}
+
+Planar geometry is well understood and extensively documented. Here we provide a brief review of what is relevant to this paper. Further details can be found in \cite{hartley2003}. We first approach planar geometry using a pinhole camera with no distortion. Section \ref{sec:planar:distortion} addresses the effects of distortion.
+
+A planar scene induces a homography between two pinhole cameras. That is, the measurements of image $i$ are related to those of image $j$ by
+%
+\begin{align}
+\homogeneous{\pv}_j \propto \Hm_{ij} \homogeneous{\pv}_i 
+\label{eq:homography}
+\end{align}
+%
+where $\Hm_{ij}$ is a $3 \times 3$ full-rank matrix. The equation is up to scale because all elements are in homogeneous coordinates and thus $\Hm_{ij}$ has only 8 DoF.
+
+The first step in our algorithm is to obtain a projective reconstruction of the scene. The reconstruction includes the position of the observed points in world coordinates and the poses of the cameras. The points can be represented with a 2D position vector $\yv=[x,y]^\top$ because the scene is planar. The pose of a camera $i$ can be represented by a homography $\Hm_i$ that translates the points from world to image space. 
+
+A projective reconstruction is defined up to a homography. Thus, without loss of generality we select one of the image frames as the reference frame $r$ which has the same coordinate frame as the world, \ie $\Hm_r = \Im_{3 \times 3}$. This also implicitly fixes the position of the world points $\yv=\pv_r$. The poses of the other frames can be determined independently by computing the homography between them and the reference frame.
+
+\subsection{Distortion}
+\label{sec:planar:distortion}
+
+The relation of Eq.~\eqref{eq:homography} only holds for a pinhole camera without distortion. We note that in the case of distortion, the undistorted measurements will still follow Eq.~\eqref{eq:homography}. We can thus estimate the distortion model by finding the coefficients that allow the measurements to be modelled by a homography. We use the distortion model from Eq.~\eqref{eq:distortion_pixels} to remove the distortion in image space.
+
+Although there are methods of estimating the distortion parameters from a set of uncalibrated images, for simplicity we rely here on robust homography estimation methods \cite{hartley2003} to obtain an initial projective reconstruction assuming no distortion. The distortion coefficients are then estimated during a projective bundle adjustment step. This has proven to work well with moderate distortion levels.
+
+\subsection{Projective bundle adjustment}
+\label{sec:projective:ba}
+
+The projective reconstruction obtained so far is biased due to the choice of reference frame and the distortion coefficients haven't been estimated. We perform a robust non-linear minimization \cite{ceres-solver} over all parameters to obtain the optimal projective reconstruction. The formulation of the minimization problem is as follows, 
+%
+\begin{align}
+\argmin_{\dv',\pv_0,\lbrace \Hm_i \rbrace, \lbrace \yv_j \rbrace} 
+%
+\sum_i \sum_j \rho(\norm{\pv_{ij} - \Distortion_{\text{px}}(\Hm_i \yv_j)})^2 + \norm{\pv_0 - \bar{\pv}_0}
+\end{align}
+%
+where $\rho(\cdot)$ is a robust function to reduce the influence of outliers (\eg the Cauchy loss function \cite{ceres-solver}). The homography of the reference camera is kept fixed to remove the projective ambiguity. However, all point coordinates $\yv_j$ are optimized to remove the bias towards the reference camera. The final term regularizes the center of distortion, biasing it towards the center of the image $\bar{\pv}_0$ in case of no distortion.
+
+
 \section{Homography-based self-calibration}
 We first derive the constraints for homography-based self-calibration. We take a different route than \cite{bocquillon2006} for clarity and to gain insight into the nature of the constraints. Yet, the constraints obtained in this section are equivalent to those of \cite{bocquillon2006}, as is shown in Section \ref{sec:calib:connection}. In Section \ref{sec:calib:normalization} we show that these constraints are biased and propose a new set of normalized constraints. We then derive a closed-form solution to obtain an initial guess for the focal length in Section \ref{sec:calib:closed}.
 
@@ -188,7 +243,7 @@ We may now enforce the same constraints (orthogonal and equal norm) on the trans
 %
 Note that Equations \eqref{eq:ortho_constraint_ref} and \eqref{eq:norm_constraint_ref} are satisfied by definition but Equations \eqref{eq:ortho_constraint} and \eqref{eq:norm_constraint} constrain $\Km$ using the reconstructed homographies. These are the self-calibration constraints that will allow us to recover $\Km$.
 
-\subsubsection{Connection with previous work}
+\subsection{Connection with previous work}
 \label{sec:calib:connection}
 
 Although our derivation takes a different route, the constraints obtained so far are identical to those proposed in \cite{bocquillon2006}. The components of the \emph{circular points} in \cite{bocquillon2006} $\xv_1$ and $\xv_2$ are simply the images of the basis vectors (\ie $\xv_1=\Km \av$ and $\xv_2=\Km \bv$). By using the notation $\omega=\Km^{-\top}\Km^{-1}$, Equations \eqref{eq:ortho_constraint} and \eqref{eq:norm_constraint} can be expanded to be expressed as in \cite{bocquillon2006}
@@ -210,7 +265,7 @@ Although our derivation takes a different route, the constraints obtained so far
 \end{align}
 which are the exact same constraints and with the same parametrization as in Equation (4) of \cite{bocquillon2006}. The resulting unknowns are $\Km$ and $\nv$. The normal $\nv$ has 3 variables with 2 DoF. The intrinsic matrix $\Km$ varies between 5 DoF and 1 DoF depending on the camera model. Vector $\ev$ is not an unknown of the problem. It can be chosen arbitrarily and fixed as long as it is not parallel to the normal vector.
 
-\subsubsection{Scale and normalization}
+\subsection{Scale and normalization}
 \label{sec:calib:normalization}
 
 The self-calibration constraints are homogeneous in the absence of noise. In this case their scale does not matter. However, with real data the constraints will have non-zero residuals and their scale affects the solution obtained. For example, Eq.~\eqref{eq:ortho_constraint} can also be expressed as
@@ -226,7 +281,7 @@ It is important to note that the homographies themselves are defined up to scale
 \end{align}
 These are the normalized planar self-calibration constraints.
 
-\subsubsection{Closed-form with a known plane normal}
+\subsection{Closed-form with a known plane normal}
 \label{sec:calib:closed}
 
 The normalized constraints can be readily used in an iterative non-linear minimization procedure to find the optimum values for the intrinsic parameters and the normal vector. However, we need an initial guess that we'd like to obtain in closed-form. A closed-form solution can be obtained if we assume a known plane normal and a simplified camera model. 
@@ -243,13 +298,13 @@ h_{31}\, h_{32}\, f^2 + h_{11}\, h_{12} + h_{21}\, h_{22}=0
 f^2\, {h_{31}}^2 - f^2\, {h_{32}}^2 + {h_{11}}^2 + {h_{21}}^2 - {h_{12}}^2 - {h_{22}}^2=0
 \label{eq:closed_form_b}
 \end{align}
-Note that since $\nv$ is known the choice of $\ev$ vanishes. Choosing either $\ev=[1,0,0]^\top$ or $\ev=[0,1,0]^\top$ result in the same equations. However, choosing $\ev=[0,0,1]^\top$ (\ie $\ev=\nv$) results in the trivial constraint $0=0$. Each homography imposes two constraints the focal length. Since the focal length only appears in quadratic form they simplify to linear constraints that can the be solved directly as an overdetermined linear system to obtain $f$. In case of outliers, a RANSAC approach can be used here to discard homographies that were poorly estimated.
+Note that since $\nv$ is known the choice of $\ev$ vanishes. Choosing either $\ev=[1,0,0]^\top$ or $\ev=[0,1,0]^\top$ result in the same equations. However, choosing $\ev=[0,0,1]^\top$ (\ie $\ev=\nv$) results in the trivial constraint $0=0$. Each homography imposes two constraints on the focal length. Since the focal length only appears in quadratic form Eqs.~\eqref{eq:closed_form_a} and \eqref{eq:closed_form_b} simplify to linear constraints that can the be solved directly as an overdetermined linear system to obtain $f$. In case of outliers, a RANSAC approach can be used here to discard homographies that were poorly estimated.
 
-\subsubsection{Minimal configuration}
+\subsection{Minimal configuration}
 
-According to \cite{hartley2000} the problem of planar calibration is well constrained when $2m \geq v+4$ where $m$ is the number of views and $v$ is the DoF of the intrinsic parameters. However, \cite{hartley2000} used 4 DoF for the circular points. The current formulation makes these a function of the normal vector and thus reduces them to 2 DoF. Thus, the minimal configuration requires $2m \geq v+2$. For example, if we only want to estimate the focal length ($2m \geq 1+2$) one homography is enough, as demonstrated by Eqs.~\eqref{eq:closed_form_a} and \eqref{eq:closed_form_b}.
+According to \cite{hartley2003} the problem of planar calibration is well constrained when $2m \geq v+4$ where $m$ is the number of views and $v$ is the DoF of the intrinsic parameters. However, \cite{hartley2003} used 4 DoF for the circular points. The current formulation makes these a function of the normal vector and thus reduces them to 2 DoF. Thus, the minimal configuration requires $2m \geq v+2$. For example, if we only want to estimate the focal length ($2m \geq 1+2$) one homography is enough, as demonstrated by Eqs.~\eqref{eq:closed_form_a} and \eqref{eq:closed_form_b}.
 
-\subsubsection{Non-linear optimization}
+\subsection{Non-linear optimization}
 
 The closed-form solution provides an initial guess under the fixed-normal assumption. Although rough, this is a suitable starting point for a non-linear optimization using the constraints \eqref{eq:ortho_constraint_normalized} and \eqref{eq:norm_constraint_normalized}. The formulation of the minimization problem is as follows, 
 %
@@ -264,55 +319,7 @@ The closed-form solution provides an initial guess under the fixed-normal assump
 %
 where the normal vector is constrained to have unit norm and $\Km$ is allowed to have 4 DoF as in \eqref{eq:intrinsic_matrix}. We note that although this non-linear minimization is necessary to improve the initial guess, it is still not optimal because the camera poses are encoded into the homographies and cannot be optimized. The optimal solution will be obtained by optimizing in metric space.
 
-\section{Planar self-calibration system}
-
-The homography-based self-calibration stage is a key component but it is not enough to produce the best calibration results. A projective reconstruction stage is needed before it to prepare the homographies and a metric recronstruction stage is needed after it to perform a final bundle adjustment. The structure of the final system is shown in Figure \ref{fig:diagram}.
-
-The projective reconstruction stage receives the input images and extracts the homographies between them. It also gives an initial estimate of the distortion. It first estimates each homography individually and then performs a global bundle adjustment of all homographies, the distortion coefficients, and the observed points in projective space. Section \ref{sec:projective} describes this stage in detail.
-
-The homographies produced by the projective reconstruction are used to calibrate the camera as previously described. This allows a metric reconstruction of the scene. Once all camera poses and point positions are recovered in metric coordinates, a final bundle adjustment is performed to obtain the optimal calibration. Details of this reconstruction and final optimization are described in Section \ref{section:metric}.
-
-%The following sections describe each stage in detail. The feature matching stage is not described since it can be implemented with any standard feature descriptor and matching approach, \eg \cite{rublee2011orb}.
-
-\subsection{Projective reconstruction}
-\label{sec:projective}
-
-Planar geometry is well understood and extensively documented. Here we provide a brief review of what is relevant to this paper. Further details can be found in \cite{hartley2000}. We first approach planar geometry using a pinhole camera with no distortion. Section \ref{sec:planar:distortion} addresses the effects of distortion.
-
-A planar scene induces a homography between two pinhole cameras. That is, the measurements of image $i$ are related to those of image $j$ by
-%
-\begin{align}
-\homogeneous{\pv}_j \propto \Hm_{ij} \homogeneous{\pv}_i 
-\label{eq:homography}
-\end{align}
-%
-where $\Hm_{ij}$ is a $3 \times 3$ full-rank matrix. The equation is up to scale because all elements are in homogeneous coordinates and thus $\Hm_{ij}$ has only 8 DoF.
-
-The first step in our algorithm is to obtain a projective reconstruction of the scene. The reconstruction includes the position of the observed points in world coordinates and the poses of the cameras. The points can be represented with a 2D position vector $\yv=[x,y]^\top$ because the scene is planar. The pose of a camera $i$ can be represented by a homography $\Hm_i$ that translates the points from world to image space. 
-
-A projective reconstruction is defined up to a homography. Thus, without loss of generality we select one of the image frames as the reference frame $r$ which has the same coordinate frame as the world, \ie $\Hm_r = \Im_{3 \times 3}$. This also implicitly fixes the position of the world points $\yv=\pv_r$. The poses of the other frames can be determined independently by computing the homography between them and the reference frame.
-
-\subsubsection{Distortion}
-\label{sec:planar:distortion}
-
-The relation of Eq.~\eqref{eq:homography} only holds for a pinhole camera without distortion. We note that in the case of distortion, the undistorted measurements will still follow Eq.~\eqref{eq:homography}. We can thus estimate the distortion model by finding the coefficients that allow the measurements to be modelled by a homography. We use the distortion model from Eq.~\eqref{eq:distortion_pixels} to remove the distortion in image space.
-
-Although there are methods of estimating the distortion parameters from a set of uncalibrated images, for simplicity we rely here on robust homography estimation methods \cite{hartley2000} to obtain an initial projective reconstruction assuming no distortion. The distortion coefficients are then estimated during a projective bundle adjustment step. This has proven to work well with moderate distortion levels.
-
-\subsection{Projective bundle adjustment}
-\label{sec:projective:ba}
-
-The projective reconstruction obtained so far is biased due to the choice of reference frame and the distortion coefficients haven't been estimated. We perform a robust non-linear minimization \cite{ceres-solver} over all parameters to obtain the optimal projective reconstruction. The formulation of the minimization problem is as follows, 
-%
-\begin{align}
-\argmin_{\dv',\pv_0,\lbrace \Hm_i \rbrace, \lbrace \yv_j \rbrace} 
-%
-\sum_i \sum_j \rho(\norm{\pv_{ij} - \Distortion_{\text{px}}(\Hm_i \yv_j)})^2 + \norm{\pv_0 - \bar{\pv}_0}
-\end{align}
-%
-where $\rho(\cdot)$ is a robust function to reduce the influence of outliers (\eg the Cauchy loss function \cite{ceres-solver}). The homography of the reference camera is kept fixed to remove the projective ambiguity. However, all point coordinates $\yv_j$ are optimized to remove the bias towards the reference camera. The final term regularizes the center of distortion, biasing it towards the center of the image $\bar{\pv}_0$ in case of no distortion.
-
-\subsection{Metric reconstruction}
+\section{Metric reconstruction}
 \label{section:metric}
 
 Once the intrinsic parameters have been recovered, upgrading the projective reconstruction to a metric reconstruction is straightforward. We define a new world reference frame so that the scene's plane lies at $z=0$. Under this reference frame, the extrinsic parameters of the reference camera are $\Rm=[\av, \bv, \nv]^\top$ and $\tv= - \Rm \nv$, which positions the camera exactly one unit away from the plane center and aligns it with the recovered normal.
@@ -338,7 +345,7 @@ where the position of the points is constrained so that $z=0$.
 
 We present a series of experiments that highlight the accuracy, robustness, and practicality of our calibration approach. Most of the experiments are done with synthetically generated datasets in order to have absolute ground truth for comparison. The final experiments use real cameras with both a checkerboard and an arbitrary planar surface to validate our method against a popular calibration toolbox.
 
-All synthetic tests were produced using a virtual camera with images of size $640 \times 480$ and intrinsic parameters $f_x=f_y=600$, $\pv_0=[320,240]^\top$, and $\dv=[0.1,-0.01]^\top$. We use three different position set-ups for the virtual cameras, shown in Fig.~\ref{fig:synth_poses}. Scene \texttt{Fixed-A} represents a common pattern by users capturing a plane from different angles. Although common, this motion is close to degenerate as described in \cite{sturm1997} and our experiments show that it should be avoided. Scene \texttt{Fixed-B} augments this camera arrangement with a series of cameras that are translated but not rotated, thus better constraining the problem. These scenes have a fixed number of cameras. To test the influence of the number of images used for calibration we use scene \texttt{Random} which samples cameras uniformly in space and points them at a random point in the plane. In all scenes the reference camera was positioned at a fixed central location and the angle between the optical axis and the plane normal was chosen according to the experiment. A uniformly distributed set of 1000 features was generated on the plane and projected onto the images, keeping only those measurements within the image bounds. Each experiment was repeated 300 times to obtain valid statistical results. All errors are calculated as the root-mean-squared value from these iterations and they are reported as a percentage of the ground truth value.
+All synthetic tests were produced using a virtual camera with images of size $640 \times 480$ and intrinsic parameters $f_x=f_y=600$, $\pv_0=[320,240]^\top$, and $\dv=[0.1,-0.01]^\top$. We use three different position set-ups for the virtual cameras, shown in Fig.~\ref{fig:synth_poses}. Scene \texttt{Fixed-A} represents a common pattern by users capturing a plane from different angles. Although common, this motion is close to degenerate as described in \cite{sturm1997} and our experiments show that it should be avoided. Scene \texttt{Fixed-B} augments this camera arrangement with a series of cameras that are translated but not rotated, thus better constraining the problem. These scenes have a fixed number of cameras, 18 and 35 respectively. To test the influence of the number of images used for calibration we use scene \texttt{Random} which samples cameras uniformly in space and points them at a random point in the plane. In all scenes the reference camera was positioned at a fixed central location and the angle between the optical axis and the plane normal was chosen according to the experiment. A uniformly distributed set of 1000 features was generated on the plane and projected onto the images, keeping only those measurements within the image bounds. Each experiment was repeated 300 times to obtain valid statistical results. All errors are calculated as the root-mean-squared value from these iterations and they are reported as a percentage of the ground truth value.
 
 \begin{figure}
 \centering
@@ -376,9 +383,9 @@ Figure \ref{fig:results_no_norm} presents a comparison of our normalized constra
 \label{fig:results_no_norm}
 \end{figure}
 
-Figure \ref{fig:results_noise} evaluates the accuracy of the calibration in the presence of noise. It also shows what are the best possible results for a planar self-calibration and for a known-target calibration. We generate a synthetic scene and add Gaussian noise to the point correspondences with increasing $\sigma$. We calibrate using our system (blue line for \texttt{Fixed-B} and red line for \texttt{Fixed-A}). We then initialize the final metric bundle adjustment with the ground truth values and perform the optimization. This produces the best self-calibration possible given the noisy measurements (green line). To compare with the approach of \cite{zhang1999} we run the final metric bundle adjustment again starting from the ground truth but keeping the 3D point positions fixed to the ground truth values (black line). 
+Figure \ref{fig:results_noise} evaluates the accuracy of the calibration in the presence of noise. It also shows what are the best possible results for a planar self-calibration and for a known-target calibration. We generate a synthetic scene and add Gaussian noise to the point correspondences with increasing $\sigma$. We calibrate using our system (blue line for \texttt{Fixed-B} and red line for \texttt{Fixed-A}). For the scene \texttt{Fixed-B} we also initialize the final metric bundle adjustment with the ground truth values and perform the optimization. This produces the best self-calibration possible given the noisy measurements (green line). To compare with the approach of \cite{zhang1999} we run the final metric bundle adjustment again starting from the ground truth but keeping the 3D point positions fixed to the ground truth values (black line). 
 
-Figure \ref{fig:results_noise} shows the clear difference in accuracy between scenes \texttt{Fixed-A} and \texttt{Fixed-B}. The translated images help constrain the distortion coefficients and result in a more accurate calibration. We observe that the green line is barely visible, which means that our calibration is very close the theoretical optimum using planar self-calibration constraints. Self-calibration is more susceptible to noise than a known-scene calibration (\eg \cite{zhang1999}). This is to be expected because the problem has more degrees of freedom. However, we can correct this by using more images.
+Figure \ref{fig:results_noise} shows the clear difference in accuracy between scenes \texttt{Fixed-A} and \texttt{Fixed-B}. The translated images help constrain the distortion coefficients and result in a more accurate calibration. We observe that the green line is barely visible, which means that our calibration is very close the theoretical optimum using planar self-calibration constraints. Self-calibration is more susceptible to noise than a known-target calibration (\eg \cite{zhang1999}). This is to be expected because the problem has more degrees of freedom. However, we can correct this by using more images.
 
 \begin{figure}
 \centering
@@ -387,12 +394,12 @@ Figure \ref{fig:results_noise} shows the clear difference in accuracy between sc
 \label{fig:results_noise}
 \end{figure}
 
-Figure \ref{fig:results_frames} shows the behavious of the algorithm with a varying number of images used for calibration. Noise was applied with a fixed $\sigma=1$ and random cameras were sampled for (scene \texttt{Random}). We see that the accuracy of the self-calibration converges to that of the known-scene calibration when more images are used. We note that for modern cameras it is trivial to capture more images for calibration. In fact, we routinely use a video of the camera moving around looking at a book cover for calibration.
+Figure \ref{fig:results_frames} shows the behaviour of the algorithm with a varying number of images used for calibration. Noise was applied with a fixed $\sigma=1$ and random cameras were sampled for scene \texttt{Random}. We see that the accuracy of the self-calibration converges to that of the known-target calibration when more images are used. We note that for modern cameras it is trivial to capture more images for calibration. In fact, we routinely use a video of the camera moving around looking at a book cover for calibration.
 
 \begin{figure}
 \centering
 \includegraphics[width=\linewidth]{images/resultsFrameCount.pdf}
-\caption{Calibration accuracy with increasing number of images. The self-calibration results converge to those of the known-scene calibration when more images are used for calibration.}
+\caption{Calibration accuracy with increasing number of images. The self-calibration results converge to those of the known-target calibration when more images are used for calibration.}
 \label{fig:results_frames}
 \end{figure}
 
@@ -442,7 +449,9 @@ Refocus during video & $d_0$ & 0.388 & 0.139 & 0.099 \\
 
 \section{Conclusions}
 
-We have presented a complete planar self-calibration system that rivals the state-of-the-art calibration algorithms in accuracy and is considerably more practical to use. We proposed a formulation of the planar self-calibration constraints that is more robust to noise due to proper normalization. We also introduced a closed-form solution to estimate the focal length with a minor assumption, namely that at least one of the cameras should be roughly perpendicular to the scene plane. The system proved to be very robust to violations of this assumption, obtaining correct calibrations with angles of up to $35^\circ$ between the reference camera and the scene plane. Finally, we showed that our system has a very high accuracy and with enough input images reaches the same accuracy as a known-scene calibration, thus eliminating the practical need of printing checkerboards for camera calibration.
+We have presented a complete planar self-calibration system that rivals the state-of-the-art calibration algorithms in accuracy and is considerably more practical to use. We proposed a formulation of the planar self-calibration constraints that is more robust to noise due to proper normalization. We also introduced a closed-form solution to estimate the focal length with a minor assumption, namely that at least one of the cameras should be roughly perpendicular to the scene plane. The system proved to be very robust to violations of this assumption, obtaining correct calibrations with angles of up to $35^\circ$ between the reference camera and the scene plane. Finally, we showed that our system has a very high accuracy and with enough input images reaches the same accuracy as a known-target calibration, thus eliminating the practical need of printing checkerboards for camera calibration.
+
+\clearpage
 
 {\small
 \bibliographystyle{ieee}

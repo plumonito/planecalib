@@ -33,14 +33,14 @@ void SceneGenerator::generateSyntheticPoses(std::vector<Eigen::Matrix3fr> &poses
 	posesR.push_back(Eigen::Matrix3fr::Identity());
 	posesCenter.push_back(Eigen::Vector3f(0, 0, -1));
 
-	for (float dx = -0.5; dx <= 0.5; dx += 0.25)
-		for (float dy = -0.5; dy <= 0.5; dy += 0.25)
-		{
-			if (dx == 0 || dy == 0)
-				continue;
-			posesR.push_back(Eigen::Matrix3fr::Identity());
-			posesCenter.push_back(Eigen::Vector3f(dx, dy, -1));
-		}
+	//for (float dx = -0.5; dx <= 0.5; dx += 0.25)
+	//	for (float dy = -0.5; dy <= 0.5; dy += 0.25)
+	//	{
+	//		if (dx == 0 || dy == 0)
+	//			continue;
+	//		posesR.push_back(Eigen::Matrix3fr::Identity());
+	//		posesCenter.push_back(Eigen::Vector3f(dx, dy, -1));
+	//	}
 	for (float alpha = -45; alpha < 45; alpha += 10)
 	{
 		float rad = alpha*M_PI / 180;
