@@ -17,7 +17,7 @@ class CalibratedBundleAdjuster
 {
 public:
 	CalibratedBundleAdjuster() :
-		mUseLocks(true), mFixCalib(false), mFix3DPoints(false), mParamsDistortion(0, 0), mK(Eigen::Matrix3dr::Identity()), mOutlierPixelThreshold(3), mOutlierPixelThresholdSq(9)
+		mUseLocks(true), mFixK(false), mFixDistortion(false), mFix3DPoints(false), mParamsDistortion(0, 0), mK(Eigen::Matrix3dr::Identity()), mOutlierPixelThreshold(3), mOutlierPixelThresholdSq(9)
 	{}
 
 	void setOutlierThreshold(float pixelThreshold)
@@ -29,8 +29,11 @@ public:
 	bool getUseLocks() const {return mUseLocks;}
 	void setUseLocks(bool value) {mUseLocks = value;}
 
-	bool getFixCalib() const { return mFixCalib; }
-	void setFixCalib(bool value) { mFixCalib = value; }
+	bool getFixK() const { return mFixK; }
+	void setFixK(bool value) { mFixK = value; }
+
+	bool getFixDistortion() const { return mFixDistortion; }
+	void setFixDistortion(bool value) { mFixDistortion = value; }
 
 	bool getFix3DPoints() const { return mFix3DPoints; }
 	void setFix3DPoints(bool value) { mFix3DPoints = value; }
@@ -54,7 +57,8 @@ protected:
 	float mOutlierPixelThreshold;
 	float mOutlierPixelThresholdSq;
 	bool mUseLocks;
-	bool mFixCalib;
+	bool mFixK;
+	bool mFixDistortion;
 	bool mFix3DPoints;
 
 	Map *mMap;

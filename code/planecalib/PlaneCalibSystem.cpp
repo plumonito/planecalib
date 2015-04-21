@@ -15,7 +15,7 @@
 #include "CalibratedBundleAdjuster.h"
 #include "PnpEstimation.h"
 //#include "CeresUtils.h"
-//#include "FeatureGridIndexer.h"
+#include "FeatureIndexer.h"
 #include "flags.h"
 
 #include <random>
@@ -85,13 +85,24 @@ bool PlaneCalibSystem::init(double timestamp, cv::Mat3b &imgColor, cv::Mat1b &im
 	{
 		const int scale = 1 << octave;
 
+		FeatureGridIndexer<IndexedCvKeypoint> indexer;
+		indexer.create(pkeyframe->getPyramid()[octave].size(), cv::Size2i(100, 100), 5);
+
 		//cv::Size2i tileSize(scale*FLAGS_FrameKeypointGridSize, scale*FLAGS_FrameKeypointGridSize);
 		//auto keypoints = FeatureGridIndexer<KeypointData>::ApplyNonMaximaSuppresion(pkeyframe->getKeypoints(octave), imageSize, tileSize, scale*16);
 		auto keypoints = pkeyframe->getKeypoints(octave);
+		auto descriptors = pkeyframe->getDescriptors(octave);
+		
 		for (uint i = 0; i < keypoints.size(); i++)
 		{
-			auto &kp = keypoints[i];
-			mMap->createFeature(*pkeyframe, poseInv, Eigen::Vector2f(kp.pt.x, kp.pt.y), octave, &pkeyframe->getDescriptors(octave)(i,0));
+			auto &keypoint = keypoints[i];
+			void *descriptor = &descriptors(i, 0);
+			indexer.addFeature(IndexedCvKeypoint(&keypoint, descriptor));
+		}
+
+		for (auto &kp : indexer)
+		{
+			mMap->createFeature(*pkeyframe, poseInv, Eigen::Vector2f(kp.keypoint->pt.x, kp.keypoint->pt.y), octave, (uchar*)kp.descriptor);
 		}
 
 		MYAPP_LOG << "Created " << keypoints.size() << " features in octave " << octave << "\n";
@@ -132,12 +143,23 @@ void PlaneCalibSystem::processImage(double timestamp, cv::Mat3b &imgColor, cv::M
 	//Reset profiler for each image
 	//Profiler::Instance().reset();
 
+	mKeyframeAdded = false;
+
 	//Build keyframe structure
 	std::unique_ptr<Keyframe> frame(new Keyframe());
 	{
 		ProfileSection ss("buildKeyFrame");
 		frame->init(imgColor, imgGray);
 		frame->setTimestamp(timestamp);
+	}
+
+	if (mSuccesfulTrackCount < 20)
+	{
+		mTracker->mForceRansac = true;
+	}
+	else
+	{
+		mTracker->mForceRansac = false;
 	}
 
 	//Tracking
@@ -152,6 +174,8 @@ void PlaneCalibSystem::processImage(double timestamp, cv::Mat3b &imgColor, cv::M
 
 	if (trackingSuccesful)
 	{
+		mSuccesfulTrackCount++;
+
 		/* 
 		// This replaces the feature-based homography with a direct estimation
 		HomographyEstimation hest;
@@ -182,29 +206,40 @@ void PlaneCalibSystem::processImage(double timestamp, cv::Mat3b &imgColor, cv::M
 			corners.emplace_back(p, eutils::HomographyPoint(poseInv, p));
 
 		bool add = true;
-		for (auto &frame_ : mMap->getKeyframes())
+		if (mSuccesfulTrackCount > 20 && mTracker->getMatchInlierCount() > 100)
 		{
-			auto &frame = *frame_;
-			float distSq = 0;
-			for (auto &p : corners)
+			for (auto &frame_ : mMap->getKeyframes())
 			{
-				auto pp = eutils::HomographyPoint(frame.getPose(), p.second);
-				distSq = std::max(distSq,(p.first - pp).squaredNorm());
-			}
+				auto &frame = *frame_;
+				float distSq = 0;
+				for (auto &p : corners)
+				{
+					auto pp = eutils::HomographyPoint(frame.getPose(), p.second);
+					distSq = std::max(distSq, (p.first - pp).squaredNorm());
+				}
 
-			if (distSq < kThresholdSq)
-			{
-				add = false;
-				break;
+				if (distSq < kThresholdSq)
+				{
+					add = false;
+					break;
+				}
 			}
+		}
+		else
+		{
+			add = false;
 		}
 
 		if (add)
 		{
 			createKeyframe();
-
+			mKeyframeAdded = true;
 			//doHomographyCalib();
 		}
+	}
+	else
+	{
+		mSuccesfulTrackCount = 0;
 	}
 }
 
@@ -337,6 +372,7 @@ void PlaneCalibSystem::doFullBA()
 		refFrame.mPose3DR(2, 2) = basis3[2];
 
 		Eigen::Vector3f refCenter = -basis3;
+		MYAPP_LOG << "Center of ref camera: " << refCenter.transpose() << "\n";
 		refFrame.mPose3DT = -refFrame.mPose3DR*refCenter; //RefCenter = -R'*t = Normal (exactly one unit away from plane center) => t = -R*normal
 		//refFrame.mPose3DR = refFrame.mGroundTruthPose3DR;
 		//refFrame.mPose3DT = refFrame.mGroundTruthPose3DT;
@@ -425,6 +461,8 @@ void PlaneCalibSystem::doFullBA()
 		}
 	}
 	mMap->setIs3DValid(true);
+	auto poseH = mTracker->getCurrentPose();
+	mTracker->resetTracking(mMap.get(), poseH);
 
 	//BAAAAA!!!
 	CalibratedBundleAdjuster ba;
@@ -432,6 +470,8 @@ void PlaneCalibSystem::doFullBA()
 	ba.setFix3DPoints(mFix3DPoints);
 	ba.setOutlierThreshold(3 * mExpectedPixelNoiseStd);
 	ba.setDistortion(distortion.cast<double>());
+	//ba.setFixDistortion(true);
+	//ba.setDistortion(Eigen::Vector2d(0.0935491, -0.157975));
 	ba.setK(k.cast<double>());
 	ba.setMap(mMap.get());
 	for (auto &framep : mMap->getKeyframes())
@@ -494,7 +534,8 @@ void PlaneCalibSystem::doValidationBA()
 	//BAAAAA!!!
 	CalibratedBundleAdjuster ba;
 	ba.setUseLocks(false);
-	ba.setFixCalib(true);
+	ba.setFixK(true);
+	ba.setFixDistortion(true);
 	ba.setFix3DPoints(true);
 	ba.setOutlierThreshold(3 * mExpectedPixelNoiseStd);
 	ba.setDistortion(distortion.cast<double>());

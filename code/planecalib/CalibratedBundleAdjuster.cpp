@@ -246,14 +246,14 @@ bool CalibratedBundleAdjuster::bundleAdjust()
 		mParamsK[2] = mK(0, 2);
 		mParamsK[3] = mK(1, 2);
 		problem.AddParameterBlock(mParamsK.data(), mParamsK.size());
-		if (mFixCalib)
+		if (mFixK)
 			problem.SetParameterBlockConstant(mParamsK.data());
 		options.linear_solver_ordering->AddElementToGroup(mParamsK.data(), 1);
 
 		//Distortion params
 		mImageSize = (**mFramesToAdjust.begin()).getImageSize(); //Image size is needed to determine the maximum radius for distortion
 		problem.AddParameterBlock(mParamsDistortion.data(), mParamsDistortion.size());
-		if (mFixCalib)
+		if (mFixDistortion)
 			problem.SetParameterBlockConstant(mParamsDistortion.data());
 		options.linear_solver_ordering->AddElementToGroup(mParamsDistortion.data(), 1);
 
@@ -320,7 +320,8 @@ bool CalibratedBundleAdjuster::bundleAdjust()
 	}
 
 	MYAPP_LOG << "Calibrated BA report:\n" << summary.FullReport();
-	MYAPP_LOG << "Calib fixed: " << mFixCalib << "\n";
+	MYAPP_LOG << "K fixed: " << mFixK << "\n";
+	MYAPP_LOG << "Distortion fixed: " << mFixDistortion << "\n";
 	MYAPP_LOG << "3D Points fixed: " << mFix3DPoints << "\n";
 	MYAPP_LOG << "Calibrated BA K: " << mParamsK.transpose() << "\n";
 	MYAPP_LOG << "Calibrated BA distortion: " << mParamsDistortion.transpose() << "\n";

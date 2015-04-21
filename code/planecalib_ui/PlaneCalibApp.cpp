@@ -362,7 +362,7 @@ void PlaneCalibApp::draw(void)
 			mFrameCount++;
 			mAdvanceFrame = false;
 
-			MYAPP_LOG << "\nFrame #" << mFrameCount << "\n";
+			//MYAPP_LOG << "\nFrame #" << mFrameCount << "\n";
 
 			//Read new input frame
 			cv::Mat1b imageGray = mImageSrc->getImgGray();
@@ -382,6 +382,9 @@ void PlaneCalibApp::draw(void)
 			mFPSSampleCount++;
 
 			mActiveWindow->updateState();
+
+			//if (mSystem->getTracker().isLost())
+			//	mFrameByFrame = true;
 		}
 	}
 

@@ -57,6 +57,7 @@ void PoseTracker::resetTracking(Map *map, const Eigen::Matrix3fr &initialPose)
 {
 	mMap = map;
 	mCurrentPose = initialPose;
+	mIsLost = true;
 
 	//Forget all previous matches
 	mLastFrame.reset(NULL);
@@ -118,8 +119,9 @@ bool PoseTracker::trackFrame(std::unique_ptr<Keyframe> frame_)
 
 void PoseTracker::findMatches()
 {
-	const int kMatchThresholdSq = 40 * 40;
+	const int kMatchThresholdSq0 = 40 * 40;
 	const float kRatioThreshold = 0.8f;
+	const int kMinScoreThreshold = 50;
 
 	std::unordered_set<const Feature*> featuresToIgnore;
 
@@ -127,9 +129,11 @@ void PoseTracker::findMatches()
 	mMap->getFeaturesInView(mCurrentPose, mImageSize, mOctaveCount, featuresToIgnore, mFeaturesInView);
 
 	//Match
+	//int octave = 0;
 	for (int octave = mOctaveCount - 1; octave >= 0; octave--)
 	{
 		const int scale = 1 << octave;
+		const int kMatchThresholdSq = kMatchThresholdSq0 / (scale*scale);
 		{
 			ProfileSection sm("matching");
 
@@ -152,7 +156,7 @@ void PoseTracker::findMatches()
 				for (int j = 0; j < (int)imgKeypoints.size(); j++)
 				{
 					auto diff = projection.getPosition() - eutils::FromCV(imgKeypoints[j].pt);
-					if (diff.dot(diff) < kMatchThresholdSq || mIsLost)
+					if (diff.squaredNorm() < kMatchThresholdSq || mIsLost)
 					{
 						const uchar *imgDesc_j = &imgDesc(j, 0);
 						int score = cv::normHamming(refDesc_i.data(), imgDesc_j, 32);
@@ -172,7 +176,9 @@ void PoseTracker::findMatches()
 
 				//Is match good enough?
 				bool add = false;
-				if (bestScore < std::numeric_limits<int>::max())
+				//MYAPP_LOG << bestScore << "/" << secondScore << "\n";
+				//if (bestScore < std::numeric_limits<int>::max())
+				if (bestScore < kMinScoreThreshold)
 				{
 					if (bestScore < kRatioThreshold * secondScore)
 						add = true;
@@ -191,10 +197,11 @@ void PoseTracker::findMatches()
 
 bool PoseTracker::trackFrameHomography(std::unique_ptr<Keyframe> frame_)
 {
+	const int kMinInlierCount = 20;
 	ProfileSection s("trackFrameHomography");
 
 	//Homography
-	if (mMatches.size() < 50)
+	if (mMatches.size() < kMinInlierCount)
 	{
 		mIsLost = true;
 	}
@@ -213,15 +220,19 @@ bool PoseTracker::trackFrameHomography(std::unique_ptr<Keyframe> frame_)
 		//cv::Mat1b mask_cv(refPoints.size(), 1, mask.data());
 
 		cv::Matx33f cvH;
+		if (mIsLost || mForceRansac)
 		{
 			ProfileSection s("homographyRansac");
 
 			HomographyRansac ransac;
-			ransac.setParams(3, 10, 100, (int)(0.9f * mMatches.size()));
+			ransac.setParams(3, 10, 100, (int)(0.99f * mMatches.size()));
 			ransac.setData(mMatches);
 			ransac.doRansac();
 			cvH = eutils::ToCV(ransac.getBestModel().cast<float>().eval());
+			MYAPP_LOG << "Homography ransac: inliers=" << ransac.getBestInlierCount() << "/" << mMatches.size() << "\n";
 		}
+		else
+			cvH = eutils::ToCV(mCurrentPose);
 
 		//Refine
 		HomographyEstimation hest;
@@ -231,19 +242,21 @@ bool PoseTracker::trackFrameHomography(std::unique_ptr<Keyframe> frame_)
 			ProfileSection s("refineHomography");
 			cvH = hest.estimateCeres(cvH, imgPoints, refPoints, octaveVec, 2.5, inliersVec);
 		}
-		std::vector<FeatureMatch> goodMatches;
+		//std::vector<FeatureMatch> goodMatches;
 		//int inlierCountBefore = mask.sum();
 		int inlierCountAfter = 0;
 		for (int i = 0; i<(int)mMatches.size(); i++)
 		{
 			if (inliersVec[i])
-				goodMatches.push_back(mMatches[i]);
+				inlierCountAfter++;
+				//goodMatches.push_back(mMatches[i]);
 		}
-		inlierCountAfter = goodMatches.size();
-		mMatches = std::move(goodMatches);
+		mMatchInlierCount = inlierCountAfter;
+		//inlierCountAfter = goodMatches.size();
+		//mMatches = std::move(goodMatches);
 		//MYAPP_LOG << "Inliers before=" << inlierCountBefore << ", inliers after=" << inlierCountAfter << "\n";
 
-		if (inlierCountAfter > 50)
+		if (inlierCountAfter > kMinInlierCount)
 		{
 			mCurrentPose = eutils::FromCV(cvH);
 			mFrame->setPose(mCurrentPose);
@@ -268,20 +281,24 @@ bool PoseTracker::trackFrameHomography(std::unique_ptr<Keyframe> frame_)
 
 bool PoseTracker::trackFrame3D(std::unique_ptr<Keyframe> frame_)
 {
+	const int kMinInlierCount = 20;
 	ProfileSection s("trackFrame3D");
 
-	if (mMatches.size() < 50)
+	if (mMatches.size() < kMinInlierCount)
 	{
 		mIsLost = true;
 	}
 	else
 	{
-		PnPRansac ransac;
-		ransac.setParams(3, 10, 100, (int)(0.9f*mMatches.size()));
-		ransac.setData(mMatches, mMap->mCamera.get());
-		ransac.doRansac();
-		mCurrentPoseR = ransac.getBestModel().first.cast<float>();
-		mCurrentPoseT = ransac.getBestModel().second.cast<float>();
+		if (mIsLost)
+		{
+			PnPRansac ransac;
+			ransac.setParams(3, 10, 100, (int)(0.9f*mMatches.size()));
+			ransac.setData(mMatches, mMap->mCamera.get());
+			ransac.doRansac();
+			mCurrentPoseR = ransac.getBestModel().first.cast<float>();
+			mCurrentPoseT = ransac.getBestModel().second.cast<float>();
+		}
 
 		int inlierCount;
 		PnPRefiner refiner;
@@ -296,7 +313,25 @@ bool PoseTracker::trackFrame3D(std::unique_ptr<Keyframe> frame_)
 		ransacH.doRansac();
 		mCurrentPose = ransacH.getBestModel().cast<float>().eval();
 
-		if (inlierCount > 50)
+		//Refine
+		HomographyEstimation hest;
+		std::vector<cv::Point2f> refPoints, imgPoints;
+		for (int i = 0; i < (int)mMatches.size(); i++)
+		{
+			auto &match = mMatches[i];
+			refPoints.push_back(eutils::ToCVPoint(match.getFeature().getPosition()));
+			imgPoints.push_back(eutils::ToCVPoint(match.getPosition()));
+		}
+		std::vector<bool> inliersVec;
+		std::vector<int> octaveVec(imgPoints.size(), 0);
+		{
+			ProfileSection s("refineHomography");
+			cv::Matx33f cvH = eutils::ToCV(mCurrentPose);
+			cvH = hest.estimateCeres(cvH, imgPoints, refPoints, octaveVec, 2.5, inliersVec);
+			mCurrentPose = eutils::FromCV(cvH);
+		}
+
+		if (inlierCount > kMinInlierCount)
 		{
 			//mCurrentPose = eutils::FromCV(cvH);
 			mFrame->mPose3DR = mCurrentPoseR;

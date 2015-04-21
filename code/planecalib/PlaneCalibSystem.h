@@ -17,7 +17,8 @@ class HomographyCalibration;
 class PlaneCalibSystem
 {
 public:
-	PlaneCalibSystem() : mSingleThreaded(false), mExpectedPixelNoiseStd(1), mUse3DGroundTruth(false), mFix3DPoints(false), mUseNormalizedConstraints(true){}
+	PlaneCalibSystem() : mSingleThreaded(false), mExpectedPixelNoiseStd(1), mUse3DGroundTruth(false), mFix3DPoints(false), mUseNormalizedConstraints(true), mSuccesfulTrackCount(0)
+	{}
 	~PlaneCalibSystem();
 
 	bool init(double timestamp, cv::Mat3b &imgColor, cv::Mat1b &imgGray);
@@ -63,6 +64,8 @@ public:
 	void doFullBA();
 	void doValidationBA();
 
+	bool mKeyframeAdded;
+
 protected:
 	////////////////////////////////////////////////////////
 	// Members
@@ -83,6 +86,8 @@ protected:
 	std::unique_ptr<Map> mMap;
 
 	std::unique_ptr<PoseTracker> mTracker;
+	int mSuccesfulTrackCount;
+
 	//std::unique_ptr<SlamMapExpander> mMapExpander;
 	std::unique_ptr<HomographyCalibration> mCalib;
 

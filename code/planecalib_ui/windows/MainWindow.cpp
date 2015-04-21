@@ -80,6 +80,12 @@ void MainWindow::updateState()
 			auto &m = *mPtr;
 			mDisplayPoints.push_back(m.getPosition());
 		}
+		//for (int octave = 0; octave < displayFrame->getOctaveCount(); octave++)
+		//for (auto &mPtr : displayFrame->getKeypoints(octave))
+		//{
+		//	//auto &m = *mPtr;
+		//	mDisplayPoints.push_back(eutils::FromCV(mPtr.pt));
+		//}
 	}
 
 	//Clear all
@@ -144,6 +150,8 @@ void MainWindow::updateState()
 	mFrameHomographies.push_back(mSystem->getTracker().getCurrentPose().inverse());
 	if (mSystem->getTracker().isLost())
 		color = StaticColors::Red();
+	else if (mSystem->mKeyframeAdded)
+		color = StaticColors::Green();
 	else
 		color = StaticColors::White();
 	mFrameColors.push_back(color);
@@ -185,15 +193,20 @@ void MainWindow::draw()
 	mTiler.setActiveTile(2);
 	mShaders->getTexture().setMVPMatrix(mTiler.getMVP());
 	mShaders->getTexture().renderTexture(mCurrentImageTextureTarget, mCurrentImageTextureId, mImageSize, 1.0f);
+	mShaders->getColor().setMVPMatrix(mTiler.getMVP());
 	if (mTracker->getFrame())
 	{
-		std::vector<Eigen::Vector2f> points;
-		for (auto &kp : mTracker->getFrame()->getKeypoints(0))
+		Eigen::Vector4f colors[] = { StaticColors::Blue(), StaticColors::Green(), StaticColors::Red() };
+		int maxOctave = std::min(3, mTracker->getFrame()->getOctaveCount());
+		for (int octave = 0; octave < maxOctave; octave++)
 		{
-			points.push_back(eutils::FromCV(kp.pt));
+			std::vector<Eigen::Vector2f> points;
+			for (auto &kp : mTracker->getFrame()->getKeypoints(octave))
+			{
+				points.push_back(eutils::FromCV(kp.pt));
+			}
+			mShaders->getColor().drawVertices(GL_POINTS, points.data(), points.size(), colors[octave]);
 		}
-		mShaders->getColor().setMVPMatrix(mTiler.getMVP());
-		mShaders->getColor().drawVertices(GL_POINTS, points.data(), points.size(), StaticColors::Blue());
 	}
 
 	mTiler.setActiveTile(0);

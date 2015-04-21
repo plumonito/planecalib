@@ -56,6 +56,8 @@ public:
 	int getMatchInlierCount() const { return mMatchInlierCount; }
 	const std::vector<MatchReprojectionErrors> &getReprojectionErrors() const { return mReprojectionErrors; }
 
+	bool mForceRansac;
+
 protected:
 	/////////////////////////////////////////////////////
 	// Protected members

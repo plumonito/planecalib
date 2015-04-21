@@ -22,8 +22,7 @@ PnPRansac::~PnPRansac()
 
 void PnPRansac::setData(const std::vector<FeatureMatch> &matches, const CameraModel *camera)
 {
-	assert(matches!=NULL);
-	assert(matches->size()!=0);
+	assert(matches.size()!=0);
 
 	mMatchCount = matches.size();
 	
