@@ -54,6 +54,7 @@ public:
 	void doHomographyBA();
 	void doFullBA();
 	void loadBouguetCalib();
+	void loadValidationData();
 	void synthTest();
 	void synthTest2();
 	void synthTestCompareUsingGroundTruth();

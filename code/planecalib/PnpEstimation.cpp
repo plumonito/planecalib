@@ -20,28 +20,61 @@ PnPRansac::~PnPRansac()
 {
 }
 
-void PnPRansac::setData(const std::vector<FeatureMatch> *matches, const CameraModel *camera)
+void PnPRansac::setData(const std::vector<FeatureMatch> &matches, const CameraModel *camera)
 {
 	assert(matches!=NULL);
 	assert(matches->size()!=0);
 
-	mMatchCount = matches->size();
-	mMatches = matches;
+	mMatchCount = matches.size();
+	
+	mOwnRefPoints.reset(new std::vector<Eigen::Vector3f>());
+	mOwnImgPoints.reset(new std::vector<Eigen::Vector2f>());
+
+	mRefPoints = mOwnRefPoints.get();
+	mImgPoints = mOwnImgPoints.get();
 
 	mConstraintCount = mMatchCount;
 
 	//Normalize
 	//TODO: this will break with fish-eye lenses, but cv::triangulate and cv:solvePnP can only take 2D points
-	mImageXnNormalized.resize(mMatchCount);
+	mOwnRefPoints->resize(mMatchCount);
+	mOwnImgPoints->resize(mMatchCount);
 	for (int i = 0; i != mMatchCount; ++i)
 	{
-		const FeatureMatch &match = mMatches->at(i);
-		auto &norm = mImageXnNormalized[i];
-
-		norm = eutils::ToCVPoint( camera->unprojectToWorld(match.getPosition()).hnormalized().eval() );
+		const FeatureMatch &match = matches[i];
+		
+		mOwnRefPoints->at(i) = match.getFeature().mPosition3D;
+		mOwnImgPoints->at(i) = camera->unprojectToWorld(match.getPosition()).hnormalized().eval();
 
 		//Create error functor
 		mErrorFunctors.emplace_back(new PoseReprojectionError3D(camera, match));
+	}
+}
+
+void PnPRansac::setData(const std::vector<Eigen::Vector3f> *refPoints, const std::vector<Eigen::Vector2f> *imgPoints, const CameraModel *camera)
+{
+	assert(refPoints != NULL && imgPoints != NULL);
+	assert(refPoints->size() != 0);
+	assert(refPoints->size() == imgPoints->size());
+
+	mMatchCount = refPoints->size();
+
+	mOwnImgPoints.reset(new std::vector<Eigen::Vector2f>());
+
+	mRefPoints = refPoints;
+	mImgPoints = mOwnImgPoints.get();
+
+	mConstraintCount = mMatchCount;
+
+	//Normalize
+	//TODO: this will break with fish-eye lenses, but cv::triangulate and cv:solvePnP can only take 2D points
+	mOwnImgPoints->resize(mMatchCount);
+	for (int i = 0; i != mMatchCount; ++i)
+	{
+		mOwnImgPoints->at(i) = camera->unprojectToWorld(imgPoints->at(i)).hnormalized().eval();
+
+		//Create error functor
+		mErrorFunctors.emplace_back(new PoseReprojectionError3D(camera, refPoints->at(i).cast<double>(), 0, imgPoints->at(i).cast<double>()));
 	}
 }
 
@@ -54,9 +87,8 @@ std::vector<std::pair<Eigen::Matrix3dr, Eigen::Vector3d>> PnPRansac::modelFromMi
 	for(int i=0; i<4; ++i)
 	{
 		const int idx = constraintIndices[i];
-		const FeatureMatch &match = mMatches->at(idx);
-		refp[i] = eutils::ToCVPoint( match.getFeature().mPosition3D );
-		imgp[i] = mImageXnNormalized[idx];
+		refp[i] = eutils::ToCVPoint( mRefPoints->at(idx) );
+		imgp[i] = eutils::ToCVPoint( mImgPoints->at(idx) );
 	}
 
 	std::vector<std::pair<Eigen::Matrix3dr, Eigen::Vector3d>> solutions;

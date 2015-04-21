@@ -110,6 +110,15 @@ void Keyframe::init(const cv::Mat3b &imageColor, const cv::Mat1b &imageGray)
     }
 }
 
+void Keyframe::freeSpace()
+{
+	mPyramid.release();
+	mColorImage.release();
+	mSBI.release();
+	mSBIdx.release();
+	mSBIdy.release();
+}
+
 std::unique_ptr<Keyframe> Keyframe::copyWithoutFeatures() const
 {
 	std::unique_ptr<Keyframe> newFrame(new Keyframe());

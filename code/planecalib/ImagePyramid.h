@@ -28,6 +28,12 @@ public:
 	const cv::Mat_<T> &getTopLevel() const {return mOctaves.back();}
 
 	void create(const cv::Mat_<T> &level0, int maxTopLevelWidth);
+	void release() 
+	{ 
+		int c = mOctaves.size();
+		mOctaves.clear(); 
+		mOctaves.resize(c);
+	}
 
 protected:
 	std::vector<cv::Mat_<T>> mOctaves;

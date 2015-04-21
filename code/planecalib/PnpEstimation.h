@@ -29,7 +29,8 @@ public:
 	PnPRansac();
 	~PnPRansac();
 
-	void setData(const std::vector<FeatureMatch> *matches, const CameraModel *camera);
+	void setData(const std::vector<FeatureMatch> &matches, const CameraModel *camera);
+	void setData(const std::vector<Eigen::Vector3f> *refPoints, const std::vector<Eigen::Vector2f> *imgPoints, const CameraModel *camera);
 
 	std::vector<std::pair<Eigen::Matrix3dr, Eigen::Vector3d>> modelFromMinimalSet(const std::vector<int> &constraintIndices);
 	void getInliers(const std::pair<Eigen::Matrix3dr, Eigen::Vector3d> &model, int &inlierCount, float &errorSumSq, PnPIterationData &data);
@@ -37,8 +38,11 @@ public:
 protected:
 	int mMatchCount;
 
-	const std::vector<FeatureMatch> *mMatches;
-	std::vector<cv::Point2f> mImageXnNormalized;
+	const std::vector<Eigen::Vector3f> *mRefPoints;
+	const std::vector<Eigen::Vector2f> *mImgPoints; //This is normalized world coordinates (xn)
+
+	std::unique_ptr<std::vector<Eigen::Vector3f>> mOwnRefPoints;
+	std::unique_ptr<std::vector<Eigen::Vector2f>> mOwnImgPoints;
 
 	std::vector<std::unique_ptr<PoseReprojectionError3D>> mErrorFunctors;
 };

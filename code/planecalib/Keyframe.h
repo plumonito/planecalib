@@ -66,6 +66,8 @@ public:
 
 	void removeMeasurement(FeatureMeasurement *m);
 
+	void freeSpace();
+
 	////////////////////////////////////
 	// BA params
 	Eigen::Matrix3dr mParamsPose;

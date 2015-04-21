@@ -48,12 +48,12 @@ class PoseReprojectionError3D: public ReprojectionError3D
 {
 public:
 	PoseReprojectionError3D(const CameraModel *camera, const FeatureMatch &match) :
-		PoseReprojectionError3D(camera, match.getFeature().mPosition3D, match.getOctave(), match.getPosition().cast<double>())
+		PoseReprojectionError3D(camera, match.getFeature().mPosition3D.cast<double>(), match.getOctave(), match.getPosition().cast<double>())
 	{
 	}
 
-	PoseReprojectionError3D(const CameraModel * const camera, const Eigen::Vector3f &featurePosition, const int octave, const Eigen::Vector2d &imgPoint) :
-		ReprojectionError3D(octave, imgPoint), mCameraParams(camera->getParams()), mDistortionParams(camera->getDistortionModel().getParams()), mFeaturePosition(featurePosition.cast<double>())
+	PoseReprojectionError3D(const CameraModel * const camera, const Eigen::Vector3d &featurePosition, const int octave, const Eigen::Vector2d &imgPoint) :
+		ReprojectionError3D(octave, imgPoint), mCameraParams(camera->getParams()), mDistortionParams(camera->getDistortionModel().getParams()), mFeaturePosition(featurePosition)
 	{
 	}
 

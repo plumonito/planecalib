@@ -100,30 +100,33 @@ void CalibratedBundleAdjuster::addFrameToAdjust(Keyframe &newFrame)
 	}
 }
 
-bool CalibratedBundleAdjuster::isInlier(const FeatureMeasurement &measurement, const Eigen::Matrix<double, 1, 6> &pose, const Eigen::Vector2d &position)
+void CalibratedBundleAdjuster::getInliers()
 {
-	CalibratedReprojectionError err(mImageSize, measurement);
-	Eigen::Vector2d residuals;
-	err(mParamsDistortion.data(), mParamsK.data() , pose.data(), pose.data() + 3, position.data(), residuals.data());
+	mInlierCount = 0;
+	
+	std::vector<float> residuals;
+	residuals.reserve(mMeasurementsInProblem.size());
 
-	if(residuals.squaredNorm() < mOutlierPixelThresholdSq)
-		return true;
-	else
-		return false;
-}
-
-void CalibratedBundleAdjuster::getInliers(int &inlierCount)
-{
-	inlierCount = 0;
 	for (auto &mp : mMeasurementsInProblem)
 	{
 		auto &m = *mp;
 		auto &poseParams = mParamsPoses.find(&m.getKeyframe())->second;
 		auto &featureParams = mParamsFeatures.find(&m.getFeature())->second;
 
-		if (isInlier(m, poseParams, featureParams))
-			inlierCount++;
+		CalibratedReprojectionError err(mImageSize, m);
+		Eigen::Vector2d ri;
+		err(mParamsDistortion.data(), mParamsK.data(), poseParams.data(), poseParams.data() + 3, featureParams.data(), ri.data());
+
+		float norm = (float)ri.norm();
+		if (norm < mOutlierPixelThreshold)
+			mInlierCount++;
+		residuals.push_back(norm);
 	}
+
+	//Stats
+	Eigen::Map<Eigen::ArrayXf> _residuals(residuals.data(), residuals.size());
+	mResidualsMean = _residuals.mean();
+	mResidualsStd = sqrtf((_residuals - mResidualsMean).square().sum() / (_residuals.size()-1));
 }
 
 Eigen::Matrix<double, 1, 6> &CalibratedBundleAdjuster::getPoseParams(Keyframe *framep)
@@ -243,12 +246,15 @@ bool CalibratedBundleAdjuster::bundleAdjust()
 		mParamsK[2] = mK(0, 2);
 		mParamsK[3] = mK(1, 2);
 		problem.AddParameterBlock(mParamsK.data(), mParamsK.size());
-		//problem.SetParameterBlockConstant(mParamsK.data());
+		if (mFixCalib)
+			problem.SetParameterBlockConstant(mParamsK.data());
 		options.linear_solver_ordering->AddElementToGroup(mParamsK.data(), 1);
 
 		//Distortion params
 		mImageSize = (**mFramesToAdjust.begin()).getImageSize(); //Image size is needed to determine the maximum radius for distortion
 		problem.AddParameterBlock(mParamsDistortion.data(), mParamsDistortion.size());
+		if (mFixCalib)
+			problem.SetParameterBlockConstant(mParamsDistortion.data());
 		options.linear_solver_ordering->AddElementToGroup(mParamsDistortion.data(), 1);
 
 		//Gather measurements
@@ -302,9 +308,8 @@ bool CalibratedBundleAdjuster::bundleAdjust()
 	}
 
 	//Get inliers before
-	int inlierCount;
-	getInliers(inlierCount);
-	MYAPP_LOG << "Calibrated BA inlier count before: " << inlierCount << "/" << mMeasurementsInProblem.size() << "\n";
+	getInliers();
+	MYAPP_LOG << "Calibrated BA inlier count before: " << mInlierCount << "/" << mMeasurementsInProblem.size() << "\n";
 
 	//No locks while ceres runs
 	//Non-linear minimization!
@@ -315,6 +320,7 @@ bool CalibratedBundleAdjuster::bundleAdjust()
 	}
 
 	MYAPP_LOG << "Calibrated BA report:\n" << summary.FullReport();
+	MYAPP_LOG << "Calib fixed: " << mFixCalib << "\n";
 	MYAPP_LOG << "3D Points fixed: " << mFix3DPoints << "\n";
 	MYAPP_LOG << "Calibrated BA K: " << mParamsK.transpose() << "\n";
 	MYAPP_LOG << "Calibrated BA distortion: " << mParamsDistortion.transpose() << "\n";
@@ -330,8 +336,9 @@ bool CalibratedBundleAdjuster::bundleAdjust()
 		return false;
 	}
 
-	getInliers(inlierCount);
-	MYAPP_LOG << "Calibrated BA inlier count after: " << inlierCount << "/" << mMeasurementsInProblem.size() << "\n";
+	getInliers();
+	MYAPP_LOG << "Calibrated BA inlier count after: " << mInlierCount << "/" << mMeasurementsInProblem.size() << "\n";
+	MYAPP_LOG << "Reprojection errors: mean=" << mResidualsMean << ", std=" << mResidualsStd << "\n";
 
 	//Again
 	//problem.SetParameterBlockVariable(mParamsK.data());

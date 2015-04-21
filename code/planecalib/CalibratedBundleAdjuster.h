@@ -17,7 +17,7 @@ class CalibratedBundleAdjuster
 {
 public:
 	CalibratedBundleAdjuster() :
-		mUseLocks(true), mFix3DPoints(false), mParamsDistortion(0, 0), mK(Eigen::Matrix3dr::Identity()), mOutlierPixelThreshold(3), mOutlierPixelThresholdSq(9)
+		mUseLocks(true), mFixCalib(false), mFix3DPoints(false), mParamsDistortion(0, 0), mK(Eigen::Matrix3dr::Identity()), mOutlierPixelThreshold(3), mOutlierPixelThresholdSq(9)
 	{}
 
 	void setOutlierThreshold(float pixelThreshold)
@@ -28,6 +28,9 @@ public:
 
 	bool getUseLocks() const {return mUseLocks;}
 	void setUseLocks(bool value) {mUseLocks = value;}
+
+	bool getFixCalib() const { return mFixCalib; }
+	void setFixCalib(bool value) { mFixCalib = value; }
 
 	bool getFix3DPoints() const { return mFix3DPoints; }
 	void setFix3DPoints(bool value) { mFix3DPoints = value; }
@@ -51,6 +54,7 @@ protected:
 	float mOutlierPixelThreshold;
 	float mOutlierPixelThresholdSq;
 	bool mUseLocks;
+	bool mFixCalib;
 	bool mFix3DPoints;
 
 	Map *mMap;
@@ -66,12 +70,14 @@ protected:
 	std::unordered_map<Feature *, Eigen::Vector2d, std::hash<Feature*>, std::equal_to<Feature*>, Eigen::aligned_allocator<std::pair<Feature*, Eigen::Vector2d>>> mParamsFeatures;
 	std::vector<FeatureMeasurement *> mMeasurementsInProblem;
 
+	int mInlierCount;
+	float mResidualsMean;
+	float mResidualsStd;
+
 	Eigen::Matrix<double, 1, 6> &getPoseParams(Keyframe *framep);
 	Eigen::Vector2d &getFeatureParams(Feature *featurep);
 
-	bool isInlier(const FeatureMeasurement &measurement, const Eigen::Matrix<double,1,6> &pose, const Eigen::Vector2d &position);
-
-	void getInliers(int &inlierCount);
+	void getInliers();
 };
 
 }

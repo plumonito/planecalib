@@ -278,7 +278,7 @@ bool PoseTracker::trackFrame3D(std::unique_ptr<Keyframe> frame_)
 	{
 		PnPRansac ransac;
 		ransac.setParams(3, 10, 100, (int)(0.9f*mMatches.size()));
-		ransac.setData(&mMatches, mMap->mCamera.get());
+		ransac.setData(mMatches, mMap->mCamera.get());
 		ransac.doRansac();
 		mCurrentPoseR = ransac.getBestModel().first.cast<float>();
 		mCurrentPoseT = ransac.getBestModel().second.cast<float>();

@@ -210,7 +210,7 @@ void PlaneCalibSystem::processImage(double timestamp, cv::Mat3b &imgColor, cv::M
 
 void PlaneCalibSystem::createKeyframe()
 {
-	auto frame_ = std::make_unique<Keyframe>(*mTracker->getFrame());
+	std::unique_ptr<Keyframe> frame_(new Keyframe(*mTracker->getFrame()));
 	Keyframe *frame = frame_.get();
 	frame->setPose(mTracker->getCurrentPose());
 
@@ -224,6 +224,8 @@ void PlaneCalibSystem::createKeyframe()
 		frame->getMeasurements().push_back(m.get());
 		m->getFeature().getMeasurements().push_back(std::move(m));
 	}
+
+	frame->freeSpace();
 }
 
 void PlaneCalibSystem::doHomographyBA()
@@ -279,7 +281,7 @@ void PlaneCalibSystem::doHomographyCalib(bool fixP0)
 	float fx2 = mCamera.getFx()*mCamera.getFx();
 	Eigen::Vector2f distortion;
 	distortion << mHomographyDistortion.getCoefficients()[0] * fx2, mHomographyDistortion.getCoefficients()[1] * fx2*fx2;
-	MYAPP_LOG << "Transformed distortion: " << distortion[0] * fx2 << ", " << distortion[1] * fx2*fx2 << "\n";
+	MYAPP_LOG << "Transformed distortion: " << distortion[0] << ", " << distortion[1] << "\n";
 
 	mCamera.getDistortionModel().setCoefficients(distortion);
 }
@@ -407,7 +409,7 @@ void PlaneCalibSystem::doFullBA()
 
 			PnPRansac ransac;
 			ransac.setParams(3 * mExpectedPixelNoiseStd, 10, 100, (int)(0.9f * frame.getMeasurements().size()));
-			ransac.setData(&matches, &mCamera);
+			ransac.setData(matches, &mCamera);
 			ransac.doRansac();
 			//MYAPP_LOG << "Frame pnp inlier count: " << ransac.getBestInlierCount() << "/" << matches.size() << "\n";
 			frame.mPose3DR = ransac.getBestModel().first.cast<float>();
@@ -479,6 +481,30 @@ void PlaneCalibSystem::doFullBA()
 
 	//	}
 	//}
+}
+
+void PlaneCalibSystem::doValidationBA()
+{
+	Eigen::Matrix3fr k;
+	Eigen::Vector2f distortion;
+
+	k = mCamera.getK();
+	distortion = mCamera.getDistortionModel().getCoefficients();
+
+	//BAAAAA!!!
+	CalibratedBundleAdjuster ba;
+	ba.setUseLocks(false);
+	ba.setFixCalib(true);
+	ba.setFix3DPoints(true);
+	ba.setOutlierThreshold(3 * mExpectedPixelNoiseStd);
+	ba.setDistortion(distortion.cast<double>());
+	ba.setK(k.cast<double>());
+	ba.setMap(mMap.get());
+	for (auto &framep : mMap->getKeyframes())
+	{
+		ba.addFrameToAdjust(*framep);
+	}
+	ba.bundleAdjust();
 }
 
 } 

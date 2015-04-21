@@ -33,6 +33,9 @@ public:
 	Map &getMap() {return *mMap;}
 	void setMap(std::unique_ptr<Map> map);
 
+	const CameraModel &getCamera() const { return mCamera; }
+	void setCamera(const CameraModel &value) { mCamera = value; }
+
 	void resetCalib();
 
 	bool getUse3DGroundTruth()  const { return mUse3DGroundTruth; }
@@ -48,7 +51,6 @@ public:
 	
 	HomographyCalibration &getCalib() { return *mCalib; }
 	
-	const CameraModel &getCamera() const { return mCamera; }
 	const Eigen::Vector3f &getNormal() const { return mNormal; }
 
 	void processImage(double timestamp, cv::Mat3b &imgColor, cv::Mat1b &imgGray);
@@ -59,6 +61,7 @@ public:
 	void doHomographyBA();
 	void doHomographyCalib(bool fixP0);
 	void doFullBA();
+	void doValidationBA();
 
 protected:
 	////////////////////////////////////////////////////////
