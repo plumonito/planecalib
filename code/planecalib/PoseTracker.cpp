@@ -133,7 +133,7 @@ void PoseTracker::findMatches()
 	for (int octave = mOctaveCount - 1; octave >= 0; octave--)
 	{
 		const int scale = 1 << octave;
-		const int kMatchThresholdSq = kMatchThresholdSq0 / (scale*scale);
+		const int kMatchThresholdSq = kMatchThresholdSq0 * (scale*scale);
 		{
 			ProfileSection sm("matching");
 
@@ -203,6 +203,7 @@ bool PoseTracker::trackFrameHomography(std::unique_ptr<Keyframe> frame_)
 	//Homography
 	if (mMatches.size() < kMinInlierCount)
 	{
+		MYAPP_LOG << "Lost in 2D, only " << mMatches.size() << " matches\n";
 		mIsLost = true;
 	}
 	else
@@ -244,26 +245,28 @@ bool PoseTracker::trackFrameHomography(std::unique_ptr<Keyframe> frame_)
 		}
 		//std::vector<FeatureMatch> goodMatches;
 		//int inlierCountBefore = mask.sum();
-		int inlierCountAfter = 0;
+		mMatchInlierCount = 0;
 		for (int i = 0; i<(int)mMatches.size(); i++)
 		{
 			if (inliersVec[i])
-				inlierCountAfter++;
+				mMatchInlierCount++;
 				//goodMatches.push_back(mMatches[i]);
 		}
-		mMatchInlierCount = inlierCountAfter;
 		//inlierCountAfter = goodMatches.size();
 		//mMatches = std::move(goodMatches);
 		//MYAPP_LOG << "Inliers before=" << inlierCountBefore << ", inliers after=" << inlierCountAfter << "\n";
 
-		if (inlierCountAfter > kMinInlierCount)
+		if (mMatchInlierCount > kMinInlierCount)
 		{
 			mCurrentPose = eutils::FromCV(cvH);
 			mFrame->setPose(mCurrentPose);
 			mIsLost = false;
 		}
 		else
+		{
+			MYAPP_LOG << "Lost in 2D, only " << mMatchInlierCount << " inliers\n";
 			mIsLost = true;
+		}
 	}
 
 	//Eval
@@ -286,6 +289,7 @@ bool PoseTracker::trackFrame3D(std::unique_ptr<Keyframe> frame_)
 
 	if (mMatches.size() < kMinInlierCount)
 	{
+		MYAPP_LOG << "Lost in 3D, only " << mMatches.size() << " matches\n";
 		mIsLost = true;
 	}
 	else
@@ -298,22 +302,22 @@ bool PoseTracker::trackFrame3D(std::unique_ptr<Keyframe> frame_)
 			ransac.doRansac();
 			mCurrentPoseR = ransac.getBestModel().first.cast<float>();
 			mCurrentPoseT = ransac.getBestModel().second.cast<float>();
+
+			HomographyRansac ransacH;
+			ransacH.setParams(3, 10, 100, (int)(0.9f * mMatches.size()));
+			ransacH.setData(mMatches);
+			ransacH.doRansac();
+			mCurrentPose = ransacH.getBestModel().cast<float>().eval();
 		}
 
-		int inlierCount;
 		PnPRefiner refiner;
 		refiner.setCamera(mMap->mCamera.get());
 		refiner.setOutlierThreshold(3);
-		refiner.refinePose(mMatches, mCurrentPoseR, mCurrentPoseT, inlierCount, mReprojectionErrors);
+		refiner.refinePose(mMatches, mCurrentPoseR, mCurrentPoseT, mMatchInlierCount, mReprojectionErrors);
 
 		//MYAPP_LOG << "Inliers before=" << inlierCountBefore << ", inliers after=" << inlierCountAfter << "\n";
-		HomographyRansac ransacH;
-		ransacH.setParams(3, 10, 100, (int)(0.9f * mMatches.size()));
-		ransacH.setData(mMatches);
-		ransacH.doRansac();
-		mCurrentPose = ransacH.getBestModel().cast<float>().eval();
 
-		//Refine
+		//Homography
 		HomographyEstimation hest;
 		std::vector<cv::Point2f> refPoints, imgPoints;
 		for (int i = 0; i < (int)mMatches.size(); i++)
@@ -331,7 +335,7 @@ bool PoseTracker::trackFrame3D(std::unique_ptr<Keyframe> frame_)
 			mCurrentPose = eutils::FromCV(cvH);
 		}
 
-		if (inlierCount > kMinInlierCount)
+		if (mMatchInlierCount > kMinInlierCount)
 		{
 			//mCurrentPose = eutils::FromCV(cvH);
 			mFrame->mPose3DR = mCurrentPoseR;
@@ -340,7 +344,10 @@ bool PoseTracker::trackFrame3D(std::unique_ptr<Keyframe> frame_)
 			mIsLost = false;
 		}
 		else
+		{
+			MYAPP_LOG << "Lost in 3D, only " << mMatchInlierCount << " inliers\n";
 			mIsLost = true;
+		}
 	}
 
 	return !mIsLost;

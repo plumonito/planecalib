@@ -29,9 +29,9 @@ bool ARWindow::init(PlaneCalibApp *app, const Eigen::Vector2i &imageSize)
 	return true;
 }
 
-void ARWindow::generateARCubeVertices(std::vector<unsigned int> &triangleIndices, std::vector<Eigen::Vector4f> &vertices, std::vector<Eigen::Vector4f> &colors, std::vector<Eigen::Vector3f> &normals)
+void ARWindow::GenerateARCubeVertices(std::vector<unsigned int> &triangleIndices, std::vector<Eigen::Vector4f> &vertices, std::vector<Eigen::Vector4f> &colors, std::vector<Eigen::Vector3f> &normals)
 {
-	const Eigen::Vector3f center = Eigen::Vector3f(0,0,-0.1f);
+	const Eigen::Vector3f center = Eigen::Vector3f(0,0.25,-0.1f);
 	const Eigen::Vector3f axis0 = Eigen::Vector3f(0.1, 0, 0);
 	const Eigen::Vector3f axis1 = Eigen::Vector3f(0, 0.1, 0);
 	const Eigen::Vector3f axis2 = Eigen::Vector3f(0, 0, 0.1);
@@ -175,7 +175,7 @@ void ARWindow::updateState()
 	mCubeColors.clear();
 	mCubeNormals.clear();
 
-	generateARCubeVertices(mCubeTriangleIndices, mCubeVertices, mCubeColors, mCubeNormals);
+	GenerateARCubeVertices(mCubeTriangleIndices, mCubeVertices, mCubeColors, mCubeNormals);
 }
 
 void ARWindow::resize()

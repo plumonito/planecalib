@@ -110,10 +110,10 @@ void MainWindow::updateState()
 		if (match)
 		{
 			color = StaticColors::Blue();
-
+			Eigen::Vector2f pos = (mTracker->getCurrentPose()*match->getPosition().homogeneous()).eval().hnormalized();
 			//Add line
 			mImageLines.push_back(feature.getPosition());
-			mImageLines.push_back(match->getPosition());
+			mImageLines.push_back(pos);
 			mImageLineColors.push_back(StaticColors::Yellow());
 			mImageLineColors.push_back(StaticColors::Blue());
 		}
@@ -437,9 +437,9 @@ void MainWindow::loadValidationData()
 	std::string answer;
 
 	//Read camera
-	std::cout << "Read camera? ([ ]=no): ";
+	std::cout << "Read camera? ([y,n]): ";
 	std::cin >> answer;
-	if (!answer.empty() || (answer.size()==1 && answer[0] != 'y'))
+	if (answer.size()==1 && answer[0] == 'y')
 	{
 		float fx, fy, u0,v0,width,height,d0, d1;
 		std::cout << "fx=";

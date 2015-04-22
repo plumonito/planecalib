@@ -63,7 +63,8 @@ protected:
 	std::vector<Eigen::Vector3f> mCubeNormals;
 
 	void toggleDisplayType();
-	void generateARCubeVertices(std::vector<unsigned int> &triangleIndices, std::vector<Eigen::Vector4f> &vertices, std::vector<Eigen::Vector4f> &colors, std::vector<Eigen::Vector3f> &normals);
+public:
+	static void GenerateARCubeVertices(std::vector<unsigned int> &triangleIndices, std::vector<Eigen::Vector4f> &vertices, std::vector<Eigen::Vector4f> &colors, std::vector<Eigen::Vector3f> &normals);
 };
 
 } 

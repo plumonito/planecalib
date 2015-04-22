@@ -73,7 +73,7 @@ void PnPRansac::setData(const std::vector<Eigen::Vector3f> *refPoints, const std
 		mOwnImgPoints->at(i) = camera->unprojectToWorld(imgPoints->at(i)).hnormalized().eval();
 
 		//Create error functor
-		mErrorFunctors.emplace_back(new PoseReprojectionError3D(camera, refPoints->at(i).cast<double>(), 0, imgPoints->at(i).cast<double>()));
+		mErrorFunctors.emplace_back(new PoseReprojectionError3D(camera, refPoints->at(i).cast<double>(), imgPoints->at(i).cast<double>(), 1));
 	}
 }
 
@@ -136,19 +136,9 @@ void PnPRansac::getInliers(const std::pair<Eigen::Matrix3dr, Eigen::Vector3d> &m
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////
 // PnPRefiner
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////
-bool PnPRefiner::getReprojectionErrors(const FeatureMatch &match,
-		const Eigen::Matrix3dr &R,
-		const Eigen::Vector3d &translation,
-		MatchReprojectionErrors &errors)
-{
-	PoseReprojectionError3D err(mCamera, match);
-	errors.reprojectionErrorsSq = (float)err.evalToDistanceSq(R, translation);
-	errors.isInlier = errors.reprojectionErrorsSq < mOutlierPixelThresholdSq;
-	return errors.isInlier;
-}
-
-
-void PnPRefiner::getInliers(const std::vector<FeatureMatch> &matches,
+void PnPRefiner::getInliers(const std::vector<Eigen::Vector3f> &refPoints,
+	const std::vector<Eigen::Vector2f> &imgPoints,
+	const std::vector<float> &scales,
 		const Eigen::Matrix3dr &R,
 		const Eigen::Vector3d &translation,
 		int &inlierCount,
@@ -157,27 +147,55 @@ void PnPRefiner::getInliers(const std::vector<FeatureMatch> &matches,
 
 	inlierCount = 0;
 
-	const int matchCount=matches.size();
+	const int matchCount=refPoints.size();
 	errors.resize(matchCount);
 	for(int i=0; i<matchCount; i++)
 	{
-		auto &match = matches[i];
 		auto &error = errors[i];
 
-		getReprojectionErrors(match, R, translation, error);
-		
+		PoseReprojectionError3D err(mCamera, refPoints[i].cast<double>(), imgPoints[i].cast<double>(), scales[i]);
+		error.reprojectionErrorsSq = (float)err.evalToDistanceSq(R, translation);
+		error.isInlier = error.reprojectionErrorsSq < mOutlierPixelThresholdSq;
+
 		if(error.isInlier)
 			inlierCount++;
 	}
 }
 
 void PnPRefiner::refinePose(const std::vector<FeatureMatch> &matches,
+	Eigen::Matrix3fr &rotation,
+	Eigen::Vector3f &translation,
+	int &inlierCount,
+	std::vector<MatchReprojectionErrors> &errors)
+{
+	std::vector<Eigen::Vector3f> refPoints;
+	std::vector<Eigen::Vector2f> imgPoints;
+	std::vector<float> scales;
+
+	refPoints.resize(matches.size());
+	imgPoints.resize(matches.size());
+	scales.resize(matches.size());
+	for (int i = 0, end = matches.size(); i != end; i++)
+	{
+		refPoints[i] = matches[i].getFeature().mPosition3D;
+		imgPoints[i] = matches[i].getPosition();
+		scales[i] = (float)(1<<matches[i].getOctave());
+	}
+
+	refinePose(refPoints, imgPoints, scales, rotation, translation, inlierCount, errors);
+}
+
+void PnPRefiner::refinePose(const std::vector<Eigen::Vector3f> &refPoints,
+		const std::vector<Eigen::Vector2f> &imgPoints,
+		const std::vector<float> &scales,
 		Eigen::Matrix3fr &rotation,
 		Eigen::Vector3f &translation,
 		int &inlierCount,
 		std::vector<MatchReprojectionErrors> &errors)
 {
-	const int matchCount=matches.size();
+	const int matchCount=refPoints.size();
+	assert(imgPoints.size() == matchCount);
+	assert(scales.size() == matchCount);
 
 	////////////////////////////////////////////////////
 	//Convert input to double
@@ -204,7 +222,7 @@ void PnPRefiner::refinePose(const std::vector<FeatureMatch> &matches,
 	//Non-linear minimization with distortion
 	ceres::Solver::Options options;
 	options.linear_solver_type = ceres::DENSE_QR;
-	options.dense_linear_algebra_library_type = ceres::LAPACK;
+	//options.dense_linear_algebra_library_type = ceres::LAPACK;
 
 	options.num_threads = 1; //Multi-threading here adds too much overhead
 	options.num_linear_solver_threads = 1;
@@ -219,16 +237,13 @@ void PnPRefiner::refinePose(const std::vector<FeatureMatch> &matches,
 
 	for(int i=0; i<matchCount; i++)
 	{
-		const FeatureMatch &match = matches[i];
-		auto &feature = match.getFeature();
-
 		totalMatchCount++;
 
 		ceres::LossFunction *lossFunc = new ceres::CauchyLoss(mOutlierPixelThreshold);
 
 		problem.AddResidualBlock(
 				new ceres::AutoDiffCostFunction<PoseReprojectionError3D,2,3,3>(
-						new PoseReprojectionError3D(mCamera,match)),
+				new PoseReprojectionError3D(mCamera, refPoints[i].cast<double>(), imgPoints[i].cast<double>(), scales[i])),
 						lossFunc, rparams_d.data(), translation_d.data());
 	}
 
@@ -237,9 +252,12 @@ void PnPRefiner::refinePose(const std::vector<FeatureMatch> &matches,
 	// Solve
 	ceres::Solver::Summary summary;
 
+	//getInliers(refPoints, imgPoints, scales, rotation_d, translation_d, inlierCount, errors);
+	//MYAPP_LOG << "PnPRefine: initial inlier count=" << inlierCount << "/" << matchCount << "\n";
+
 	ceres::Solve(options, &problem, &summary);
 
-	//DTSLAM_LOG << summary.FullReport();
+	//MYAPP_LOG << summary.FullReport();
 
 	////////////////////////////////////////////////////
 	//Extract result
@@ -249,8 +267,8 @@ void PnPRefiner::refinePose(const std::vector<FeatureMatch> &matches,
 
 	translation = translation_d.cast<float>();
 
-	getInliers(matches, finalRotation_d, translation_d, inlierCount, errors);
-	MYAPP_LOG << "PnPRefine: final inlier count=" << inlierCount << "\n";
+	getInliers(refPoints, imgPoints, scales, finalRotation_d, translation_d, inlierCount, errors);
+	//MYAPP_LOG << "PnPRefine: final inlier count=" << inlierCount << "/" << matchCount << "\n";
 }
 
 } /* namespace dtslam */

@@ -65,12 +65,9 @@ public:
 	}
 
 
-	bool getReprojectionErrors(const FeatureMatch &match,
-		const Eigen::Matrix3dr &R,
-		const Eigen::Vector3d &translation,
-		MatchReprojectionErrors &errors);
-
-	void getInliers(const std::vector<FeatureMatch> &matches,
+	void getInliers(const std::vector<Eigen::Vector3f> &refPoints,
+		const std::vector<Eigen::Vector2f> &imgPoints,
+		const std::vector<float> &scales,
 			const Eigen::Matrix3dr &R,
 			const Eigen::Vector3d &translation,
 			int &inlierCount,
@@ -81,6 +78,13 @@ public:
 			Eigen::Vector3f &translation,
 			int &inlierCount,
 			std::vector<MatchReprojectionErrors> &errors);
+	void refinePose(const std::vector<Eigen::Vector3f> &refPoints,
+		const std::vector<Eigen::Vector2f> &imgPoints,
+		const std::vector<float> &scales,
+		Eigen::Matrix3fr &rotation,
+		Eigen::Vector3f &translation,
+		int &inlierCount,
+		std::vector<MatchReprojectionErrors> &errors);
 
 protected:
 	const CameraModel *mCamera;

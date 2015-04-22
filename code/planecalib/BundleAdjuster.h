@@ -70,7 +70,7 @@ protected:
 
 	bool isInlier(const FeatureMeasurement &measurement);
 
-	void getInliers(int &inlierCount);
+	void getInliers(int &inlierCount, std::vector<FeatureMeasurement *> &outliers);
 };
 
 }

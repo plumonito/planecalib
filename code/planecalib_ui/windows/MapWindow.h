@@ -138,6 +138,11 @@ protected:
 
 	std::vector<Eigen::Vector4f> mPoseLog;
 
+	std::vector<unsigned int> mCubeTriangleIndices;
+	std::vector<Eigen::Vector4f> mCubeVertices;
+	std::vector<Eigen::Vector4f> mCubeColors;
+	std::vector<Eigen::Vector3f> mCubeNormals;
+
 	DrawFrustumData prepareFrameFrustum(const Eigen::Matrix3fr &R, Eigen::Vector3f &t, unsigned int texTarget=0, unsigned int texID=0);
     void drawFrameFrustum(const DrawFrustumData &data);
 };

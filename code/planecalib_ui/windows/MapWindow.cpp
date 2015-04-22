@@ -9,6 +9,7 @@
 #include "planecalib/flags.h"
 #include "../flags.h"
 #include "../PlaneCalibApp.h"
+#include "ARWindow.h"
 
 namespace planecalib {
 
@@ -38,6 +39,8 @@ bool MapWindow::init(PlaneCalibApp *app, const Eigen::Vector2i &imageSize)
 	mKeyBindings.addBinding(false, '+', static_cast<KeyBindingHandler<BaseWindow>::SimpleBindingFunc>(&MapWindow::zoomOut), "Zoom out.");
 	mKeyBindings.addBinding(false, 'c', static_cast<KeyBindingHandler<BaseWindow>::SimpleBindingFunc>(&MapWindow::startCube), "Define cube surface.");
 		
+	ARWindow::GenerateARCubeVertices(mCubeTriangleIndices, mCubeVertices, mCubeColors, mCubeNormals);
+
 	return true;
 }
 
@@ -261,7 +264,6 @@ void MapWindow::touchUp(int id, int x, int y)
 void MapWindow::draw()
 {
 	Eigen::Vector2i screenSize = UserInterfaceInfo::Instance().getScreenSize();
-
 	Eigen::Matrix<float, 3, 4> viewerRt;
 	viewerRt << mViewerCameraR, mViewerCameraT;
 
@@ -298,6 +300,9 @@ void MapWindow::draw()
     	drawFeature(data);
     }
     glEnable(GL_DEPTH_TEST);
+
+	//Draw cube
+	mShaders->getColor().drawVertices(GL_TRIANGLES, mCubeTriangleIndices.data(), mCubeTriangleIndices.size(), mCubeVertices.data(), mCubeColors.data());
 
     //Draw frustums
     for(auto &frameData : mFrustumsToDraw)
@@ -366,7 +371,10 @@ MapWindow::DrawFrustumData MapWindow::prepareFrameFrustum(const Eigen::Matrix3fr
 
 	data.texTarget = texTarget;
 	data.texId = texID;
-	data.color = StaticColors::Gray();
+	if (texTarget == mCurrentImageTextureTarget && texID == mCurrentImageTextureId)
+		data.color = StaticColors::Green();
+	else
+		data.color = StaticColors::Black();
 
 	//Center
 	Eigen::Vector3f center = -R.transpose()*t;

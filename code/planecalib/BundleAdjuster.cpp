@@ -166,14 +166,17 @@ bool BundleAdjuster::isInlier(const FeatureMeasurement &measurement)
 	return errors.isInlier;
 }
 
-void BundleAdjuster::getInliers(int &inlierCount)
+void BundleAdjuster::getInliers(int &inlierCount, std::vector<FeatureMeasurement *> &outliers)
 {
 	inlierCount = 0;
+	outliers.clear();
 	for(auto &mp : mMeasurementsInProblem)
 	{
 		auto &m = *mp;
-		if(isInlier(m))
+		if (isInlier(m))
 			inlierCount++;
+		else
+			outliers.push_back(mp);
 	}
 }
 
@@ -336,7 +339,8 @@ bool BundleAdjuster::bundleAdjust()
 
 	//Get inliers before
 	int inlierCount;
-	getInliers(inlierCount);
+	std::vector<FeatureMeasurement *> outliers;
+	getInliers(inlierCount, outliers);
 	MYAPP_LOG << "BA inlier count before: " << inlierCount << " / " << mMeasurementsInProblem.size() << "\n";
 
 	//No locks while ceres runs
@@ -363,7 +367,7 @@ bool BundleAdjuster::bundleAdjust()
 		return false;
 	}
 
-	getInliers(inlierCount);
+	getInliers(inlierCount, outliers);
 	MYAPP_LOG << "BA inlier count after: " << inlierCount << " / " << mMeasurementsInProblem.size() << "\n";
 
 	//Update pose
@@ -383,6 +387,32 @@ bool BundleAdjuster::bundleAdjust()
 
 		feature.setPosition(params.cast<float>());
 	}
+
+	//Remove outliers
+	for (auto mp : outliers)
+	{
+		auto &frameVec = mp->getKeyframe().getMeasurements();
+		for (auto it = frameVec.begin(), end = frameVec.end(); it != end; ++it)
+		{
+			if (*it == mp)
+			{
+				frameVec.erase(it);
+				break;
+			}
+		}
+
+		auto &featuresVec = mp->getFeature().getMeasurements();
+		for (auto it = featuresVec.begin(), end = featuresVec.end(); it != end; ++it)
+		{
+			if (it->get() == mp)
+			{
+				featuresVec.erase(it);
+				break;
+			}
+		}
+	}
+	MYAPP_LOG << "Removed " << outliers.size() << " outliers\n";
+
 	return true;
 }
 

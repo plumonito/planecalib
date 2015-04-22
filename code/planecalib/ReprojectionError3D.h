@@ -16,12 +16,12 @@ class ReprojectionError3D
 {
 public:
 	ReprojectionError3D(const FeatureMeasurement &m):
-		ReprojectionError3D(m.getOctave(), m.getPosition().cast<double>())
+		ReprojectionError3D(m.getPosition().cast<double>(), 1 << m.getOctave())
 	{
 	}
 
-	ReprojectionError3D(const int octave, const Eigen::Vector2d &imgPoint) :
-		mScale(1<<octave), mImgPoint(imgPoint)
+	ReprojectionError3D(const Eigen::Vector2d &imgPoint, const double scale) :
+		mScale(scale), mImgPoint(imgPoint)
 	{
 	}
 
@@ -37,7 +37,7 @@ public:
 	double evalToDistanceSq(const Eigen::VectorXd &cameraParams, const Eigen::VectorXd &distortionParams, const Eigen::Vector3d &Rparams, const Eigen::Vector3d &t, const Eigen::Vector3d &x) const;
 
 protected:
-	const int mScale;
+	const double mScale;
 	const Eigen::Vector2d mImgPoint;
 
 	template<class T>
@@ -48,12 +48,12 @@ class PoseReprojectionError3D: public ReprojectionError3D
 {
 public:
 	PoseReprojectionError3D(const CameraModel *camera, const FeatureMatch &match) :
-		PoseReprojectionError3D(camera, match.getFeature().mPosition3D.cast<double>(), match.getOctave(), match.getPosition().cast<double>())
+		PoseReprojectionError3D(camera, match.getFeature().mPosition3D.cast<double>(), match.getPosition().cast<double>(), 1<<match.getOctave())
 	{
 	}
 
-	PoseReprojectionError3D(const CameraModel * const camera, const Eigen::Vector3d &featurePosition, const int octave, const Eigen::Vector2d &imgPoint) :
-		ReprojectionError3D(octave, imgPoint), mCameraParams(camera->getParams()), mDistortionParams(camera->getDistortionModel().getParams()), mFeaturePosition(featurePosition)
+	PoseReprojectionError3D(const CameraModel * const camera, const Eigen::Vector3d &featurePosition, const Eigen::Vector2d &imgPoint, const double scale) :
+		ReprojectionError3D(imgPoint, scale), mCameraParams(camera->getParams()), mDistortionParams(camera->getDistortionModel().getParams()), mFeaturePosition(featurePosition)
 	{
 	}
 
@@ -84,7 +84,7 @@ class BAReprojectionError3D: public ReprojectionError3D
 {
 public:
 	BAReprojectionError3D(const int octave, const Eigen::Vector2d &imgPoint):
-		ReprojectionError3D(octave, imgPoint)
+		ReprojectionError3D(imgPoint, 1 << octave)
 	{
 	}
 
