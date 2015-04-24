@@ -209,39 +209,40 @@ bool PoseTracker::trackFrameHomography(std::unique_ptr<Keyframe> frame_)
 	else
 	{
 		//Create cv vectors
-		std::vector<cv::Point2f> refPoints, imgPoints;
+		std::vector<Eigen::Vector2f> refPoints, imgPoints;
+		std::vector<float> scales;
 		for (int i = 0; i < (int)mMatches.size(); i++)
 		{
 			auto &match = mMatches[i];
-			refPoints.push_back(eutils::ToCVPoint(match.getFeature().getPosition()));
-			imgPoints.push_back(eutils::ToCVPoint(match.getPosition()));
+			refPoints.push_back(match.getFeature().getPosition());
+			imgPoints.push_back(match.getPosition());
+			scales.push_back((float)(1<<match.getOctave()));
 		}
 
 		//Eigen::Matrix<uchar,Eigen::Dynamic,1> mask(refPoints.size());
 		//cv::Mat1b mask_cv(refPoints.size(), 1, mask.data());
 
-		cv::Matx33f cvH;
+		Eigen::Matrix3fr H;
 		if (mIsLost || mForceRansac)
 		{
 			ProfileSection s("homographyRansac");
 
 			HomographyRansac ransac;
 			ransac.setParams(3, 10, 100, (int)(0.99f * mMatches.size()));
-			ransac.setData(mMatches);
+			ransac.setData(&refPoints, &imgPoints, &scales);
 			ransac.doRansac();
-			cvH = eutils::ToCV(ransac.getBestModel().cast<float>().eval());
+			H = ransac.getBestModel().cast<float>();
 			MYAPP_LOG << "Homography ransac: inliers=" << ransac.getBestInlierCount() << "/" << mMatches.size() << "\n";
 		}
 		else
-			cvH = eutils::ToCV(mCurrentPose);
+			H = mCurrentPose;
 
 		//Refine
 		HomographyEstimation hest;
 		std::vector<bool> inliersVec;
-		std::vector<int> octaveVec(imgPoints.size(), 0);
 		{
 			ProfileSection s("refineHomography");
-			cvH = hest.estimateCeres(cvH, imgPoints, refPoints, octaveVec, 2.5, inliersVec);
+			H = hest.estimateCeres(H, imgPoints, refPoints, scales, 2.5, inliersVec);
 		}
 		//std::vector<FeatureMatch> goodMatches;
 		//int inlierCountBefore = mask.sum();
@@ -258,7 +259,7 @@ bool PoseTracker::trackFrameHomography(std::unique_ptr<Keyframe> frame_)
 
 		if (mMatchInlierCount > kMinInlierCount)
 		{
-			mCurrentPose = eutils::FromCV(cvH);
+			mCurrentPose = H;
 			mFrame->setPose(mCurrentPose);
 			mIsLost = false;
 		}
@@ -294,20 +295,25 @@ bool PoseTracker::trackFrame3D(std::unique_ptr<Keyframe> frame_)
 	}
 	else
 	{
+		std::vector<Eigen::Vector3f> refPoints;
+		std::vector<Eigen::Vector2f> imgPoints;
+		std::vector<float> scales;
+
+		for (auto &match : mMatches)
+		{
+			refPoints.push_back(match.getFeature().mPosition3D);
+			imgPoints.push_back(match.getPosition());
+			scales.push_back((float)(1 << match.getOctave()));
+		}
+
 		if (mIsLost)
 		{
 			PnPRansac ransac;
 			ransac.setParams(3, 10, 100, (int)(0.9f*mMatches.size()));
-			ransac.setData(mMatches, mMap->mCamera.get());
+			ransac.setData(&refPoints, &imgPoints, &scales, mMap->mCamera.get());
 			ransac.doRansac();
 			mCurrentPoseR = ransac.getBestModel().first.cast<float>();
 			mCurrentPoseT = ransac.getBestModel().second.cast<float>();
-
-			HomographyRansac ransacH;
-			ransacH.setParams(3, 10, 100, (int)(0.9f * mMatches.size()));
-			ransacH.setData(mMatches);
-			ransacH.doRansac();
-			mCurrentPose = ransacH.getBestModel().cast<float>().eval();
 		}
 
 		PnPRefiner refiner;
@@ -317,27 +323,23 @@ bool PoseTracker::trackFrame3D(std::unique_ptr<Keyframe> frame_)
 
 		//MYAPP_LOG << "Inliers before=" << inlierCountBefore << ", inliers after=" << inlierCountAfter << "\n";
 
-		//Homography
-		HomographyEstimation hest;
-		std::vector<cv::Point2f> refPoints, imgPoints;
-		for (int i = 0; i < (int)mMatches.size(); i++)
-		{
-			auto &match = mMatches[i];
-			refPoints.push_back(eutils::ToCVPoint(match.getFeature().getPosition()));
-			imgPoints.push_back(eutils::ToCVPoint(match.getPosition()));
-		}
-		std::vector<bool> inliersVec;
-		std::vector<int> octaveVec(imgPoints.size(), 0);
-		{
-			ProfileSection s("refineHomography");
-			cv::Matx33f cvH = eutils::ToCV(mCurrentPose);
-			cvH = hest.estimateCeres(cvH, imgPoints, refPoints, octaveVec, 2.5, inliersVec);
-			mCurrentPose = eutils::FromCV(cvH);
-		}
+		//Convert to homography
+		//Ref data could be computed just once
+		Keyframe &refFrame = *mMap->getKeyframes()[0];
+		Eigen::Matrix3fr refR = refFrame.mPose3DR;
+		Eigen::Vector3f refT = refFrame.mPose3DT - refR*Eigen::Vector3f::UnitZ();
+		Eigen::Matrix3fr worldToRefH = mMap->mCamera->getK() * (refR + refT*Eigen::Vector3f::UnitZ().transpose());
+
+		Eigen::Matrix3fr &imgR = mCurrentPoseR;
+		Eigen::Vector3f imgT = mCurrentPoseT - imgR*Eigen::Vector3f::UnitZ();
+		Eigen::Matrix3fr worldToImgH = mMap->mCamera->getK() * (imgR + imgT*Eigen::Vector3f::UnitZ().transpose());
+
+		mCurrentPose = worldToImgH*worldToRefH.inverse();
+
+		
 
 		if (mMatchInlierCount > kMinInlierCount)
 		{
-			//mCurrentPose = eutils::FromCV(cvH);
 			mFrame->mPose3DR = mCurrentPoseR;
 			mFrame->mPose3DT = mCurrentPoseT;
 			mFrame->setPose(mCurrentPose);

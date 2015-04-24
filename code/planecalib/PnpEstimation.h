@@ -30,7 +30,7 @@ public:
 	~PnPRansac();
 
 	void setData(const std::vector<FeatureMatch> &matches, const CameraModel *camera);
-	void setData(const std::vector<Eigen::Vector3f> *refPoints, const std::vector<Eigen::Vector2f> *imgPoints, const CameraModel *camera);
+	void setData(const std::vector<Eigen::Vector3f> *refPoints, const std::vector<Eigen::Vector2f> *imgPoints, const std::vector<float> *scales, const CameraModel *camera);
 
 	std::vector<std::pair<Eigen::Matrix3dr, Eigen::Vector3d>> modelFromMinimalSet(const std::vector<int> &constraintIndices);
 	void getInliers(const std::pair<Eigen::Matrix3dr, Eigen::Vector3d> &model, int &inlierCount, float &errorSumSq, PnPIterationData &data);

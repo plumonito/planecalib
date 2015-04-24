@@ -420,13 +420,13 @@ void PlaneCalibSystem::doFullBA()
 
 					refPoints.push_back(m.getFeature().mPosition3D);
 					imgPoints.push_back(m.getPosition());
-					scales.push_back(1<<m.getOctave());
+					scales.push_back((float)(1<<m.getOctave()));
 				}
 
 				//PnP
 				PnPRansac ransac;
 				ransac.setParams(3 * mExpectedPixelNoiseStd, 10, 100, (int)(0.99f * frame.getMeasurements().size()));
-				ransac.setData(&refPoints, &imgPoints, &mCamera);
+				ransac.setData(&refPoints, &imgPoints, &scales, &mCamera);
 				ransac.doRansac();
 				//MYAPP_LOG << "Frame pnp inlier count: " << ransac.getBestInlierCount() << "/" << matches.size() << "\n";
 				frame.mPose3DR = ransac.getBestModel().first.cast<float>();

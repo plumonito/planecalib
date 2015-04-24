@@ -38,6 +38,7 @@ void PnPRansac::setData(const std::vector<FeatureMatch> &matches, const CameraMo
 	//TODO: this will break with fish-eye lenses, but cv::triangulate and cv:solvePnP can only take 2D points
 	mOwnRefPoints->resize(mMatchCount);
 	mOwnImgPoints->resize(mMatchCount);
+	mErrorFunctors.clear();
 	for (int i = 0; i != mMatchCount; ++i)
 	{
 		const FeatureMatch &match = matches[i];
@@ -50,7 +51,7 @@ void PnPRansac::setData(const std::vector<FeatureMatch> &matches, const CameraMo
 	}
 }
 
-void PnPRansac::setData(const std::vector<Eigen::Vector3f> *refPoints, const std::vector<Eigen::Vector2f> *imgPoints, const CameraModel *camera)
+void PnPRansac::setData(const std::vector<Eigen::Vector3f> *refPoints, const std::vector<Eigen::Vector2f> *imgPoints, const std::vector<float> *scales, const CameraModel *camera)
 {
 	assert(refPoints != NULL && imgPoints != NULL);
 	assert(refPoints->size() != 0);
@@ -73,7 +74,7 @@ void PnPRansac::setData(const std::vector<Eigen::Vector3f> *refPoints, const std
 		mOwnImgPoints->at(i) = camera->unprojectToWorld(imgPoints->at(i)).hnormalized().eval();
 
 		//Create error functor
-		mErrorFunctors.emplace_back(new PoseReprojectionError3D(camera, refPoints->at(i).cast<double>(), imgPoints->at(i).cast<double>(), 1));
+		mErrorFunctors.emplace_back(new PoseReprojectionError3D(camera, refPoints->at(i).cast<double>(), imgPoints->at(i).cast<double>(), scales->at(i)));
 	}
 }
 

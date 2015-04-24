@@ -34,35 +34,35 @@ void HomographyRansac::setData(const std::vector<FeatureMeasurement*> &measureme
 {
 	mOwnRefPoints.reset(new std::vector<Eigen::Vector2f>());
 	mOwnImgPoints.reset(new std::vector<Eigen::Vector2f>());
-	std::vector<int> octaves;
+	std::vector<float> scales;
 
 	for (auto &mPtr : measurements)
 	{
 		auto &m = *mPtr;
 		mOwnRefPoints->push_back(m.getFeature().getPosition());
 		mOwnImgPoints->push_back(m.getPosition());
-		octaves.push_back(m.getOctave());
+		scales.push_back((float)(1<<m.getOctave()));
 	}
 
-	setData(mOwnRefPoints.get(), mOwnImgPoints.get(), &octaves);
+	setData(mOwnRefPoints.get(), mOwnImgPoints.get(), &scales);
 }
 void HomographyRansac::setData(const std::vector<FeatureMatch> &matches)
 {
 	mOwnRefPoints.reset(new std::vector<Eigen::Vector2f>());
 	mOwnImgPoints.reset(new std::vector<Eigen::Vector2f>());
-	std::vector<int> octaves;
+	std::vector<float> scales;
 
 	for (auto &m : matches)
 	{
 		mOwnRefPoints->push_back(m.getFeature().getPosition());
 		mOwnImgPoints->push_back(m.getPosition());
-		octaves.push_back(m.getOctave());
+		scales.push_back((float)(1<<m.getOctave()));
 	}
 
-	setData(mOwnRefPoints.get(), mOwnImgPoints.get(), &octaves);
+	setData(mOwnRefPoints.get(), mOwnImgPoints.get(), &scales);
 }
 
-void HomographyRansac::setData(const std::vector<Eigen::Vector2f> *refPoints, const std::vector<Eigen::Vector2f> *imgPoints, const std::vector<int> *octaves)
+void HomographyRansac::setData(const std::vector<Eigen::Vector2f> *refPoints, const std::vector<Eigen::Vector2f> *imgPoints, const std::vector<float> *scales)
 {
 	assert(refPoints != NULL && imgPoints!=NULL);
 	assert(refPoints->size() != 0);
@@ -76,14 +76,15 @@ void HomographyRansac::setData(const std::vector<Eigen::Vector2f> *refPoints, co
 
 	//Error functors
 	//TODO: this will break with fish-eye lenses, but cv::triangulate and cv:solvePnP can only take 2D points
+	mErrorFunctors.clear();
 	for (int i = 0; i != mMatchCount; ++i)
 	{
 		auto &ref = mRefPoints->at(i);
 		auto &img = mImgPoints->at(i);
-		auto &octave = octaves->at(i);
+		auto &scale = scales->at(i);
 
 		//Create error functor
-		mErrorFunctors.emplace_back(new HomographyReprojectionError(img[0], img[1], ref[0], ref[1], 1<<octave));
+		mErrorFunctors.emplace_back(new HomographyReprojectionError(img[0], img[1], ref[0], ref[1], scale));
 	}
 }
 
@@ -144,18 +145,18 @@ void HomographyRansac::getInliers(const Eigen::Matrix3dr &model, int &inlierCoun
 // HomographyEstimation
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-cv::Matx33f HomographyEstimation::estimateCeres(const cv::Matx33f &initial, const std::vector<cv::Point2f> &left, const std::vector<cv::Point2f> &right, const std::vector<int> &octave, float threshold, std::vector<bool> &inliers)
+Eigen::Matrix3fr HomographyEstimation::estimateCeres(const Eigen::Matrix3fr &initial, const std::vector<Eigen::Vector2f> &left, const std::vector<Eigen::Vector2f> &right, const std::vector<float> &scales, float threshold, std::vector<bool> &inliers)
 {
 	ceres::Problem problem;
 	ceres::LossFunction *lossFunc = new ceres::CauchyLoss(threshold);
 
-	cv::Matx33d h(initial);
+	Eigen::Matrix3dr h = initial.cast<double>();
 	for(int i=0; i<(int)left.size(); i++)
 	{
 		problem.AddResidualBlock(
 				new ceres::AutoDiffCostFunction<HomographyReprojectionError,2,9>(
-						new HomographyReprojectionError(left[i].x, left[i].y, right[i].x, right[i].y, 1<<octave[i])),
-				lossFunc, h.val);
+				new HomographyReprojectionError(left[i].x(), left[i].y(), right[i].x(), right[i].y(), scales[i])),
+				lossFunc, h.data());
 	}
 
 	ceres::Solver::Options options;
@@ -168,20 +169,26 @@ cv::Matx33f HomographyEstimation::estimateCeres(const cv::Matx33f &initial, cons
 
 	//DTSLAM_LOG << summary.BriefReport() << "\n";
 
+	int inlierCount=0;
 	inliers.resize(left.size());
 	for(int i=0; i<(int)left.size(); i++)
 	{
-		HomographyReprojectionError err(left[i].x, left[i].y, right[i].x, right[i].y, 1<<octave[i]);
+		HomographyReprojectionError err(left[i].x(), left[i].y(), right[i].x(), right[i].y(), scales[i]);
 		double residuals[2];
 
-		err(h.val, residuals);
-		if(fabs(residuals[0])<threshold && fabs(residuals[1])<threshold)
+		err(h.data(), residuals);
+		if (fabs(residuals[0]) < threshold && fabs(residuals[1]) < threshold)
+		{
 			inliers[i] = true;
+			inlierCount++;
+		}
 		else
 			inliers[i] = false;
 	}
 
-	return h;
+	//MYAPP_LOG << "Homography refine: inliers=" << inlierCount << "/" << left.size() << "\n";
+
+	return h.cast<float>();
 }
 
 //Estimate homography with weights for each residual

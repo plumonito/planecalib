@@ -585,6 +585,7 @@ void MainWindow::loadValidationData()
 	}
 
 	//Create keyframes
+	std::vector<float> scales(worldPointsVec.size(), 1);
 	cv::Mat3b nullImg3(mImageSize[1], mImageSize[0]);
 	cv::Mat1b nullImg1(mImageSize[1], mImageSize[0]);
 	Eigen::Matrix<uchar, 1, 32> nullDescr;
@@ -598,7 +599,7 @@ void MainWindow::loadValidationData()
 		//Find pose
 		PnPRansac ransac;
 		ransac.setParams(3, 10, 100, (int)(0.9f*featureCount));
-		ransac.setData(&worldPointsVec, &imagePointsVec[k], &mSystem->getCamera());
+		ransac.setData(&worldPointsVec, &imagePointsVec[k], &scales, &mSystem->getCamera());
 		ransac.doRansac();
 		frame->mPose3DR = ransac.getBestModel().first.cast<float>();
 		frame->mPose3DT = ransac.getBestModel().second.cast<float>();

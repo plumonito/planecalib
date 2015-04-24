@@ -33,7 +33,7 @@ public:
 	HomographyRansac();
 	~HomographyRansac();
 
-	void setData(const std::vector<Eigen::Vector2f> *refPoints, const std::vector<Eigen::Vector2f> *imgPoints, const std::vector<int> *octaves);
+	void setData(const std::vector<Eigen::Vector2f> *refPoints, const std::vector<Eigen::Vector2f> *imgPoints, const std::vector<float> *scales);
 	void setData(const std::vector<FeatureMeasurement*> &measurements);
 	void setData(const std::vector<FeatureMatch> &matches);
 
@@ -70,12 +70,12 @@ public:
 	// Full homography estimation based on matches
 	////////////////////////////////////////////////
 
-	cv::Matx33f estimate(const cv::Matx33f &initial, const std::vector<cv::Point2f> &left, const std::vector<cv::Point2f> &right, const std::vector<int> &octave, float threshold, std::vector<bool> &inliers)
+	Eigen::Matrix3f estimate(const Eigen::Matrix3f &initial, const std::vector<Eigen::Vector2f> &left, const std::vector<Eigen::Vector2f> &right, const std::vector<float> &scales, float threshold, std::vector<bool> &inliers)
 	{
-		return estimateCeres(initial, left, right, octave, threshold, inliers);
+		return estimateCeres(initial, left, right, scales, threshold, inliers);
 		//return EstimateOpenCV(initial, left, right, threshold, inliers);
 	}
-	cv::Matx33f estimateCeres(const cv::Matx33f &initial, const std::vector<cv::Point2f> &left, const std::vector<cv::Point2f> &right, const std::vector<int> &octave, float threshold, std::vector<bool> &inliers);
+	Eigen::Matrix3fr estimateCeres(const Eigen::Matrix3fr &initial, const std::vector<Eigen::Vector2f> &left, const std::vector<Eigen::Vector2f> &right, const std::vector<float> &scales, float threshold, std::vector<bool> &inliers);
 	cv::Matx33f estimateOpenCV(const cv::Matx33f &initial, const std::vector<cv::Point2f> &left, const std::vector<cv::Point2f> &right, const std::vector<int> &octave, float threshold, std::vector<bool> &inliers);
 
 	cv::Matx33f estimateCeres(const cv::Matx33f &initial, const std::vector<cv::Point2f> &left, const std::vector<cv::Point2f> &right, const std::vector<int> &octave, const std::vector<double> &weights, float threshold, std::vector<bool> &inliers);

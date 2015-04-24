@@ -240,7 +240,7 @@ std::unique_ptr<Map> SceneGenerator::generateFromPoses(const std::vector<Eigen::
 		std::vector<float> noiseError;
 
 		//Points
-		std::vector<cv::Point2f> refPoints, imgPoints;
+		std::vector<Eigen::Vector2f> refPoints, imgPoints;
 		for (int j = 0; j< (int)newMap->getFeatures().size(); j++)
 		{
 			auto &feature = *newMap->getFeatures()[j];
@@ -273,8 +273,8 @@ std::unique_ptr<Map> SceneGenerator::generateFromPoses(const std::vector<Eigen::
 			feature.getMeasurements().push_back(std::move(m));
 
 			//Save match
-			refPoints.push_back(eutils::ToCVPoint(feature.getPosition()));
-			imgPoints.push_back(eutils::ToCVPoint(imagePos));
+			refPoints.push_back(feature.getPosition());
+			imgPoints.push_back(imagePos);
 		}
 
 		//Write stats
@@ -290,26 +290,26 @@ std::unique_ptr<Map> SceneGenerator::generateFromPoses(const std::vector<Eigen::
 			MYAPP_LOG << "  Max noise error: " << _noiseError.maxCoeff() << "\n";
 		}
 
+
 		//Get homography
 		Eigen::Matrix<uchar, Eigen::Dynamic, 1> mask(refPoints.size());
 		cv::Mat1b mask_cv(refPoints.size(), 1, mask.data());
 
-		cv::Mat H;
 		HomographyRansac ransac;
 		ransac.setParams(3 * expectedPixelNoiseStd, 10, 100, (int)(0.9f * newFrame->getMeasurements().size()));
 		ransac.setData(newFrame->getMeasurements());
 		ransac.doRansac();
 
-		cv::Matx33f cvH = eutils::ToCV(ransac.getBestModel().cast<float>().eval());
+		Eigen::Matrix3fr H = ransac.getBestModel().cast<float>();
 
 		//Refine
 		HomographyEstimation hest;
 		std::vector<bool> inliersVec;
-		std::vector<int> octaveVec(imgPoints.size(), 0);
-		cvH = hest.estimateCeres(cvH, imgPoints, refPoints, octaveVec, 3 * expectedPixelNoiseStd, inliersVec);
+		std::vector<float> scales(imgPoints.size(), 1);
+		H = hest.estimateCeres(H, imgPoints, refPoints, scales, 3 * expectedPixelNoiseStd, inliersVec);
 
 		//Set final
-		newFrame->setPose(eutils::FromCV(cvH));
+		newFrame->setPose(H);
 
 		//Add
 		newMap->addKeyframe(std::move(newFrame));
