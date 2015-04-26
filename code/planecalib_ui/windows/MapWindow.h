@@ -143,6 +143,13 @@ protected:
 	std::vector<Eigen::Vector4f> mCubeColors;
 	std::vector<Eigen::Vector3f> mCubeNormals;
 
+	const int kBackprojectRowCount = 10;
+	const int kBackprojectColCount = 10;
+	std::vector<Eigen::Vector3f> mBackprojectedFrameXn;
+	std::vector<Eigen::Vector4f> mBackprojectedFrameVertices;
+	std::vector<Eigen::Vector2f> mBackprojectedFrameTexCoords;
+	std::vector<unsigned int> mBackprojectedFrameIndices;
+
 	DrawFrustumData prepareFrameFrustum(const Eigen::Matrix3fr &R, Eigen::Vector3f &t, unsigned int texTarget=0, unsigned int texID=0);
     void drawFrameFrustum(const DrawFrustumData &data);
 };

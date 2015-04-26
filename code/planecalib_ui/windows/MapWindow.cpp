@@ -41,6 +41,45 @@ bool MapWindow::init(PlaneCalibApp *app, const Eigen::Vector2i &imageSize)
 		
 	ARWindow::GenerateARCubeVertices(mCubeTriangleIndices, mCubeVertices, mCubeColors, mCubeNormals);
 
+	//Backproject
+	mBackprojectedFrameXn.resize(kBackprojectColCount*kBackprojectRowCount);
+	mBackprojectedFrameVertices.resize(kBackprojectColCount*kBackprojectRowCount);
+	mBackprojectedFrameTexCoords.resize(kBackprojectColCount*kBackprojectRowCount);
+	auto &camera = *mApp->getSystem().getMap().mCamera;
+	float stepx = (float)(camera.getImageSize()[0]-1) / kBackprojectColCount;
+	float stepy = (float)(camera.getImageSize()[1]-1) / kBackprojectRowCount;
+	Eigen::Vector2f uv;
+	for (int j = 0; j < kBackprojectRowCount; j++)
+	{
+		uv[1] = j*stepy;
+		for (int i = 0; i < kBackprojectColCount; i++)
+		{
+			int id = j*kBackprojectRowCount + i;
+			uv[0] = i*stepx;
+			auto xn = camera.unprojectToWorld(uv);
+			mBackprojectedFrameXn[id] = xn.normalized();
+			mBackprojectedFrameTexCoords[id] << uv[0]/camera.getImageSize()[0], uv[1]/camera.getImageSize()[1];
+		}
+	}
+
+	for (int j = 0; j < kBackprojectRowCount-1; j++)
+	{
+		int id = j*kBackprojectRowCount;
+		mBackprojectedFrameIndices.push_back(id);
+		mBackprojectedFrameIndices.push_back(id+kBackprojectRowCount);
+		for (int i = 1; i < kBackprojectColCount; i++)
+		{
+			id++;
+			mBackprojectedFrameIndices.push_back(id);
+			mBackprojectedFrameIndices.push_back(id+kBackprojectRowCount);
+		}
+		if (j < kBackprojectRowCount - 1)
+		{
+			mBackprojectedFrameIndices.push_back(id+kBackprojectRowCount);
+			mBackprojectedFrameIndices.push_back((j+1)*kBackprojectRowCount);
+		}
+	}
+
 	return true;
 }
 
@@ -98,7 +137,36 @@ void MapWindow::updateState()
     }
 
     //Draw currently tracked frame
-	mFrustumsToDraw.push_back(prepareFrameFrustum(mTracker->mCurrentPoseR, mTracker->mCurrentPoseT, mCurrentImageTextureTarget, mCurrentImageTextureId));
+	//mFrustumsToDraw.push_back(prepareFrameFrustum(mTracker->mCurrentPoseR, mTracker->mCurrentPoseT, mCurrentImageTextureTarget, mCurrentImageTextureId));
+
+	//Backproject
+	Eigen::Vector3f center = -mTracker->mCurrentPoseR.transpose()*mTracker->mCurrentPoseT;
+	for (int i = 0, end = (int)mBackprojectedFrameXn.size(); i < end; i++)
+	{
+		auto xn = mTracker->mCurrentPoseR.transpose()*mBackprojectedFrameXn[i];
+		Eigen::Vector3f x = center - (center[2] / xn[2])*xn;
+
+		mBackprojectedFrameVertices[i] << x[0], x[1], x[2], 1;
+	}
+
+	DrawFrustumData data;
+
+	data.color = StaticColors::Green();
+
+	//Center
+	data.center = center.homogeneous();
+	//Corners
+	std::array<Eigen::Vector2f, 4> cornersImg = {
+		Eigen::Vector2f(0, 0),
+		Eigen::Vector2f(mImageSize[0], 0),
+		Eigen::Vector2f(mImageSize[0], mImageSize[1]),
+		Eigen::Vector2f(0, mImageSize[1])
+	};
+	data.corners[0] = mBackprojectedFrameVertices[0];
+	data.corners[1] = mBackprojectedFrameVertices[kBackprojectColCount-1];
+	data.corners[2] = mBackprojectedFrameVertices[(kBackprojectRowCount-1)*kBackprojectColCount + kBackprojectColCount - 1];
+	data.corners[3] = mBackprojectedFrameVertices[(kBackprojectRowCount - 1)*kBackprojectColCount];
+	mFrustumsToDraw.push_back(data);
 }
 
 bool MapWindow::isFeatureMatched(const Feature &feature)
@@ -224,8 +292,8 @@ void MapWindow::touchMove(int x, int y)
 		//Rotation
 		Eigen::Vector2f diff = mDragEnd - mDragOrigin;
 
-		float angleY = diff[0] * M_PI / (UserInterfaceInfo::Instance().getScreenSize()[0] / 2);
-		float angleX = diff[1] * M_PI / (UserInterfaceInfo::Instance().getScreenSize()[1] / 2);
+		float angleY = diff[0] * (float)M_PI / (UserInterfaceInfo::Instance().getScreenSize()[0] / 2);
+		float angleX = diff[1] * (float)M_PI / (UserInterfaceInfo::Instance().getScreenSize()[1] / 2);
 
 		Eigen::Matrix3fr rotX = eutils::RotationX(angleX);
 		Eigen::Matrix3fr rotY = eutils::RotationY(angleY);
@@ -287,6 +355,10 @@ void MapWindow::draw()
 	testVertices.push_back(Eigen::Vector4f(1, 1, 0, 1));
 	testVertices.push_back(Eigen::Vector4f(1, -1, 0, 1));
 	mShaders->getColor().drawVertices(GL_LINE_LOOP, testVertices.data(), testVertices.size(), StaticColors::Red());
+
+	//Backproject
+	mShaders->getTexture().drawVertices(GL_TRIANGLE_STRIP, mCurrentImageTextureTarget, mCurrentImageTextureId, mBackprojectedFrameIndices.data(), mBackprojectedFrameIndices.size(),
+		mBackprojectedFrameVertices.data(), mBackprojectedFrameTexCoords.data());
 
     //Draw features
     for(auto &data : mFeaturesToDraw)
@@ -389,7 +461,7 @@ MapWindow::DrawFrustumData MapWindow::prepareFrameFrustum(const Eigen::Matrix3fr
 		Eigen::Vector2f(mImageSize[0], mImageSize[1]),
 		Eigen::Vector2f(0, mImageSize[1])
 	};
-	for (int i = 0; i < cornersImg.size(); i++)
+	for (int i = 0; i < (int)cornersImg.size(); i++)
 	{
 		Eigen::Vector2f xn = mSystemCameraDistortion.undistortPoint((mSystemCameraKinv*cornersImg[i].homogeneous()).eval().hnormalized());
 		Eigen::Vector3f xc = R.transpose()*xn.homogeneous()*kFrustumDepth + center;
@@ -416,7 +488,7 @@ MapWindow::DrawFrustumData MapWindow::prepareFrameFrustum(const Eigen::Matrix3fr
 	{
 		imgPoints.emplace_back(x, y);
 	}
-	for (int i = 0; i < imgPoints.size(); i++)
+	for (int i = 0; i < (int)imgPoints.size(); i++)
 	{
 		Eigen::Vector2f xn = mSystemCameraDistortion.undistortPoint((mSystemCameraKinv*imgPoints[i].homogeneous()).eval().hnormalized());
 		Eigen::Vector3f xc = R.transpose()*xn.homogeneous()*kFrustumDepth + center;
@@ -455,7 +527,8 @@ void MapWindow::drawFrameFrustum(const DrawFrustumData &data)
     mShaders->getColor().drawVertices(GL_LINES, indices, 8, vertices, colors.data());
 	//mShaders->getColor().drawVertices(GL_LINE_STRIP, data.frameVertices.data(), 2, StaticColors::Yellow());
 	//mShaders->getColor().drawVertices(GL_LINE_STRIP, data.frameVertices.data(), 2, StaticColors::Yellow());
-	mShaders->getColor().drawVertices(GL_LINE_LOOP, data.borderVertices.data(), data.borderVertices.size(), data.color);
+	if (!data.borderVertices.empty())
+		mShaders->getColor().drawVertices(GL_LINE_LOOP, data.borderVertices.data(), data.borderVertices.size(), data.color);
 
  //   cv::Vec4f v2[] =
  //   { vertices[1], vertices[0], vertices[3], vertices[2] };

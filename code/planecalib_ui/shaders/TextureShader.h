@@ -25,6 +25,9 @@ public:
                                         const Eigen::Vector2f &screenOrigin);
     void renderTexture(GLenum mode, GLuint target, GLuint id, const Eigen::Vector4f *vertices,
                                         const Eigen::Vector2f *textureCoords, int count);
+	void drawVertices(GLenum mode, GLuint target, GLuint id, 
+									const unsigned int *indices, unsigned int indexCount, 
+									const Eigen::Vector4f *vertices, const Eigen::Vector2f *textureCoords);
 
     void renderTexture(GLuint target, GLuint id, const Eigen::Vector2i &imageSize, float alpha) {renderTexture(target,id,imageSize,Eigen::Vector2f(0,0), alpha);}
 	void renderTexture(GLuint target, GLuint id, const Eigen::Vector2i &imageSize,

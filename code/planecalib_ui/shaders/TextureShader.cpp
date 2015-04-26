@@ -80,6 +80,26 @@ void TextureShader::renderTexture(GLenum mode, GLuint target, GLuint id, const E
     glDisableVertexAttribArray(mAttribTexCoord);
 }
 
+void TextureShader::drawVertices(GLenum mode, GLuint target, GLuint id, const unsigned int *indices, unsigned int indexCount, 
+	const Eigen::Vector4f *vertices, const Eigen::Vector2f *textureCoords)
+{
+	glUseProgram(mProgram.getId());
+
+	// setup uniforms
+	glActiveTexture(GL_TEXTURE0);
+	glBindTexture(target, id);
+	glUniform1i(mUniformTexture, 0);
+
+	// drawing quad
+	glVertexAttribPointer(mAttribPosCoord, 4, GL_FLOAT, GL_FALSE, 0, vertices);
+	glVertexAttribPointer(mAttribTexCoord, 2, GL_FLOAT, GL_FALSE, 0, textureCoords);
+	glEnableVertexAttribArray(mAttribPosCoord);
+	glEnableVertexAttribArray(mAttribTexCoord);
+	glDrawElements(mode, indexCount, GL_UNSIGNED_INT, indices);
+	glDisableVertexAttribArray(mAttribPosCoord);
+	glDisableVertexAttribArray(mAttribTexCoord);
+}
+
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 // Fixed alpha
 void TextureShader::renderTexture(GLuint target, GLuint id, const Eigen::Vector2i &imageSize,
