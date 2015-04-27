@@ -446,7 +446,7 @@ MapWindow::DrawFrustumData MapWindow::prepareFrameFrustum(const Eigen::Matrix3fr
 	if (texTarget == mCurrentImageTextureTarget && texID == mCurrentImageTextureId)
 		data.color = StaticColors::Green();
 	else
-		data.color = StaticColors::Black();
+		data.color = StaticColors::White();
 
 	//Center
 	Eigen::Vector3f center = -R.transpose()*t;
