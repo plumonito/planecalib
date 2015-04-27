@@ -47,9 +47,9 @@ namespace planecalib
 
 PlaneCalibApp::PlaneCalibApp()
         : mInitialized(false), mFrameCount(0), mQuit(false),
-          mFrameByFrame(true), mAdvanceFrame(false), mShowProfiler(true), mShowProfilerTotals(false),
+          mFrameByFrame(true), mAdvanceFrame(false), mShowProfiler(false), mShowProfilerTotals(false),
           mActiveWindow(NULL), mKeyBindings(this),
-		  mRecordFrames(false)
+		  mRecordVideo(false)
 
 {
 }
@@ -131,8 +131,8 @@ bool PlaneCalibApp::init(void)
 	mKeyBindings.addBinding(false, 'p', static_cast<KeyBindingHandler<PlaneCalibApp>::SimpleBindingFunc>(&PlaneCalibApp::toggleProfilerMode), "Toggle profiler mode.");
 	mKeyBindings.addBinding(false, 'P', static_cast<KeyBindingHandler<PlaneCalibApp>::SimpleBindingFunc>(&PlaneCalibApp::resetProfiler), "Reset profiler counts.");
 	mKeyBindings.addBinding(false, 'r', static_cast<KeyBindingHandler<PlaneCalibApp>::SimpleBindingFunc>(&PlaneCalibApp::resetSystem), "Reset the slam system.");
-	mKeyBindings.addBinding(false, 'c', static_cast<KeyBindingHandler<PlaneCalibApp>::SimpleBindingFunc>(&PlaneCalibApp::recordOneFrame), "Record a single frame.");
-	mKeyBindings.addBinding(false, 'R', static_cast<KeyBindingHandler<PlaneCalibApp>::SimpleBindingFunc>(&PlaneCalibApp::startRecording), "Reset and start recording.");
+	//mKeyBindings.addBinding(false, 'c', static_cast<KeyBindingHandler<PlaneCalibApp>::SimpleBindingFunc>(&PlaneCalibApp::recordOneFrame), "Record a single frame.");
+	mKeyBindings.addBinding(false, 'R', static_cast<KeyBindingHandler<PlaneCalibApp>::SimpleBindingFunc>(&PlaneCalibApp::toggleRecording), "Start/stop recording output video.");
 
 	for(int i=0; i<(int)mWindows.size(); ++i)
 		mKeyBindings.addBinding(false, i + '1', static_cast<KeyBindingHandler<PlaneCalibApp>::BindingFunc>(&PlaneCalibApp::changeWindowKey), "Show window: " + mWindows[i]->getName());
@@ -177,26 +177,39 @@ void PlaneCalibApp::resetSystem()
 	}
 }
 
-void PlaneCalibApp::startRecording()
+void PlaneCalibApp::toggleRecording()
 {
-	resetSystem();
-	mRecordFrames = true;
-	mRecordId = 0;
-	mRecordFileFormat = FLAGS_DriverRecordPath + "frame%.4d.jpg";
-
-	//Delete all previous
-	bool filesToDelete=true;
-	int deleteId=0;
-	char buffer[1024];
-	while(filesToDelete)
+	if (mRecordVideo)
 	{
-		sprintf(buffer, mRecordFileFormat.c_str(), deleteId++);
-		if(std::remove(buffer))
-			filesToDelete = false;
-	};
+		mRecordVideo = false;
+		mRecordVideoWriter.release();
+	}
+	else
+	{
+		//resetSystem();
+		mRecordVideo = true;
+		mRecordVideoWriter.open(FLAGS_DriverRecordVideoFile, -1, 30, eutils::ToSize(UserInterfaceInfo::Instance().getScreenSize()), true);
+	}
 }
 
-void PlaneCalibApp::recordFrame(cv::Mat3b &im)
+void PlaneCalibApp::recordOutputFrame()
+{
+	auto screenSize = UserInterfaceInfo::Instance().getScreenSize();
+	cv::Mat3b im(eutils::ToSize(screenSize));
+	
+	glReadPixels(0, 0, screenSize[0], screenSize[1], GL_RGB, GL_UNSIGNED_BYTE, im.data);
+
+	//Convert to bgr
+	cv::Mat3b bgr;
+	cv::cvtColor(im, bgr, cv::COLOR_RGB2BGR);
+
+	//Flip
+	cv::flip(bgr, im, 0);
+
+	mRecordVideoWriter << im;
+}
+
+void PlaneCalibApp::recordInputFrame(cv::Mat3b &im)
 {
 	//Convert to bgr
 	cv::Mat3b bgr;
@@ -344,6 +357,8 @@ void PlaneCalibApp::touchUp(int id, int x, int y)
 // Main draw function
 void PlaneCalibApp::draw(void)
 {
+	bool stateUpdated = false;
+
     if(!mFrameByFrame || mAdvanceFrame)
 	{
         bool isFrameAvailable;
@@ -369,10 +384,10 @@ void PlaneCalibApp::draw(void)
 			cv::Mat3b imageColor = mImageSrc->getImgColor();
 
 			//Record
-			if (mRecordFrames || mRecordOneFrame)
+			if (mRecordOneFrame)
 			{
 				mRecordOneFrame = false;
-				recordFrame(imageColor);
+				recordInputFrame(imageColor);
 			}
 
 			//Process new frame
@@ -382,7 +397,9 @@ void PlaneCalibApp::draw(void)
 			mFPSSampleCount++;
 
 			mActiveWindow->updateState();
-
+			
+			stateUpdated = true;
+			
 			//if (mSystem->getTracker().isLost())
 			//	mFrameByFrame = true;
 		}
@@ -419,23 +436,22 @@ void PlaneCalibApp::draw(void)
 		mShaders.getText().setMVPMatrix(ViewportTiler::GetImageSpaceMvp(viewportAspect, screenSize));
 
 	    mShaders.getText().setActiveFontSmall();
-	    mShaders.getText().setRenderCharHeight(10);
+		mShaders.getText().setRenderCharHeight(kDefaultFontHeight);
 	    mShaders.getText().setCaret(Eigen::Vector2f(0,0));
 	    mShaders.getText().setColor(StaticColors::Green());
 	    mShaders.getText().renderText(ss);
 
 	    //Map stats in the bottom
-		const float kMapStatsFontHeight = 10.0f;
 		std::vector<Eigen::Vector2f> corners;
-		corners.push_back(Eigen::Vector2f(0.0f, (float)screenSize.y() - 2 * kMapStatsFontHeight));
-		corners.push_back(Eigen::Vector2f((float)screenSize.x(), (float)screenSize.y() - 2 * kMapStatsFontHeight));
+		corners.push_back(Eigen::Vector2f(0.0f, (float)screenSize.y() - 2 * kDefaultFontHeight));
+		corners.push_back(Eigen::Vector2f((float)screenSize.x(), (float)screenSize.y() - 2 * kDefaultFontHeight));
 		corners.push_back(Eigen::Vector2f(0.0f, (float)screenSize.y()));
 		corners.push_back(Eigen::Vector2f((float)screenSize.x(), (float)screenSize.y()));
 	    mShaders.getColor().setMVPMatrix(ViewportTiler::GetImageSpaceMvp(viewportAspect, screenSize));
-	    mShaders.getColor().drawVertices(GL_TRIANGLE_STRIP, corners.data(), 4, StaticColors::Black(0.5f));
+	    mShaders.getColor().drawVertices(GL_TRIANGLE_STRIP, corners.data(), 4, StaticColors::Gray(0.75f));
 
-		mShaders.getText().setRenderCharHeight(kMapStatsFontHeight);
-		mShaders.getText().setCaret((corners[0] + Eigen::Vector2f(kMapStatsFontHeight / 2, kMapStatsFontHeight / 2)).eval());
+		mShaders.getText().setRenderCharHeight(kDefaultFontHeight);
+		mShaders.getText().setCaret((corners[0] + Eigen::Vector2f(kDefaultFontHeight / 2, kDefaultFontHeight / 2)).eval());
 		mShaders.getText().setColor(StaticColors::White());
 		{
 			TextRendererStream ts(mShaders.getText());
@@ -514,6 +530,11 @@ void PlaneCalibApp::draw(void)
 		mFPSSampleAccum = std::chrono::high_resolution_clock::duration(0);
 
 		mLastFPSCheck = now;
+	}
+
+	if (stateUpdated && mRecordVideo)
+	{
+		recordOutputFrame();
 	}
 }
 

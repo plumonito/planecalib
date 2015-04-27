@@ -23,6 +23,7 @@ namespace planecalib
 	DECLARE_int32(DriverMaxImageWidth);
 	DECLARE_bool(DriverSingleThreaded);
 	DECLARE_string(DriverRecordPath);
+	DECLARE_string(DriverRecordVideoFile);
 	//
 	//DECLARE_double(MapDrawScale);
 }

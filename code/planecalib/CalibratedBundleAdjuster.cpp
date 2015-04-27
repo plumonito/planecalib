@@ -213,8 +213,8 @@ bool CalibratedBundleAdjuster::bundleAdjust()
 			{
 				//First key frame in region, scale fixed
 				problem.AddParameterBlock(params.data(), 3);
-				//problem.AddParameterBlock(params.data() + 3, 3, new Fixed3DNormParametrization(1));
-				problem.AddParameterBlock(params.data() + 3, 3);
+				problem.AddParameterBlock(params.data() + 3, 3, new Fixed3DNormParametrization(1));
+				//problem.AddParameterBlock(params.data() + 3, 3);
 			}
 			else
 			{
@@ -226,6 +226,8 @@ bool CalibratedBundleAdjuster::bundleAdjust()
 		}
 
 		//Prepare features
+		int maxMcount = 0;
+		Eigen::Vector2d *maxMparams=NULL;
 		for (auto &featurep : mFeaturesToAdjust)
 		{
 			auto &feature = *featurep;
@@ -238,7 +240,14 @@ bool CalibratedBundleAdjuster::bundleAdjust()
 			if (mFix3DPoints)
 				problem.SetParameterBlockConstant(params.data());
 			options.linear_solver_ordering->AddElementToGroup(params.data(), 0);
+
+			if (maxMcount < feature.getMeasurements().size())
+			{
+				maxMcount = feature.getMeasurements().size();
+				maxMparams = &params;
+			}
 		}
+		//problem.SetParameterBlockConstant(maxMparams->data());
 
 		//K params
 		mParamsK[0] = mK(0, 0);

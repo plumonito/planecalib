@@ -7,6 +7,7 @@
 #include <memory>
 #include <chrono>
 #include <opencv2/core/core.hpp>
+#include <opencv2/highgui/highgui.hpp> 
 #include <Eigen/Dense>
 
 #include "planecalib/Profiler.h"
@@ -42,10 +43,13 @@ private:
     bool mFrameByFrame;
     bool mAdvanceFrame;
 
-    bool mRecordFrames;
-    int mRecordId;
-    std::string mRecordFileFormat;
 	bool mRecordOneFrame;
+	int mRecordId;
+	std::string mRecordFileFormat;
+
+	bool mRecordVideo;
+	std::string mRecordVideoFilename;
+	cv::VideoWriter mRecordVideoWriter;
 
     bool mShowProfiler;
     bool mShowProfilerTotals;
@@ -62,6 +66,8 @@ private:
     BaseWindow *mActiveWindow;
 
 public:
+	static const int kDefaultFontHeight = 10;
+
 	PlaneCalibApp();
 	~PlaneCalibApp();
 
@@ -96,9 +102,10 @@ private:
     void escapePressed() {mQuit=true;}
     void changeWindowKey(bool isSpecial, unsigned char key);
     void resetSystem();
-    void startRecording();
+    void toggleRecording();
 	void recordOneFrame() { mRecordOneFrame = true; }
-    void recordFrame(cv::Mat3b &im);
+	void recordInputFrame(cv::Mat3b &im);
+	void recordOutputFrame();
 
 	void saveMap();
 	void loadMap();

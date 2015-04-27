@@ -64,6 +64,18 @@ void ViewportTiler::addTile(int row, int col, float aspectRatio, int rowSpan, in
 	}
 }
 
+void ViewportTiler::addAbsoluteTile(const Eigen::Vector2i &origin, const Eigen::Vector2i &size)
+{
+	ViewportTileInfo *tile = new ViewportTileInfo();
+	mTiles.push_back(std::unique_ptr<ViewportTileInfo>(tile));
+
+	tile->mViewportOrigin = origin;
+	tile->mViewportSize = size;
+
+	tile->mAspectRatio = (float)size[0]/size[1];
+	resetMVP(tile);
+}
+
 void ViewportTiler::resetMVP(ViewportTileInfo *tile)
 {
 	//Configure mvp matrix to correct aspect ratio

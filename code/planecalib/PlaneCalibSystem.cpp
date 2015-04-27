@@ -230,11 +230,17 @@ void PlaneCalibSystem::processImage(double timestamp, cv::Mat3b &imgColor, cv::M
 			add = false;
 		}
 
-		if (add)
+		//Stop adding keyframes after calibrated BA
+		if (mMap->getIs3DValid())
+			add = false;
+
+		//Add keyframe?
+		if (add) 
 		{
 			createKeyframe();
 			mKeyframeAdded = true;
-			doHomographyCalib(true);
+			if (!mMap->getIs3DValid())
+				doHomographyCalib(true);
 		}
 	}
 	else

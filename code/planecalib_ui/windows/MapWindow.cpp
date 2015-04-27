@@ -37,9 +37,9 @@ bool MapWindow::init(PlaneCalibApp *app, const Eigen::Vector2i &imageSize)
 	mKeyBindings.addBinding(false,'Y',static_cast<KeyBindingHandler<BaseWindow>::SimpleBindingFunc>(&MapWindow::decreasePointSize),"Decrease GL point size.");
 	mKeyBindings.addBinding(false, '-', static_cast<KeyBindingHandler<BaseWindow>::SimpleBindingFunc>(&MapWindow::zoomIn), "Zoom in.");
 	mKeyBindings.addBinding(false, '+', static_cast<KeyBindingHandler<BaseWindow>::SimpleBindingFunc>(&MapWindow::zoomOut), "Zoom out.");
-	mKeyBindings.addBinding(false, 'c', static_cast<KeyBindingHandler<BaseWindow>::SimpleBindingFunc>(&MapWindow::startCube), "Define cube surface.");
+	mKeyBindings.addBinding(false, 'c', static_cast<KeyBindingHandler<BaseWindow>::SimpleBindingFunc>(&MapWindow::toggleShowCube), "Show/hide cube.");
 		
-	ARWindow::GenerateARCubeVertices(mCubeTriangleIndices, mCubeVertices, mCubeColors, mCubeNormals);
+	ARWindow::GenerateARCubeVertices(mApp->getSystem().getMap(), mCubeTriangleIndices, mCubeVertices, mCubeColors, mCubeNormals);
 
 	//Backproject
 	mBackprojectedFrameXn.resize(kBackprojectColCount*kBackprojectRowCount);
@@ -374,7 +374,10 @@ void MapWindow::draw()
     glEnable(GL_DEPTH_TEST);
 
 	//Draw cube
-	mShaders->getColor().drawVertices(GL_TRIANGLES, mCubeTriangleIndices.data(), mCubeTriangleIndices.size(), mCubeVertices.data(), mCubeColors.data());
+	if (mShowCube)
+	{
+		mShaders->getColor().drawVertices(GL_TRIANGLES, mCubeTriangleIndices.data(), mCubeTriangleIndices.size(), mCubeVertices.data(), mCubeColors.data());
+	}
 
     //Draw frustums
     for(auto &frameData : mFrustumsToDraw)

@@ -50,6 +50,7 @@ public:
 		BaseWindow("MapWindow"),
 		mPointSize(4),
 		mMapDrawScale(1),
+		mShowCube(false),
 		mActiveDragType(EDragType::NoDragging)
 	{
 	}
@@ -63,6 +64,7 @@ public:
     void touchDown(int id, int x, int y);
     void touchMove(int x, int y);
     void touchUp(int id, int x, int y);
+	void toggleShowCube() { mShowCube = !mShowCube; MYAPP_LOG << "Show cube: " << mShowCube << "\n"; }
 
     void draw();
 
@@ -125,6 +127,7 @@ protected:
 
 	//Drawing stuff
 	float mMapDrawScale;
+	bool mShowCube;
 
     //Drawing of feature
 	typedef MapWindow_DrawFeatureData DrawFeatureData;

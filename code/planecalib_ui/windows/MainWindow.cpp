@@ -159,38 +159,40 @@ void MainWindow::updateState()
 
 void MainWindow::resize()
 {
-    mTiler.configDevice(Eigen::Vector2i::Zero(),UserInterfaceInfo::Instance().getScreenSize(),3,3);
+	auto screenSize = UserInterfaceInfo::Instance().getScreenSize();
+	float imgAspect = (float)mImageSize[0] / mImageSize[1];
+	int smallImgWidth = (int)(screenSize[0] * 0.2f);
+	int smallImgHeight = (int)(smallImgWidth/imgAspect);
 
-	mTiler.addTile(0, 0, -1.0f, 3, 2);
+    mTiler.configDevice(Eigen::Vector2i::Zero(),screenSize,1,1);
+
+	mTiler.addTile(0);
 	mTiler.setImageMVP(0, 2*mImageSize);
 	Eigen::Matrix4f offsetMat;
 	offsetMat << 1, 0, 0, (float)mImageSize[0] / 2, 0, 1, 0, (float)mImageSize[1] / 2, 0, 0, 1, 0, 0, 0, 0, 1;
 	mTiler.multiplyMVP(0, offsetMat);
 
-	mTiler.addTile(0, 2);
+	Eigen::Vector2i smallImgSize(smallImgWidth, smallImgHeight);
+	Eigen::Vector2i smallImgOrigin(screenSize[0] - smallImgSize[0], 0);
+	mTiler.addAbsoluteTile(smallImgOrigin, smallImgSize);
 	mTiler.setImageMVP(1, mImageSize);
-	mTiler.addTile(1, 2);
-	mTiler.setImageMVP(2, mImageSize);
-
-	mTiler.addTile(2, 2);
-	mTiler.setImageMVP(3, Eigen::Vector2i(100,100));
 }
 
 void MainWindow::draw()
 {
 	glPointSize(3.0f);
 
-	if (mDisplayFrameIdx != -1)
-	{
-		mTiler.setActiveTile(1);
-		mShaders->getTexture().setMVPMatrix(mTiler.getMVP());
-		mShaders->getTexture().renderTexture(mDisplayTexture.getTarget(), mDisplayTexture.getId(), mImageSize, 1.0f);
-		
-		mShaders->getColor().setMVPMatrix(mTiler.getMVP());
-		mShaders->getColor().drawVertices(GL_POINTS, mDisplayPoints.data(), mDisplayPoints.size(), StaticColors::Green());
-	}
+	//if (mDisplayFrameIdx != -1)
+	//{
+	//	mTiler.setActiveTile(1);
+	//	mShaders->getTexture().setMVPMatrix(mTiler.getMVP());
+	//	mShaders->getTexture().renderTexture(mDisplayTexture.getTarget(), mDisplayTexture.getId(), mImageSize, 1.0f);
+	//	
+	//	mShaders->getColor().setMVPMatrix(mTiler.getMVP());
+	//	mShaders->getColor().drawVertices(GL_POINTS, mDisplayPoints.data(), mDisplayPoints.size(), StaticColors::Green());
+	//}
 
-	mTiler.setActiveTile(2);
+	mTiler.setActiveTile(1);
 	mShaders->getTexture().setMVPMatrix(mTiler.getMVP());
 	mShaders->getTexture().renderTexture(mCurrentImageTextureTarget, mCurrentImageTextureId, mImageSize, 1.0f);
 	mShaders->getColor().setMVPMatrix(mTiler.getMVP());
@@ -241,16 +243,29 @@ void MainWindow::draw()
 	mShaders->getColor().drawVertices(GL_POINTS, mImagePoints.data(), mImagePointColors.data(), mImagePoints.size());
 
 	//K
-	mTiler.setActiveTile(3);
-	mShaders->getText().setMVPMatrix(mTiler.getMVP());
+	mTiler.setFullScreen();
+	auto screenSize = UserInterfaceInfo::Instance().getScreenSize();
+	auto mvp = ViewportTiler::GetImageSpaceMvp(UserInterfaceInfo::Instance().getScreenAspect(), screenSize);
+	mShaders->getText().setMVPMatrix(mvp);
 	mShaders->getText().setActiveFontSmall();
-	mShaders->getText().setRenderCharHeight(4);
-	mShaders->getText().setCaret(Eigen::Vector2f(0, 0));
+	mShaders->getText().setRenderCharHeight(PlaneCalibApp::kDefaultFontHeight);
+	mShaders->getText().setCaret(Eigen::Vector2f(screenSize[0] - 300, 30));
 	mShaders->getText().setColor(StaticColors::Green());
 	{
 		TextRendererStream ts(mShaders->getText());
-		ts << "Alpha0=" << mSystem->getCalib().getInitialAlpha() << "\n";
-		ts << "Normal=" << mSystem->getNormal() << "\nK=" << mSystem->getCamera().getK() << "\nDistortion=" << mSystem->getCamera().getDistortionModel().getCoefficients().transpose();
+		ts << std::fixed << std::setprecision(2) << std::setw(6);
+		ts << "Closed-form Fx=" << mSystem->getCalib().getInitialAlpha() << "\n";
+		ts << "\nRefined:\n";
+
+		ts << std::fixed << std::setprecision(3) << std::setw(4);
+		ts << " Normal=[" << mSystem->getNormal().transpose() << "]\n";
+
+		ts << std::fixed << std::setprecision(2) << std::setw(6);
+		ts << " F  = [" << mSystem->getCamera().getFx() << "," << mSystem->getCamera().getFy() << "]\n";
+		ts << " P0 = [" << mSystem->getCamera().getU0() << "," << mSystem->getCamera().getV0() << "]\n";
+
+		ts << std::fixed << std::setprecision(3) << std::setw(4);
+		ts << " Distortion = [" << mSystem->getCamera().getDistortionModel().getCoefficients().transpose() << "]";
 	}
 }
 

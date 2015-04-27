@@ -29,13 +29,22 @@ bool ARWindow::init(PlaneCalibApp *app, const Eigen::Vector2i &imageSize)
 	return true;
 }
 
-void ARWindow::GenerateARCubeVertices(std::vector<unsigned int> &triangleIndices, std::vector<Eigen::Vector4f> &vertices, std::vector<Eigen::Vector4f> &colors, std::vector<Eigen::Vector3f> &normals)
+void ARWindow::GenerateARCubeVertices(const Map &map, std::vector<unsigned int> &triangleIndices, std::vector<Eigen::Vector4f> &vertices, std::vector<Eigen::Vector4f> &colors, std::vector<Eigen::Vector3f> &normals)
 {
-	const Eigen::Vector3f center = Eigen::Vector3f(0,0.25,-0.1f);
+	//Axes
+	//const Eigen::Vector3f center = Eigen::Vector3f(0, 0, -0.1f);
 	const Eigen::Vector3f axis0 = Eigen::Vector3f(0.1, 0, 0);
 	const Eigen::Vector3f axis1 = Eigen::Vector3f(0, 0.1, 0);
 	const Eigen::Vector3f axis2 = Eigen::Vector3f(0, 0, 0.1);
 
+	//Find center
+	Eigen::Vector3f center = Eigen::Vector3f::Zero();
+	for (auto &featurePtr : map.getFeatures())
+		center += featurePtr->mPosition3D;
+	center /= map.getFeatures().size();
+	center -= axis2;
+	
+	//Corners
 	const Eigen::Vector4f cubeCorners[] = { (center - axis0 - axis1 - axis2).homogeneous(),	//0 ---
 		(center + axis0 - axis1 - axis2).homogeneous(),		//1 +--
 		(center + axis0 + axis1 - axis2).homogeneous(),		//2 ++-
@@ -175,7 +184,7 @@ void ARWindow::updateState()
 	mCubeColors.clear();
 	mCubeNormals.clear();
 
-	GenerateARCubeVertices(mCubeTriangleIndices, mCubeVertices, mCubeColors, mCubeNormals);
+	GenerateARCubeVertices(*mMap, mCubeTriangleIndices, mCubeVertices, mCubeColors, mCubeNormals);
 }
 
 void ARWindow::resize()

@@ -32,11 +32,12 @@ DEFINE_int32(DriverDropFrames, 0, "The system will ignore this many frames per i
 DEFINE_int32(DriverMaxImageWidth, 960, "Maximum width of input image. Input will be downsampled to be under this width.");
 DEFINE_bool(DriverSingleThreaded, false, "Use a single thread for easier debugging.");
 DEFINE_string(DriverRecordPath, "record/", "Path where the frames will be stored in case of recording.");
+DEFINE_string(DriverRecordVideoFile, "video.avi", "Output video file for recording.");
 
 ///////////////////////////////////////////////////////
 
-DEFINE_int32(WindowWidth, 640, "Initial width of the window.");
-DEFINE_int32(WindowHeight, 480, "Initial height of the window.");
+DEFINE_int32(WindowWidth, 1280, "Initial width of the window.");
+DEFINE_int32(WindowHeight, 960, "Initial height of the window.");
 
 }
 
@@ -118,7 +119,7 @@ int main(int argc, char**argv)
 
 	//init GLUT and create window
 	glutInit(&argc, argv );
-	glutInitDisplayMode(GLUT_DEPTH | GLUT_DOUBLE | GLUT_RGBA | GLUT_ALPHA);
+	glutInitDisplayMode(GLUT_DEPTH | GLUT_DOUBLE | GLUT_RGBA | GLUT_ALPHA | GLUT_MULTISAMPLE);
 	//glutInitWindowPosition(900,10);
 	glutInitWindowSize(initialSize.x(),initialSize.y());
 	planecalib::UserInterfaceInfo::Instance().setScreenSize(initialSize);
@@ -143,6 +144,8 @@ int main(int argc, char**argv)
 	glutSpecialUpFunc(releaseSpecial);
 	glutMouseFunc(mouseEvent);
 	glutMotionFunc(mouseMoveEvent);
+	
+	glEnable(GL_MULTISAMPLE);
 
 	gApp = new planecalib::PlaneCalibApp();
 

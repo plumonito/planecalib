@@ -59,7 +59,9 @@ public:
     void addTile(int row, int col, float aspectRatio, int rowSpan, int colSpan);
     void addTile(int row, int col, float aspectRatio) {addTile(row, col, -1.0f, 1, 1);}
     void addTile(int row, int col) {addTile(row, col, -1.0f);}
-    void addTile(int col) {addTile(1, col);}
+    void addTile(int col) {addTile(0, col);}
+
+	void addAbsoluteTile(const Eigen::Vector2i &origin, const Eigen::Vector2i &size);
 
     void fillTiles();
     int getTileCount() {return (int)mTiles.size();}
