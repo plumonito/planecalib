@@ -1,6 +1,5 @@
 #include "SceneGenerator.h"
 #include "planecalib/Map.h"
-#include "matio.h"
 #include "planecalib/CameraModel.h"
 #include "planecalib/HomographyEstimation.h"
 #include <opencv2/calib3d.hpp>
@@ -113,7 +112,7 @@ void SceneGenerator::generateRandomPoses(int frameCount, std::vector<Eigen::Matr
 		Eigen::Matrix3fr R;
 		Eigen::Vector3f a, b, c;
 		c = (lookTarget - center).normalized();
-		HomographyCalibrationError::GetBasis(c.data(), a, b);
+		eutils::GetBasis(c, a, b);
 		
 		Eigen::AngleAxisf aa(uniformAngle(mRandomDevice), c);
 		a = (aa*a).normalized();

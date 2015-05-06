@@ -66,7 +66,7 @@ private:
     BaseWindow *mActiveWindow;
 
 public:
-	static const int kDefaultFontHeight = 10;
+	static const float kDefaultFontHeight;
 
 	PlaneCalibApp();
 	~PlaneCalibApp();

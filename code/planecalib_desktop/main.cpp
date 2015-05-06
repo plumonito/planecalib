@@ -11,8 +11,6 @@
 #define GFLAGS_DLL_DEFINE_FLAG
 #include <gflags/gflags.h>
 
-#include <ceres/ceres.h>
-
 namespace planecalib
 {
 ///////////////////////////////////////////////////////
@@ -57,6 +55,7 @@ void renderScene(void)
 {
 	if(gApp->getFinished())
 	{
+		delete gApp;
 		glutDestroyWindow(gWindowId);
 		exit(0);
 	}
@@ -104,10 +103,10 @@ void mouseMoveEvent(int x, int y)
 
 void __declspec(dllexport) dummy()
 {
-	ceres::Solver::Options options;
-	ceres::Solver::Summary s;
-	ceres::Problem p;
-	ceres::Solve(options, &p, &s);
+	//ceres::Solver::Options options;
+	//ceres::Solver::Summary s;
+	//ceres::Problem p;
+	//ceres::Solve(options, &p, &s);
 }
 
 int main(int argc, char**argv)
@@ -157,8 +156,6 @@ int main(int argc, char**argv)
 
 	// enter GLUT event processing cycle
 	glutMainLoop();
-
-	delete gApp;
 
 	return 0;
 }
