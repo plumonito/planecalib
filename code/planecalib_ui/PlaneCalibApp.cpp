@@ -18,10 +18,8 @@
 
 #include <GL/freeglut.h>
 
-#include <ceres/loss_function.h>
-
 #undef LOG
-#include <glog/logging.h>
+//#include <glog/logging.h>
 #include "planecalib/log.h"
 
 #include "ImageDataSource.h"
@@ -44,6 +42,8 @@
 
 namespace planecalib
 {
+
+const float PlaneCalibApp::kDefaultFontHeight = 10;
 
 PlaneCalibApp::PlaneCalibApp()
         : mInitialized(false), mFrameCount(0), mQuit(false),
@@ -76,19 +76,19 @@ bool PlaneCalibApp::init(void)
             "";//Empty str disables the creation  of a log file from glog. Only ceres uses glog. Not needed.
 
 
-    google::InitGoogleLogging(glogstr);
+    //google::InitGoogleLogging(glogstr);
 
-    if (!initImageSrc())
-    {
+	// Initialize Shader
+	if (!mShaders.init())
+	{
+		return false;
+	}
+	
+	if (!initImageSrc())
+	{
 		MYAPP_LOG << "Couldn't initialize image source.\n";
-        return false;
-    }
-
-    // Initialize Shader
-    if (!mShaders.init())
-    {
-        return false;
-    }
+		return false;
+	}
 
 	//Determine downscale at input
 	int width = mImageSrc->getSourceSize().width;
@@ -455,7 +455,6 @@ void PlaneCalibApp::draw(void)
 		mShaders.getText().setColor(StaticColors::White());
 		{
 			TextRendererStream ts(mShaders.getText());
-
 			int frameCount = mSystem->getMap().getKeyframes().size();
 			int count3D = mSystem->getMap().getFeatures().size();
 		//	if (!FLAGS_DisableRegions)

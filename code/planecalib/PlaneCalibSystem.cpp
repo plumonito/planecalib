@@ -4,7 +4,6 @@
 #include <opencv2/imgproc.hpp>
 #include <opencv2/video.hpp>
 #include <opencv2/calib3d.hpp>
-#include <ceres/rotation.h>
 
 #include "Keyframe.h"
 #include "Profiler.h"
@@ -356,7 +355,7 @@ void PlaneCalibSystem::doFullBA()
 
 			Eigen::Vector3f basis1, basis2, basis3;
 			basis3 = mNormal;
-			HomographyCalibrationError::GetBasis(basis3.data(), basis1, basis2);
+			eutils::GetBasis(basis3, basis1, basis2);
 			basis1.normalize();
 			basis2.normalize();
 
@@ -484,7 +483,6 @@ void PlaneCalibSystem::doFullBA()
 	mCamera.getDistortionModel().setCoefficients(ba.getDistortion().cast<float>());
 	mCamera.setFromK(ba.getK().cast<float>());
 
-	MYAPP_LOG << "K*1.5: " << (ba.getK()*1.5) << "\n";
 	mMap->mCamera.reset(new CameraModel(mCamera));
 
 	//Log

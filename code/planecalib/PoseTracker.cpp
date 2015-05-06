@@ -153,13 +153,14 @@ void PoseTracker::findMatches()
 				Eigen::Vector2f bestPosition;
 				const uchar *bestDescriptor;
 				int secondScore = std::numeric_limits<int>::max();
+				cv::Hamming distFunc;
 				for (int j = 0; j < (int)imgKeypoints.size(); j++)
 				{
 					auto diff = projection.getPosition() - eutils::FromCV(imgKeypoints[j].pt);
 					if (diff.squaredNorm() < kMatchThresholdSq || mIsLost)
 					{
 						const uchar *imgDesc_j = &imgDesc(j, 0);
-						int score = cv::normHamming(refDesc_i.data(), imgDesc_j, 32);
+						int score = distFunc(refDesc_i.data(), imgDesc_j, 32);
 						if (score < bestScore)
 						{
 							secondScore = bestScore;

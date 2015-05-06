@@ -1,6 +1,8 @@
 #ifndef REPROJECTIONERROR3DIMPL_HPP_
 #define REPROJECTIONERROR3DIMPL_HPP_
 
+#include "CeresUtils.h"
+
 namespace planecalib
 {
 

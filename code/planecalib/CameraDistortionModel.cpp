@@ -1,5 +1,4 @@
 #include "CameraDistortionModel.h"
-#include <ceres/ceres.h>
 #include "log.h"
 
 namespace planecalib {

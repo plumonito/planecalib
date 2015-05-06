@@ -57,7 +57,7 @@ void Keyframe::init(const cv::Mat3b &imageColor, const cv::Mat1b &imageGray)
 	mDescriptors.resize(mPyramid.getOctaveCount());
 	mDescriptorsEigen.reserve(mPyramid.getOctaveCount());
 
-	cv::ORB orb(2000, 2, 1);
+	cv::Ptr<cv::ORB> orb = cv::ORB::create(2000, 2, 1);
 
 	for(int octave=0; octave<mPyramid.getOctaveCount(); octave++)
 	{
@@ -69,7 +69,7 @@ void Keyframe::init(const cv::Mat3b &imageColor, const cv::Mat1b &imageGray)
 		cv::Mat1b &descriptorsAll = mDescriptors[octave];
 
 	    //ORB features
-		orb(mPyramid[octave], cv::noArray(), keypointsAll, descriptorsAll);
+		orb->detectAndCompute(mPyramid[octave], cv::noArray(), keypointsAll, descriptorsAll);
 
 		//Fix scale features
 		for (int i = 0; i < (int)keypointsAll.size(); i++)

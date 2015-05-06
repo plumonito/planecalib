@@ -122,6 +122,40 @@ public:
 		cmat_map = emat;
 		return cmat;
 	}
+
+	static void GetBasis(const Eigen::Vector3f &x, Eigen::Vector3f &basis1, Eigen::Vector3f &basis2)
+	{
+		const double kThreshold = 0.1;
+
+		//basis1 = cross(C,x)
+		//basis2 = cross(basis1,x)
+		//Check that the point we use is not colinear with x
+		if (x[0] > kThreshold || x[0] < -kThreshold || x[2] > kThreshold || x[2] < -kThreshold)
+		{
+			//Use C=[0,1,0]
+			basis1[0] = x[2];
+			basis1[1] = (0);
+			basis1[2] = -x[0];
+
+			basis2[0] = -x[0] * x[1];
+			basis2[1] = x[0] * x[0] + x[2] * x[2];
+			basis2[2] = -x[1] * x[2];
+		}
+		else
+		{
+			//Use C=[1,0,0]
+			basis1[0] = (0);
+			basis1[1] = -x[2];
+			basis1[2] = x[1];
+
+			basis2[0] = x[1] * x[1] + x[2] * x[2];
+			basis2[1] = -x[0] * x[1];
+			basis2[2] = -x[0] * x[2];
+		}
+		//basis1.normalize();
+		//basis2.normalize();
+	}
+
 };
 
 }

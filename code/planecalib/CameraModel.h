@@ -5,7 +5,6 @@
 #include <memory>
 #include <opencv2/core.hpp>
 #include <gflags/gflags.h>
-#include <ceres/rotation.h>
 #include "CameraDistortionModel.h"
 #include "log.h"
 

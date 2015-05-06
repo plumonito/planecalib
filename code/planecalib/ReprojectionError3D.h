@@ -4,7 +4,6 @@
 #include <vector>
 #include <Eigen/Dense>
 #include "CameraModel.h"
-#include "CeresUtils.h"
 #include "PoseEstimationCommon.h"
 #include "Map.h"
 #include "FeatureMatcher.h"
@@ -24,6 +23,8 @@ public:
 		mScale(scale), mImgPoint(imgPoint)
 	{
 	}
+	
+	~ReprojectionError3D() {}
 
 	EIGEN_MAKE_ALIGNED_OPERATOR_NEW
 

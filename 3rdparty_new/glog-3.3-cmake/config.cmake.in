@@ -1,0 +1,3 @@
+# Our library dependencies (contains definitions for IMPORTED targets)
+include(${CMAKE_CURRENT_LIST_DIR}/@TARGETS_FILE@)
+
