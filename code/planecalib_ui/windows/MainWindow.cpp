@@ -399,6 +399,14 @@ void MainWindow::loadBouguetCalib()
 	
 	Mat_Close(matFile);
 
+	//Select ref
+	const int kRefIdx = 17;
+	if (kRefIdx != 0)
+	{
+		std::swap(imagePoints[0], imagePoints[kRefIdx]);
+		std::swap(homographies[0], homographies[kRefIdx]);
+	}
+
 	//Create map
 	int featureCount = imagePoints[0].cols();
 	std::unique_ptr<Map> map(new Map);

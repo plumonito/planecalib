@@ -4,6 +4,7 @@
 *.blg
 *.log
 *.gz
+*.mp4
 *-converted-to.pdf
 egpaper_final.pdf
 egpaper_for_review.pdf

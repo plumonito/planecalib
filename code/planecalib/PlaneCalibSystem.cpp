@@ -192,7 +192,7 @@ void PlaneCalibSystem::processImage(double timestamp, cv::Mat3b &imgColor, cv::M
 		mExpanderCheckPending = true;
 
 		//Check distance
-		const float kThreshold = 90;
+		const float kThreshold = 60;
 		const float kThresholdSq = kThreshold*kThreshold;
 		std::vector<Eigen::Vector2f> cornersOriginal;
 		cornersOriginal.push_back(Eigen::Vector2f(0, 0));
