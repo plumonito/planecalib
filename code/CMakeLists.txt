@@ -3,6 +3,8 @@
 ##################################
 cmake_minimum_required(VERSION 3.0)
 
+include(echo_target.cmake)
+
 project(planecalib CXX C)
 
 # The version number.

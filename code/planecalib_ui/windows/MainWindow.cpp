@@ -1,9 +1,9 @@
 /*
- * ARWindow.cpp
- *
- *  Created on: 7.4.2014
- *      Author: dan
- */
+* ARWindow.cpp
+*
+*  Created on: 7.4.2014
+*      Author: dan
+*/
 
 #include "MainWindow.h"
 #include "planecalib/PlaneCalibSystem.h"
@@ -55,7 +55,7 @@ bool MainWindow::init(PlaneCalibApp *app, const Eigen::Vector2i &imageSize)
 void MainWindow::updateState()
 {
 	shared_lock<shared_mutex> lockRead(mSystem->getMap().getMutex());
-	
+
 	mTracker = &mSystem->getTracker();
 	mMap = &mSystem->getMap();
 
@@ -104,7 +104,7 @@ void MainWindow::updateState()
 	for (auto &p : mMap->getFeatures())
 	{
 		const Feature &feature = *p;
-		
+
 		Eigen::Vector4f color;
 		auto match = mTracker->getMatch(&feature);
 		if (match)
@@ -162,12 +162,12 @@ void MainWindow::resize()
 	auto screenSize = UserInterfaceInfo::Instance().getScreenSize();
 	float imgAspect = (float)mImageSize[0] / mImageSize[1];
 	int smallImgWidth = (int)(screenSize[0] * 0.2f);
-	int smallImgHeight = (int)(smallImgWidth/imgAspect);
+	int smallImgHeight = (int)(smallImgWidth / imgAspect);
 
-    mTiler.configDevice(Eigen::Vector2i::Zero(),screenSize,1,1);
+	mTiler.configDevice(Eigen::Vector2i::Zero(), screenSize, 1, 1);
 
 	mTiler.addTile(0);
-	mTiler.setImageMVP(0, 2*mImageSize);
+	mTiler.setImageMVP(0, 2 * mImageSize);
 	Eigen::Matrix4f offsetMat;
 	offsetMat << 1, 0, 0, (float)mImageSize[0] / 2, 0, 1, 0, (float)mImageSize[1] / 2, 0, 0, 1, 0, 0, 0, 0, 1;
 	mTiler.multiplyMVP(0, offsetMat);
@@ -212,7 +212,7 @@ void MainWindow::draw()
 	}
 
 	mTiler.setActiveTile(0);
-    mShaders->getTexture().setMVPMatrix(mTiler.getMVP());
+	mShaders->getTexture().setMVPMatrix(mTiler.getMVP());
 	mShaders->getTextureWarp().setMVPMatrix(mTiler.getMVP());
 	mShaders->getColor().setMVPMatrix(mTiler.getMVP());
 
@@ -278,165 +278,9 @@ void MainWindow::loadBouguetCalib()
 	if (filename.empty() || filename.size() == 1)
 		filename = kDefaultFilename;
 
-<<<<<<< HEAD
-	mat_t *matFile;
-	matFile = Mat_Open(filename.c_str(), MAT_ACC_RDONLY);
-	if (!matFile)
-	{
-		MYAPP_LOG << "Error opening mat file: " << filename << "\n";
-		return;
-	}
-
-	matvar_t *matVar;
-	double *matData;
-
-	//Read number of images
-	Mat_Rewind(matFile); //Hack: must call or Mat_VarRead might fail
-	matVar = Mat_VarRead(matFile,"n_ima");
-	if (!matVar)
-		throw std::runtime_error("Variable not found in mat file.");
-	matData = static_cast<double*>(matVar->data);
-	imageCount = (int)matData[0];
-	MYAPP_LOG << "Reading calib info for " << imageCount << " images...";
-	Mat_VarFree(matVar);
-
-
-	//Read image width
-	Mat_Rewind(matFile); //Hack: must call or Mat_VarRead might fail
-	matVar = Mat_VarRead(matFile, "nx");
-	if (!matVar)
-		throw std::runtime_error("Variable not found in mat file.");
-	matData = static_cast<double*>(matVar->data);
-	imageSize[0] = (int)matData[0];
-	Mat_VarFree(matVar);
-
-	//Read image height
-	Mat_Rewind(matFile); //Hack: must call or Mat_VarRead might fail
-	matVar = Mat_VarRead(matFile, "ny");
-	if (!matVar)
-		throw std::runtime_error("Variable not found in mat file.");
-	matData = static_cast<double*>(matVar->data);
-	imageSize[1] = (int)matData[0];
-	Mat_VarFree(matVar);
-
-	//Read calib data
-	Mat_Rewind(matFile); //Hack: must call or Mat_VarRead might fail
-	matVar = Mat_VarRead(matFile, "fc");
-	if (!matVar)
-		throw std::runtime_error("Variable not found in mat file.");
-	matData = static_cast<double*>(matVar->data);
-	fc[0] = (float)matData[0];
-	fc[1] = (float)matData[1];
-	Mat_VarFree(matVar);
-
-	Mat_Rewind(matFile); //Hack: must call or Mat_VarRead might fail
-	matVar = Mat_VarRead(matFile, "cc");
-	if (!matVar)
-		throw std::runtime_error("Variable not found in mat file.");
-	matData = static_cast<double*>(matVar->data);
-	cc[0] = (float)matData[0];
-	cc[1] = (float)matData[1];
-	Mat_VarFree(matVar);
-
-	Mat_Rewind(matFile); //Hack: must call or Mat_VarRead might fail
-	matVar = Mat_VarRead(matFile, "kc");
-	if (!matVar)
-		throw std::runtime_error("Variable not found in mat file.");
-	matData = static_cast<double*>(matVar->data);
-	kc[0] = (float)matData[0];
-	kc[1] = (float)matData[1];
-	Mat_VarFree(matVar);
-
-	//Read image data
-	imagePoints.resize(imageCount);
-	homographies.resize(imageCount);
-	for (int i = 0; i < imageCount; i++)
-	{
-		//Image points
-		{
-			std::stringstream ss;
-			ss << "x_" << (i + 1);
-			Mat_Rewind(matFile); //Hack: must call or Mat_VarRead might fail
-			matVar = Mat_VarRead(matFile, ss.str().c_str());
-			if (!matVar)
-				throw std::runtime_error("Variable not found in mat file.");
-			assert(matVar->rank == 2);
-			assert(matVar->dims[0] == 2);
-			assert(matVar->data_type == MAT_T_DOUBLE);
-			assert(matVar->class_type == MAT_C_DOUBLE);
-			
-			Eigen::Matrix2Xd points;
-			points.resize(2, matVar->dims[1]);
-			memcpy(points.data(), matVar->data, matVar->nbytes);
-			imagePoints[i] = points.cast<float>();
-			Mat_VarFree(matVar);
-		}
-
-		//Homography
-		{
-			std::stringstream ss;
-			ss << "H_" << (i + 1);
-			Mat_Rewind(matFile); //Hack: must call or Mat_VarRead might fail
-			matVar = Mat_VarRead(matFile, ss.str().c_str());
-			if (!matVar)
-				throw std::runtime_error("Variable not found in mat file.");
-			assert(matVar->rank == 2);
-			assert(matVar->dims[0] == 3 && matVar->dims[1] == 3);
-			assert(matVar->data_type == MAT_T_DOUBLE);
-			assert(matVar->class_type == MAT_C_DOUBLE);
-			Eigen::Matrix3d h;
-			memcpy(h.data(), matVar->data, matVar->nbytes);
-			homographies[i] = h.cast<float>();
-			Mat_VarFree(matVar);
-		}
-	}
-	
-	Mat_Close(matFile);
-
-	//Create map
-	int featureCount = imagePoints[0].cols();
-	std::unique_ptr<Map> map(new Map);
-	
-	//Create features
-	for (int i = 0; i < featureCount; i++)
-	{
-		std::unique_ptr<Feature> feature(new Feature);
-		feature->setPosition(imagePoints[0].col(i));
-		map->addFeature(std::move(feature));
-	}
-
-	//Create keyframes
-	cv::Mat3b nullImg3(imageSize[1],imageSize[0]);
-	cv::Mat1b nullImg1(imageSize[1], imageSize[0]);
-	Eigen::Matrix<uchar, 1, 32> nullDescr;
-	nullDescr.setZero();
-	Eigen::Matrix3f refHinv = homographies[0].inverse();
-	for (int k = 0; k< imageCount; k++)
-	{
-		std::unique_ptr<Keyframe> frame(new Keyframe);
-		
-		frame->init(nullImg3, nullImg1);
-		frame->setPose(homographies[k]*refHinv);
-
-		for (int i = 0; i < featureCount; i++)
-		{
-			std::unique_ptr<FeatureMeasurement> m(new FeatureMeasurement(map->getFeatures()[i].get(), frame.get(), imagePoints[k].col(i), 0, nullDescr.data()));
-			frame->getMeasurements().push_back(m.get());
-			map->getFeatures()[i]->getMeasurements().push_back(std::move(m));
-		}
-
-		map->addKeyframe(std::move(frame));
-	}
-
-	CameraModel camera;
-	camera.init(fc[0], fc[1], cc[0], cc[1], imageSize[0], imageSize[1]);
-	camera.getDistortionModel().init(kc, camera.getMaxRadiusSq());
-	mSystem->setCamera(camera);
-=======
 	BouguetInterface b;
 	auto map = b.loadCalib(filename);
 	mSystem->setCamera(*map->mCamera);
->>>>>>> 01e0287c1db291020b729c3c68f9ae8303aca762
 	mSystem->setMap(std::move(map));
 	updateState();
 }
@@ -448,9 +292,9 @@ void MainWindow::loadValidationData()
 	//Read camera
 	std::cout << "Read camera? ([y,n]): ";
 	std::cin >> answer;
-	if (answer.size()==1 && answer[0] == 'y')
+	if (answer.size() == 1 && answer[0] == 'y')
 	{
-		float fx, fy, u0,v0,width,height,d0, d1;
+		float fx, fy, u0, v0, width, height, d0, d1;
 		std::cout << "fx=";
 		std::cin >> fx;
 		std::cout << "fy=";
@@ -535,7 +379,7 @@ void MainWindow::synthTest()
 
 	MatlabDataLog::AddValue("errorKeyName", "'noiseStd'");
 
-	for (noiseStd = 0; noiseStd <= 10; noiseStd+=0.5)
+	for (noiseStd = 0; noiseStd <= 10; noiseStd += 0.5)
 	{
 		int kk = 0;
 		for (kk = 0; kk < 300; kk++)
@@ -618,13 +462,13 @@ void MainWindow::synthTestNormalAngle()
 
 	MatlabDataLog::AddValue("errorKeyName", "'normalAngle'");
 
-	float normalAngle = 10*M_PI/180;
-	for (normalAngle = 0; normalAngle < 45 * M_PI / 180; normalAngle+=1*M_PI/180)
+	float normalAngle = 10 * M_PI / 180;
+	for (normalAngle = 0; normalAngle < 45 * M_PI / 180; normalAngle += 1 * M_PI / 180)
 	{
 		int kk = 0;
 		for (kk = 0; kk < 300; kk++)
 		{
-			MYAPP_LOG << "-------------Synth test, normalAngle=" << (normalAngle*180/M_PI) << ", iter=" << kk << "----------------\n";
+			MYAPP_LOG << "-------------Synth test, normalAngle=" << (normalAngle * 180 / M_PI) << ", iter=" << kk << "----------------\n";
 			std::unique_ptr<Map> map = generator.generateVariableNormal(normalAngle);
 
 			//Calib
@@ -673,7 +517,7 @@ void MainWindow::synthTestNormalizationWithNoise()
 
 	float normalAngle = 20 * M_PI / 180;
 	for (noiseStd = 0; noiseStd <= 10; noiseStd += 0.5)
-	//for (normalAngle = 0; normalAngle < 45 * M_PI / 180; normalAngle += 1 * M_PI / 180)
+		//for (normalAngle = 0; normalAngle < 45 * M_PI / 180; normalAngle += 1 * M_PI / 180)
 	{
 		int kk = 0;
 		for (kk = 0; kk < 300; kk++)
@@ -748,7 +592,7 @@ void MainWindow::synthTestNormalizationWithFrames()
 		for (kk = 0; kk < 300; kk++)
 		{
 			MYAPP_LOG << "-------------Synth test for normalization, frameCount=" << frameCount << ", noiseStd=" << noiseStd << ", iter=" << kk << "----------------\n";
-			std::unique_ptr<Map> map = generator.generateRandomMap(frameCount,normalAngle);
+			std::unique_ptr<Map> map = generator.generateRandomMap(frameCount, normalAngle);
 
 			MatlabDataLog::AddValue("errorKey", frameCount);
 
@@ -977,4 +821,4 @@ void MainWindow::synthTest2()
 	updateState();
 }
 
-} 
+}

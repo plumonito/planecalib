@@ -20,6 +20,9 @@ if(WIN32)
     set(SuiteSparse_USE_LAPACK_BLAS ON)
 endif()
 find_package(SuiteSparse REQUIRED PATHS "${EP_PREFIX}")
+if(WIN32)
+	include(${USE_SuiteSparse})
+endif()
 
 find_package(Ceres REQUIRED QUIET PATHS "${EP_PREFIX}")
 
