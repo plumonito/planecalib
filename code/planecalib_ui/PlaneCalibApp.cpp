@@ -94,11 +94,11 @@ bool PlaneCalibApp::init(void)
 	//Determine downscale at input
 	int width = mImageSrc->getSourceSize().width;
 	mDownsampleInputCount = 0;
-	//while(width > FLAGS_DriverMaxImageWidth)
-	//{
-	//	width = (width+1)/2;
-	//	mDownsampleInputCount++;
-	//}
+	while(width > FLAGS_DriverMaxImageWidth)
+	{
+		width = (width+1)/2;
+		mDownsampleInputCount++;
+	}
 	int scale = 1<<mDownsampleInputCount;
 
 	mImageSrc->setDownsample(mDownsampleInputCount);

@@ -11,6 +11,7 @@ namespace planecalib
 
 class Map;
 class PoseTracker;
+class ErrorClass;
 
 class TestWindow : public BaseWindow
 {
@@ -39,10 +40,15 @@ protected:
 	cv::Mat1b mRefImg;
 	cv::Mat1s mRefDx;
 	cv::Mat1s mRefDy;
+
+	std::vector<Eigen::Vector3i> mEvalPositions;
+	cv::Mat3b mEvalPosImg;
+
 	Eigen::Matrix3fr mPose;
 
 	//Draw data
 	TextureHelper mRefTexture;
+	TextureHelper mEvalPositionsTexture;
 };
 
 } 
