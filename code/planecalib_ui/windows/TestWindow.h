@@ -44,6 +44,7 @@ protected:
 	std::vector<Eigen::Vector3i> mEvalPositions;
 	cv::Mat3b mEvalPosImg;
 
+	Eigen::Matrix3fr mPose0;
 	Eigen::Matrix3fr mPose;
 
 	//Draw data

@@ -215,6 +215,9 @@ void TestWindow::updateState()
 	if (!frame)
 		return;
 
+	//mPose = Eigen::Matrix3f::Identity();
+	mPose0 = mPose;
+
 	cv::Mat1b img;
 	cv::Mat1s imgDx;
 	cv::Mat1s imgDy;
@@ -270,14 +273,25 @@ void TestWindow::updateState()
 
 void TestWindow::resize()
 {
-	mTiler.configDevice(Eigen::Vector2i::Zero(), UserInterfaceInfo::Instance().getScreenSize(), 1);
+	mTiler.configDevice(Eigen::Vector2i::Zero(), UserInterfaceInfo::Instance().getScreenSize(), 2);
 	mTiler.fillTiles();
 	mTiler.setImageMVP(0, mImageSize);
+	mTiler.setImageMVP(1, mImageSize);
 }
 
 void TestWindow::draw()
 {
-    mTiler.setActiveTile(0);
+	mTiler.setActiveTile(0);
+	mShaders->getTexture().setMVPMatrix(mTiler.getMVP());
+	mShaders->getTextureWarp().setMVPMatrix(mTiler.getMVP());
+	mShaders->getColor().setMVPMatrix(mTiler.getMVP());
+
+	//Draw texture
+	mShaders->getTextureWarp().renderTexture(mCurrentImageTextureTarget, mCurrentImageTextureId, mPose0, mImageSize);
+	mShaders->getTexture().renderTexture(mRefTexture.getTarget(), mRefTexture.getId(), eutils::FromSize(mRefTexture.getSize()), 0.7f);
+	//mShaders->getTexture().renderTexture(mEvalPositionsTexture.getTarget(), mEvalPositionsTexture.getId(), eutils::FromSize(mEvalPositionsTexture.getSize()), 0.3f);
+	
+	mTiler.setActiveTile(1);
     mShaders->getTexture().setMVPMatrix(mTiler.getMVP());
 	mShaders->getTextureWarp().setMVPMatrix(mTiler.getMVP());
 	mShaders->getColor().setMVPMatrix(mTiler.getMVP());
