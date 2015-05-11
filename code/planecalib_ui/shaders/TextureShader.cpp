@@ -38,24 +38,32 @@ void TextureShader::setMVPMatrix(const Eigen::Matrix4f &mvp)
 {
     glUseProgram(mProgram.getId());
     glUniformMatrix4fv(mUniformMVPMatrix, 1, false, mvp.data());
-
+	
     glUseProgram(mProgramFA.getId());
     glUniformMatrix4fv(mUniformMVPMatrixFA, 1, false, mvp.data());
 }
 
-void TextureShader::renderTexture(GLuint target, GLuint id, const cv::Size &imageSize,
+void TextureShader::CreateVertices(const Eigen::Vector2f &screenOrigin, const Eigen::Vector2i &imageSize, std::vector<Eigen::Vector4f> &vertices, std::vector<Eigen::Vector2f> &texCoords)
+{
+	const float kDepth = 1.0f;
+	vertices.push_back(Eigen::Vector4f(screenOrigin.x() + (float)imageSize[0] - 1, screenOrigin.y(), kDepth, 1.0f));
+	vertices.push_back(Eigen::Vector4f(screenOrigin.x(), screenOrigin.y(), kDepth, 1.0f));
+	vertices.push_back(Eigen::Vector4f(screenOrigin.x() + (float)imageSize[0] - 1, screenOrigin.y() + (float)imageSize[1] - 1, kDepth, 1.0f));
+	vertices.push_back(Eigen::Vector4f(screenOrigin.x(), screenOrigin.y() + (float)imageSize[1] - 1, kDepth, 1.0f));
+
+	texCoords.push_back(Eigen::Vector2f(1, 0));
+	texCoords.push_back(Eigen::Vector2f(0, 0));
+	texCoords.push_back(Eigen::Vector2f(1, 1));
+	texCoords.push_back(Eigen::Vector2f(0, 1));
+}
+
+void TextureShader::renderTexture(GLuint target, GLuint id, const Eigen::Vector2i &imageSize,
                                     const Eigen::Vector2f &screenOrigin)
 {
-    const float kDepth = 1.0f;
-    Eigen::Vector4f const vertices[] =
-	{ Eigen::Vector4f(screenOrigin.x() + (float)imageSize.width - 1, screenOrigin.y(), kDepth, 1.0f),
-	Eigen::Vector4f(screenOrigin.x(), screenOrigin.y(), kDepth, 1.0f),
-	Eigen::Vector4f(screenOrigin.x() + (float)imageSize.width - 1, screenOrigin.y() + (float)imageSize.height - 1, kDepth, 1.0f),
-	Eigen::Vector4f(screenOrigin.x(), screenOrigin.y() + (float)imageSize.height - 1, kDepth, 1.0f) };
-    
-	Eigen::Vector2f const textureCoords[] =
-	{ Eigen::Vector2f(1, 0), Eigen::Vector2f(0, 0), Eigen::Vector2f(1, 1), Eigen::Vector2f(0, 1) };
-    renderTexture(GL_TRIANGLE_STRIP, target, id, vertices, textureCoords, 4);
+	std::vector<Eigen::Vector4f> vertices;
+	std::vector<Eigen::Vector2f> textureCoords;
+	CreateVertices(screenOrigin, imageSize, vertices, textureCoords);
+	renderTexture(GL_TRIANGLE_STRIP, target, id, vertices.data(), textureCoords.data(), 4);
 }
 
 void TextureShader::renderTexture(GLenum mode, GLuint target, GLuint id, const Eigen::Vector4f *vertices,
@@ -105,18 +113,10 @@ void TextureShader::drawVertices(GLenum mode, GLuint target, GLuint id, const un
 void TextureShader::renderTexture(GLuint target, GLuint id, const Eigen::Vector2i &imageSize,
                                     const Eigen::Vector2f &screenOrigin, float alpha)
 {
-    const float kDepth = 1.0f;
-
-	//std::vector<Eigen::Vector4f, Eigen::aligned_allocator<Eigen::Vector4f>> vertices;
 	std::vector<Eigen::Vector4f> vertices;
-	vertices.push_back(Eigen::Vector4f(screenOrigin.x() + (float)imageSize.x() - 1, screenOrigin.y(), kDepth, 1.0f));
-	vertices.push_back(Eigen::Vector4f(screenOrigin.x(), screenOrigin.y(), kDepth, 1.0f));
-	vertices.push_back(Eigen::Vector4f(screenOrigin.x() + (float)imageSize.x() - 1, screenOrigin.y() + (float)imageSize.y() - 1, kDepth, 1.0f));
-	vertices.push_back(Eigen::Vector4f(screenOrigin.x(), screenOrigin.y() + (float)imageSize.y() - 1, kDepth, 1.0f));
-	
-    Eigen::Vector2f const textureCoords[] =
-    { Eigen::Vector2f(1, 0), Eigen::Vector2f(0, 0), Eigen::Vector2f(1, 1), Eigen::Vector2f(0, 1) };
-    renderTexture(GL_TRIANGLE_STRIP, target, id, vertices.data(), textureCoords, 4, alpha);
+	std::vector<Eigen::Vector2f> textureCoords;
+	CreateVertices(screenOrigin, imageSize, vertices, textureCoords);
+	renderTexture(GL_TRIANGLE_STRIP, target, id, vertices.data(), textureCoords.data(), 4, alpha);
 }
 
 void TextureShader::renderTexture(GLenum mode, GLuint target, GLuint id, const Eigen::Vector4f *vertices,

@@ -45,11 +45,17 @@ protected:
 	cv::Mat3b mEvalPosImg;
 
 	Eigen::Matrix3fr mPose0;
-	Eigen::Matrix3fr mPose;
+	Eigen::Matrix3fr mPoseAffine;
+	Eigen::Matrix3fr mPoseHomography;
 
 	//Draw data
 	TextureHelper mRefTexture;
 	TextureHelper mEvalPositionsTexture;
+	TextureHelper mCostAffineTexture;
+	TextureHelper mCostHomographyTexture;
+
+	void alignAffine(const cv::Mat1b &img, const cv::Mat1s &imgDx, const cv::Mat1s &imgDy, Eigen::Matrix3fr &pose, TextureHelper &tex);
+	void alignHomography(const cv::Mat1b &img, const cv::Mat1s &imgDx, const cv::Mat1s &imgDy, Eigen::Matrix3fr &pose, TextureHelper &tex);
 };
 
 } 

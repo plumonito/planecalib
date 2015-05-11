@@ -20,8 +20,11 @@ public:
     //mvp is in normal opencv row-major order
 	void setMVPMatrix(const Eigen::Matrix4f &mvp);
 
-    void renderTexture(GLuint target, GLuint id, const cv::Size &imageSize) {renderTexture(target,id,imageSize,Eigen::Vector2f(0,0));}
-    void renderTexture(GLuint target, GLuint id, const cv::Size &imageSize,
+	static void CreateVertices(const Eigen::Vector2i &imageSize, std::vector<Eigen::Vector4f> &vertices, std::vector<Eigen::Vector2f> &texCoords) { CreateVertices(Eigen::Vector2f(0,0), imageSize, vertices, texCoords); }
+	static void CreateVertices(const Eigen::Vector2f &screenOrigin, const Eigen::Vector2i &imageSize, std::vector<Eigen::Vector4f> &vertices, std::vector<Eigen::Vector2f> &texCoords);
+
+	void renderTexture(GLuint target, GLuint id, const Eigen::Vector2i &imageSize) { renderTexture(target, id, imageSize, Eigen::Vector2f(0, 0)); }
+	void renderTexture(GLuint target, GLuint id, const Eigen::Vector2i &imageSize,
                                         const Eigen::Vector2f &screenOrigin);
     void renderTexture(GLenum mode, GLuint target, GLuint id, const Eigen::Vector4f *vertices,
                                         const Eigen::Vector2f *textureCoords, int count);
