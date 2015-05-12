@@ -37,6 +37,7 @@ public:
 protected:
     ViewportTiler mTiler;
 
+	void *mRefKeyframe;
 	cv::Mat1b mRefImg;
 	cv::Mat1s mRefDx;
 	cv::Mat1s mRefDy;
@@ -54,6 +55,7 @@ protected:
 	TextureHelper mCostAffineTexture;
 	TextureHelper mCostHomographyTexture;
 
+	void loadRefFrame();
 	void alignAffine(const cv::Mat1b &img, const cv::Mat1s &imgDx, const cv::Mat1s &imgDy, Eigen::Matrix3fr &pose, TextureHelper &tex);
 	void alignHomography(const cv::Mat1b &img, const cv::Mat1s &imgDx, const cv::Mat1s &imgDy, Eigen::Matrix3fr &pose, TextureHelper &tex);
 };

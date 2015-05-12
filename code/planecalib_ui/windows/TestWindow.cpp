@@ -95,7 +95,7 @@ public:
 	ErrorClass(const cv::Mat1b &refImg, const cv::Mat1s &refDx, const cv::Mat1s &refDy, const std::vector<Eigen::Vector3i> &evalPositions, const cv::Mat1b &img, const cv::Mat1s &imgDx, const cv::Mat1s &imgDy);
 
 	template<class T>
-	bool evalRaw(const T * const paramsA, const T * const paramsB, const T * const paramsC, T *residuals, T*validCount)  const;
+	void evalRaw(const T * const paramsA, const T * const paramsB, const T * const paramsC, T *residuals, T*validCount)  const;
 
 	template<class T>
 	bool operator() (const T * const paramsA, const T * const paramsB, const T * const paramsC, T *residuals)  const;
@@ -131,7 +131,7 @@ bool ErrorClass::operator() (const T * const paramsA, const T * const paramsB, c
 }
 
 template<class T>
-bool ErrorClass::evalRaw(const T * const paramsA, const T * const paramsB, const T * const paramsC, T *residuals, T*validCountT)  const
+void ErrorClass::evalRaw(const T * const paramsA, const T * const paramsB, const T * const paramsC, T *residuals, T*validCountT)  const
 {
 	Eigen::Map<Eigen::Matrix3Xi> evalPositionsMap((int*)mEvalPositions.data(), 3, mEvalPositions.size());
 	Eigen::Matrix<T, 3, Eigen::Dynamic> refPos = evalPositionsMap.cast<T>();
@@ -178,10 +178,25 @@ bool TestWindow::init(PlaneCalibApp *app, const Eigen::Vector2i &imageSize)
 {
 	BaseWindow::init(app, imageSize);
 
+	mRefTexture.create(GL_LUMINANCE, eutils::ToSize(imageSize));
+	mCostAffineTexture.create(GL_LUMINANCE, eutils::ToSize(imageSize));
+	mCostHomographyTexture.create(GL_LUMINANCE, eutils::ToSize(imageSize));
+	mEvalPositionsTexture.create(GL_RGB, eutils::ToSize(imageSize));
+
+	loadRefFrame();
+
+	resize();
+
+	return true;
+}
+
+void TestWindow::loadRefFrame()
+{
 	const int kMinGradientSq = 10 * 10;
 
+	mRefKeyframe = mApp->getSystem().getMap().getKeyframes()[0].get();
 	mRefImg = mApp->getSystem().getMap().getKeyframes()[0]->getImage(0);
-	
+
 	cv::Sobel(mRefImg, mRefDx, CV_16S, 1, 0, 1);
 	cv::Sobel(mRefImg, mRefDy, CV_16S, 0, 1, 1);
 
@@ -194,34 +209,25 @@ bool TestWindow::init(PlaneCalibApp *app, const Eigen::Vector2i &imageSize)
 			const auto &dx = mRefDx(p[1], p[0]);
 			const auto &dy = mRefDy(p[1], p[0]);
 			const auto dmSq = dx*dx + dy*dy;
-			if (dmSq > kMinGradientSq)
+			//if (dmSq > kMinGradientSq)
 			{
 				mEvalPositions.push_back(p);
-				mEvalPosImg(p[1], p[0]) = cv::Vec3b(0,255,0);
+				mEvalPosImg(p[1], p[0]) = cv::Vec3b(0, 255, 0);
 			}
-			else
-				mEvalPosImg(p[1], p[0]) = cv::Vec3b(0, 0, 0);
+			//else
+			//	mEvalPosImg(p[1], p[0]) = cv::Vec3b(0, 0, 0);
 		}
 	}
 
 	mPoseAffine = mPoseHomography = Eigen::Matrix3f::Identity();
 
-	mRefTexture.create(GL_LUMINANCE, mRefImg.size());
 	mRefTexture.update(mRefImg);
 
-	mCostAffineTexture.create(GL_LUMINANCE, mRefImg.size());
 	mCostAffineTexture.update(mRefImg);
-	mCostHomographyTexture.create(GL_LUMINANCE, mRefImg.size());
 	mCostHomographyTexture.update(mRefImg);
 
-	mEvalPositionsTexture.create(GL_RGB, mEvalPosImg.size());
 	mEvalPositionsTexture.update(mEvalPosImg);
-
-	resize();
-
-	return true;
 }
-
 void TestWindow::alignAffine(const cv::Mat1b &img, const cv::Mat1s &imgDx, const cv::Mat1s &imgDy, Eigen::Matrix3fr &pose, TextureHelper &tex)
 {
 	//Solver options
@@ -366,6 +372,9 @@ void TestWindow::updateState()
 {
 	shared_lock<shared_mutex> lockRead(mApp->getSystem().getMap().getMutex());
 
+	if (mApp->getSystem().getMap().getKeyframes()[0].get() != mRefKeyframe)
+		loadRefFrame();
+
 	const Keyframe *frame = mApp->getSystem().getTracker().getFrame();
 	if (!frame)
 		return;
@@ -398,40 +407,42 @@ void TestWindow::resize()
 
 void TestWindow::draw()
 {
-	mTiler.setActiveTile(0);
-	mShaders->getTexture().setMVPMatrix(mTiler.getMVP());
-	mShaders->getTextureWarp().setMVPMatrix(mTiler.getMVP());
-	mShaders->getColor().setMVPMatrix(mTiler.getMVP());
-
 	//Generic vertices
 	std::vector<Eigen::Vector4f> vertices;
 	std::vector<Eigen::Vector2f> textureCoords;
 	TextureShader::CreateVertices(mImageSize, vertices, textureCoords);
 
-	//Draw texture
-	mShaders->getTextureWarp().renderTexture(mCurrentImageTextureTarget, mCurrentImageTextureId, mPoseAffine, mImageSize);
-	mShaders->getTexture().renderTexture(mRefTexture.getTarget(), mRefTexture.getId(), eutils::FromSize(mRefTexture.getSize()), 0.7f);
+	///////////////////////////
+	// Affine
+	// Alignment
+	mTiler.setActiveTile(0);
+	glEnable(GL_BLEND);
+	glBlendFunc(GL_SRC_ALPHA, GL_DST_ALPHA);
+	mShaders->getTextureWarp().setMVPMatrix(mTiler.getMVP());
+	mShaders->getTextureWarp().renderTexture(mRefTexture.getTarget(), mRefTexture.getId(), Eigen::Matrix3fr::Identity(), StaticColors::Green(), mImageSize);
+	mShaders->getTextureWarp().renderTexture(mCurrentImageTextureTarget, mCurrentImageTextureId, mPoseAffine, StaticColors::Red(), mImageSize);
 	//mShaders->getTexture().renderTexture(mEvalPositionsTexture.getTarget(), mEvalPositionsTexture.getId(), eutils::FromSize(mEvalPositionsTexture.getSize()), 0.3f);
 
+	//Cost
 	mTiler.setActiveTile(2);
+	glDisable(GL_BLEND);
 	mShaders->getTexture().setMVPMatrix(mTiler.getMVP());
 	mShaders->getTexture().renderTexture(mCostAffineTexture.getTarget(), mCostAffineTexture.getId(), eutils::FromSize(mCostAffineTexture.getSize()));
 
 
+	///////////////////////////
+	// Homography
+	// Alignment
 	mTiler.setActiveTile(1);
-    mShaders->getTexture().setMVPMatrix(mTiler.getMVP());
-	mShaders->getTextureWarp().setMVPMatrix(mTiler.getMVP());
-	mShaders->getColor().setMVPMatrix(mTiler.getMVP());
-	
-	//Draw texture
 	glEnable(GL_BLEND);
 	glBlendFunc(GL_SRC_ALPHA, GL_DST_ALPHA);
-
-	mShaders->getTextureWarp().renderTexture(mCurrentImageTextureTarget, mCurrentImageTextureId, mPoseHomography, StaticColors::Red(), mImageSize);
+	mShaders->getTextureWarp().setMVPMatrix(mTiler.getMVP());
 	mShaders->getTextureWarp().renderTexture(mRefTexture.getTarget(), mRefTexture.getId(), Eigen::Matrix3fr::Identity(), StaticColors::Green(), mImageSize);
-	//mShaders->getTexture().renderTexture(mRefTexture.getTarget(), mRefTexture.getId(), eutils::FromSize(mRefTexture.getSize()), 0.7f);
+	mShaders->getTextureWarp().renderTexture(mCurrentImageTextureTarget, mCurrentImageTextureId, mPoseHomography, StaticColors::Red(), mImageSize);
 
+	//Cost
 	mTiler.setActiveTile(3);
+	glDisable(GL_BLEND);
 	mShaders->getTexture().setMVPMatrix(mTiler.getMVP());
 	mShaders->getTexture().renderTexture(mCostHomographyTexture.getTarget(), mCostHomographyTexture.getId(), eutils::FromSize(mCostHomographyTexture.getSize()));
 }
