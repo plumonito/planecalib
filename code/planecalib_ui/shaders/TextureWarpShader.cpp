@@ -111,16 +111,16 @@ void TextureWarpShader::renderTexture(GLenum mode, GLuint target, GLuint id, con
 }
 
 
-void TextureWarpShader::renderTexture(GLuint target, GLuint id, const Eigen::Matrix3fr &homography, float alpha, const Eigen::Vector2i &imageSize,
+void TextureWarpShader::renderTextureFixedAlpha(GLuint target, GLuint id, const Eigen::Matrix3fr &homography, float alpha, const Eigen::Vector2i &imageSize,
 	const Eigen::Vector2f &screenOrigin)
 {
 	std::vector<Eigen::Vector4f> vertices;
 	std::vector<Eigen::Vector2f> textureCoords;
 	TextureShader::CreateVertices(screenOrigin, imageSize, vertices, textureCoords);
-	renderTexture(GL_TRIANGLE_STRIP, target, id, homography, alpha, imageSize, vertices.data(), textureCoords.data(), 4);
+	renderTextureFixedAlpha(GL_TRIANGLE_STRIP, target, id, homography, alpha, imageSize, vertices.data(), textureCoords.data(), 4);
 }
 
-void TextureWarpShader::renderTexture(GLenum mode, GLuint target, GLuint id, const Eigen::Matrix3fr &homography, float alpha, const Eigen::Vector2i &imageSize, const Eigen::Vector4f *vertices,
+void TextureWarpShader::renderTextureFixedAlpha(GLenum mode, GLuint target, GLuint id, const Eigen::Matrix3fr &homography, float alpha, const Eigen::Vector2i &imageSize, const Eigen::Vector4f *vertices,
 	const Eigen::Vector2f *textureCoords, int count)
 {
     assert(target == GL_TEXTURE_2D);
@@ -149,16 +149,16 @@ void TextureWarpShader::renderTexture(GLenum mode, GLuint target, GLuint id, con
 }
 
 
-void TextureWarpShader::renderTexture(GLuint target, GLuint id, const Eigen::Matrix3fr &homography, const Eigen::Vector4f &color, const Eigen::Vector2i &imageSize,
+void TextureWarpShader::renderTextureAsAlpha(GLuint target, GLuint id, const Eigen::Matrix3fr &homography, const Eigen::Vector4f &color, const Eigen::Vector2i &imageSize,
 	const Eigen::Vector2f &screenOrigin)
 {
 	std::vector<Eigen::Vector4f> vertices;
 	std::vector<Eigen::Vector2f> textureCoords;
 	TextureShader::CreateVertices(screenOrigin, imageSize, vertices, textureCoords);
-	renderTexture(GL_TRIANGLE_STRIP, target, id, homography, color, imageSize, vertices.data(), textureCoords.data(), 4);
+	renderTextureAsAlpha(GL_TRIANGLE_STRIP, target, id, homography, color, imageSize, vertices.data(), textureCoords.data(), 4);
 }
 
-void TextureWarpShader::renderTexture(GLenum mode, GLuint target, GLuint id, const Eigen::Matrix3fr &homography, const Eigen::Vector4f &color, const Eigen::Vector2i &imageSize, const Eigen::Vector4f *vertices,
+void TextureWarpShader::renderTextureAsAlpha(GLenum mode, GLuint target, GLuint id, const Eigen::Matrix3fr &homography, const Eigen::Vector4f &color, const Eigen::Vector2i &imageSize, const Eigen::Vector4f *vertices,
 	const Eigen::Vector2f *textureCoords, int count)
 {
 	assert(target == GL_TEXTURE_2D);

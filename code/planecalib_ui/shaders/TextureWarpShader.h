@@ -24,16 +24,16 @@ public:
 
 	//////////////
 	//Fixed alpha
-	void renderTexture(GLuint target, GLuint id, const Eigen::Matrix3fr &homography, float alpha, const Eigen::Vector2i &imageSize) { renderTexture(target, id, homography, alpha, imageSize, Eigen::Vector2f(0, 0)); }
-	void renderTexture(GLuint target, GLuint id, const Eigen::Matrix3fr &homography, float alpha, const Eigen::Vector2i &imageSize, const Eigen::Vector2f &screenOrigin);
-	void renderTexture(GLenum mode, GLuint target, GLuint id, const Eigen::Matrix3fr &homography, float alpha, const Eigen::Vector2i &imageSize, const Eigen::Vector4f *vertices,
+	void renderTextureFixedAlpha(GLuint target, GLuint id, const Eigen::Matrix3fr &homography, float alpha, const Eigen::Vector2i &imageSize) { renderTextureFixedAlpha(target, id, homography, alpha, imageSize, Eigen::Vector2f(0, 0)); }
+	void renderTextureFixedAlpha(GLuint target, GLuint id, const Eigen::Matrix3fr &homography, float alpha, const Eigen::Vector2i &imageSize, const Eigen::Vector2f &screenOrigin);
+	void renderTextureFixedAlpha(GLenum mode, GLuint target, GLuint id, const Eigen::Matrix3fr &homography, float alpha, const Eigen::Vector2i &imageSize, const Eigen::Vector4f *vertices,
 										const Eigen::Vector2f *textureCoords, int count);
 
 	//////////////
 	//Fixed color
-	void renderTexture(GLuint target, GLuint id, const Eigen::Matrix3fr &homography, const Eigen::Vector4f &color, const Eigen::Vector2i &imageSize) { renderTexture(target, id, homography, color, imageSize, Eigen::Vector2f(0, 0)); }
-	void renderTexture(GLuint target, GLuint id, const Eigen::Matrix3fr &homography, const Eigen::Vector4f &color, const Eigen::Vector2i &imageSize, const Eigen::Vector2f &screenOrigin);
-	void renderTexture(GLenum mode, GLuint target, GLuint id, const Eigen::Matrix3fr &homography, const Eigen::Vector4f &color, const Eigen::Vector2i &imageSize, const Eigen::Vector4f *vertices,
+	void renderTextureAsAlpha(GLuint target, GLuint id, const Eigen::Matrix3fr &homography, const Eigen::Vector4f &color, const Eigen::Vector2i &imageSize) { renderTextureAsAlpha(target, id, homography, color, imageSize, Eigen::Vector2f(0, 0)); }
+	void renderTextureAsAlpha(GLuint target, GLuint id, const Eigen::Matrix3fr &homography, const Eigen::Vector4f &color, const Eigen::Vector2i &imageSize, const Eigen::Vector2f &screenOrigin);
+	void renderTextureAsAlpha(GLenum mode, GLuint target, GLuint id, const Eigen::Matrix3fr &homography, const Eigen::Vector4f &color, const Eigen::Vector2i &imageSize, const Eigen::Vector4f *vertices,
 		const Eigen::Vector2f *textureCoords, int count);
 
 protected:

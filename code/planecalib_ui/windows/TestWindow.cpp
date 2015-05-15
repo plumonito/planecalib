@@ -43,8 +43,8 @@ bool ImageInterpolation::Evaluate(double const* const* parameters,
 	double* residuals,
 	double** jacobians) const
 {
-	//int u0 = (int)parameters[0][0];
-	//int v0 = (int)parameters[0][1];
+	int u0 = (int)parameters[0][0];
+	int v0 = (int)parameters[0][1];
 	//residuals[0] = mImg(v0, u0);
 
 	double u = parameters[0][0];
@@ -96,9 +96,6 @@ public:
 
 	template<class T>
 	void evalRaw(const T * const paramsA, const T * const paramsB, const T * const paramsC, T *residuals, T*validCount)  const;
-
-	template<class T>
-	void makeImg(const T * const paramsA, const T * const paramsB, const T * const paramsC, cv::Mat1b &img)  const;
 
 	template<class T>
 	bool operator() (const T * const paramsA, const T * const paramsB, const T * const paramsC, T *residuals)  const;
@@ -177,56 +174,14 @@ void ErrorClass::evalRaw(const T * const paramsA, const T * const paramsB, const
 	*validCountT = T(validCount);
 }
 
-template<class T>
-void ErrorClass::makeImg(const T * const paramsA, const T * const paramsB, const T * const paramsC, cv::Mat1b &img)  const
-{
-	Eigen::Map<Eigen::Matrix3Xi> evalPositionsMap((int*)mEvalPositions.data(), 3, mEvalPositions.size());
-	Eigen::Matrix<T, 3, Eigen::Dynamic> refPos = evalPositionsMap.cast<T>();
-
-	Eigen::Matrix<T, 3, 3> H;
-	//H << T(1), T(0), params[0], T(0), T(1), params[1], T(0), T(0), T(1);
-	H << paramsB[0], paramsB[1], paramsA[0], paramsB[2], paramsB[3], paramsA[1], paramsC[0], paramsC[1], paramsC[2];
-
-	Eigen::Matrix<T, 3, Eigen::Dynamic> imgPos3 = H*refPos;
-
-	Eigen::Matrix<T, 2, Eigen::Dynamic> imgPos;
-	//Eigen::Matrix<T, 2, 100> imgPos;
-	imgPos.resize(2, imgPos3.cols());
-	imgPos.row(0) = imgPos3.row(0).array() / imgPos3.row(2).array();
-	imgPos.row(1) = imgPos3.row(1).array() / imgPos3.row(2).array();
-
-	img.create(mRefImg.size());
-	img.setTo(0);
-
-	int validCount = 0;
-	for (int i = 0; i < (int)mEvalPositions.size(); i++)
-	{
-		T *imgPosi = &imgPos(0, i);
-
-		double imgUd = CeresUtils::ToDouble(imgPosi[0]);
-		double imgVd = CeresUtils::ToDouble(imgPosi[1]);
-		if (imgUd < 0 || imgVd < 0 || imgUd > mImg.cols - 1 || imgVd > mImg.rows - 1)
-		{
-			continue;
-		}
-
-		T imgVal;
-		mInterp(imgPosi, &imgVal);
-
-		auto &refPosi = mEvalPositions[i];
-		img(refPosi[1], refPosi[0]) = (uchar)imgVal;
-	}
-}
-
 bool TestWindow::init(PlaneCalibApp *app, const Eigen::Vector2i &imageSize)
 {
 	BaseWindow::init(app, imageSize);
 
 	mRefTexture.create(GL_LUMINANCE, eutils::ToSize(imageSize));
 	mImgTexture.create(GL_LUMINANCE, eutils::ToSize(imageSize));
-	mCostAffineTexture.create(GL_LUMINANCE, eutils::ToSize(imageSize));
-	mCostHomographyTexture.create(GL_LUMINANCE, eutils::ToSize(imageSize));
-	mEvalPositionsTexture.create(GL_RGB, eutils::ToSize(imageSize));
+	mCostTexture.create(GL_LUMINANCE, eutils::ToSize(imageSize));
+	mEvalPositionsTexture.create(GL_LUMINANCE, eutils::ToSize(imageSize));
 
 	loadRefFrame();
 
@@ -245,7 +200,8 @@ void TestWindow::loadRefFrame()
 	cv::Sobel(mRefImg, mRefDx, CV_16S, 1, 0, 1);
 	cv::Sobel(mRefImg, mRefDy, CV_16S, 0, 1, 1);
 
-	mEvalPosImg.create(mRefImg.size());
+	cv::Mat1b evalPosImg;
+	evalPosImg.create(mRefImg.size());
 
 	for (Eigen::Vector3i p(0, 0, 1); p[1] < mRefImg.rows; p[1]++)
 	{
@@ -254,24 +210,23 @@ void TestWindow::loadRefFrame()
 			const auto &dx = mRefDx(p[1], p[0]);
 			const auto &dy = mRefDy(p[1], p[0]);
 			const auto dmSq = dx*dx + dy*dy;
-			//if (dmSq > kMinGradientSq)
+			if (dmSq > kMinGradientSq)
 			{
 				mEvalPositions.push_back(p);
-				mEvalPosImg(p[1], p[0]) = cv::Vec3b(0, 255, 0);
+				evalPosImg(p[1], p[0]) = (uchar)(255 * 0.3f);
 			}
-			//else
-			//	mEvalPosImg(p[1], p[0]) = cv::Vec3b(0, 0, 0);
+			else
+				evalPosImg(p[1], p[0]) = 0;
 		}
 	}
 
-	mPoseAffine = mPoseHomography = Eigen::Matrix3f::Identity();
+	mPose = Eigen::Matrix3f::Identity();
 
 	mRefTexture.update(mRefImg);
 
-	mCostAffineTexture.update(mRefImg);
-	mCostHomographyTexture.update(mRefImg);
+	mCostTexture.update(mRefImg);
 
-	mEvalPositionsTexture.update(mEvalPosImg);
+	mEvalPositionsTexture.update(evalPosImg);
 }
 void TestWindow::alignAffine(const cv::Mat1b &img, const cv::Mat1s &imgDx, const cv::Mat1s &imgDy, Eigen::Matrix3fr &pose, TextureHelper &tex)
 {
@@ -378,9 +333,10 @@ void TestWindow::alignHomography(const cv::Mat1b &img, const cv::Mat1s &imgDx, c
 	problem.AddParameterBlock(paramsA.data(), paramsA.size());
 	problem.AddParameterBlock(paramsB.data(), paramsB.size());
 	
-	std::vector<int> constantIdx;
-	constantIdx.push_back(2);
-	problem.AddParameterBlock(paramsC.data(), paramsC.size(), new ceres::SubsetParameterization(3,constantIdx));
+	//std::vector<int> constantIdx;
+	//constantIdx.push_back(2);
+	//problem.AddParameterBlock(paramsC.data(), paramsC.size(), new ceres::SubsetParameterization(3,constantIdx));
+	problem.AddParameterBlock(paramsC.data(), paramsC.size());
 
 	//problem.SetParameterBlockConstant(paramsB.data());
 	//problem.SetParameterBlockConstant(paramsC.data());
@@ -450,30 +406,30 @@ void TestWindow::updateState()
 
 	//mPoseAffine = mPoseHomography = Eigen::Matrix3fr::Identity();
 
-	alignAffine(img, imgDx, imgDy, mPoseAffine, mCostAffineTexture);
-	alignHomography(img, imgDx, imgDy, mPoseHomography, mCostHomographyTexture);
+	//alignAffine(img, imgDx, imgDy, mPoseAffine, mCostAffineTexture);
+	alignHomography(img, imgDx, imgDy, mPose, mCostTexture);
 
 	//Corners
-	std::vector<Eigen::Vector2f> refCorners;
-	refCorners.push_back(Eigen::Vector2f(0, 0));
-	refCorners.push_back(Eigen::Vector2f(0, mRefImg.rows));
-	refCorners.push_back(Eigen::Vector2f(mRefImg.cols, mRefImg.rows));
-	refCorners.push_back(Eigen::Vector2f(mRefImg.cols, 0));
+	Eigen::Matrix<float, 3, 4> refCorners;
 
-	mCornerPosAffine.resize(4);
-	mCornerPosHomography.resize(4);
-	for (int i = 0; i < 4; i++)
-	{
-		mCornerPosAffine[i] = (mPoseAffine.inverse() * refCorners[i].homogeneous()).eval().hnormalized();
-		mCornerPosHomography[i] = (mPoseHomography.inverse() * refCorners[i].homogeneous()).eval().hnormalized();
-	}
+	refCorners <<
+		0, 0, mRefImg.cols, mRefImg.cols,
+		0, mRefImg.rows, mRefImg.rows, 0,
+		1,1,1,1;
+
+	Eigen::Matrix<float, 3, 4> corners3;
+	corners3 = mPose.inverse() * refCorners;
+	mCornerPos.row(0) = corners3.row(0).array() / corners3.row(2).array();
+	mCornerPos.row(1) = corners3.row(1).array() / corners3.row(2).array();
 }
 
 void TestWindow::resize()
 {
-	mTiler.configDevice(Eigen::Vector2i::Zero(), UserInterfaceInfo::Instance().getScreenSize(), 2, 2);
+	auto screenSize = UserInterfaceInfo::Instance().getScreenSize();
+	mTiler.configDevice(Eigen::Vector2i::Zero(), screenSize, 2, 1);
 	mTiler.fillTiles();
 
+	//Tile 0 - Alignment
 	float scale = 1.5f;
 	Eigen::Vector2i sizeScaled = (scale*mImageSize.cast<float>()).cast<int>();
 	Eigen::Vector2f padding = (sizeScaled - mImageSize).cast<float>();
@@ -483,11 +439,18 @@ void TestWindow::resize()
 	mTiler.setImageMVP(0, sizeScaled);
 	mTiler.multiplyMVP(0, offsetMat);
 
-	mTiler.setImageMVP(1, sizeScaled);
-	mTiler.multiplyMVP(1, offsetMat);
+	//Tile 1 - Cost
+	mTiler.setImageMVP(1, mImageSize);
 
+	//Tile 2 - absolute
+	int smallImgWidth = (int)(screenSize[0] * 0.2f);
+	float imgAspect = (float)mImageSize[0] / mImageSize[1];
+	int smallImgHeight = (int)(smallImgWidth / imgAspect);
+
+	Eigen::Vector2i smallImgSize(smallImgWidth, smallImgHeight);
+	Eigen::Vector2i smallImgOrigin(screenSize[0] - smallImgSize[0], 0);
+	mTiler.addAbsoluteTile(smallImgOrigin, smallImgSize);
 	mTiler.setImageMVP(2, mImageSize);
-	mTiler.setImageMVP(3, mImageSize);
 }
 
 void TestWindow::draw()
@@ -498,48 +461,33 @@ void TestWindow::draw()
 	TextureShader::CreateVertices(mImageSize, vertices, textureCoords);
 
 	///////////////////////////
-	// Affine
-	// Alignment
-	mTiler.setActiveTile(0);
-	mShaders->getColor().setMVPMatrix(mTiler.getMVP());
-	mShaders->getTextureWarp().setMVPMatrix(mTiler.getMVP());
-
-	glEnable(GL_BLEND);
-	glBlendFunc(GL_SRC_ALPHA, GL_DST_ALPHA);
-	mShaders->getTextureWarp().renderTexture(mRefTexture.getTarget(), mRefTexture.getId(), Eigen::Matrix3fr::Identity(), StaticColors::Green(), mImageSize);
-	mShaders->getTextureWarp().renderTexture(mImgTexture.getTarget(), mImgTexture.getId(), mPoseAffine, StaticColors::Red(), mImageSize);
-
-	//mShaders->getTexture().renderTexture(mEvalPositionsTexture.getTarget(), mEvalPositionsTexture.getId(), eutils::FromSize(mEvalPositionsTexture.getSize()), 0.3f);
-	glDisable(GL_BLEND);
-
-	mShaders->getColor().drawVertices(GL_LINE_LOOP, mCornerPosAffine.data(), mCornerPosAffine.size(), StaticColors::Green());
-
-	//Cost
-	mTiler.setActiveTile(2);
-	mShaders->getTexture().setMVPMatrix(mTiler.getMVP());
-	mShaders->getTexture().renderTexture(mCostAffineTexture.getTarget(), mCostAffineTexture.getId(), eutils::FromSize(mCostAffineTexture.getSize()));
-
-
-	///////////////////////////
 	// Homography
 	// Alignment
-	mTiler.setActiveTile(1);
+	mTiler.setActiveTile(0);
 	mShaders->getTextureWarp().setMVPMatrix(mTiler.getMVP());
 	mShaders->getColor().setMVPMatrix(mTiler.getMVP());
 
 	glEnable(GL_BLEND);
 	glBlendFunc(GL_SRC_ALPHA, GL_DST_ALPHA);
-	mShaders->getTextureWarp().renderTexture(mRefTexture.getTarget(), mRefTexture.getId(), Eigen::Matrix3fr::Identity(), StaticColors::Green(), mImageSize);
-	mShaders->getTextureWarp().renderTexture(mImgTexture.getTarget(), mImgTexture.getId(), mPoseHomography, StaticColors::Red(), mImageSize);
-	glDisable(GL_BLEND);
+	mShaders->getTextureWarp().renderTextureAsAlpha(mRefTexture.getTarget(), mRefTexture.getId(), Eigen::Matrix3fr::Identity(), StaticColors::Green(), mImageSize);
+	mShaders->getTextureWarp().renderTextureAsAlpha(mImgTexture.getTarget(), mImgTexture.getId(), mPose, StaticColors::Red(), mImageSize);
 
-	mShaders->getColor().drawVertices(GL_LINE_LOOP, mCornerPosHomography.data(), mCornerPosHomography.size(), StaticColors::Green());
+	mShaders->getColor().drawVertices(GL_LINE_LOOP, (Eigen::Vector2f*)mCornerPos.data(), mCornerPos.cols(), StaticColors::Green());
 
 
 	//Cost
-	mTiler.setActiveTile(3);
+	mTiler.setActiveTile(1);
 	mShaders->getTexture().setMVPMatrix(mTiler.getMVP());
-	mShaders->getTexture().renderTexture(mCostHomographyTexture.getTarget(), mCostHomographyTexture.getId(), eutils::FromSize(mCostHomographyTexture.getSize()));
+	mShaders->getTexture().renderTexture(mCostTexture.getTarget(), mCostTexture.getId(), eutils::FromSize(mCostTexture.getSize()));
+
+	//Absolute
+	mTiler.setActiveTile(2);
+	mShaders->getTexture().setMVPMatrix(mTiler.getMVP());
+	mShaders->getTextureWarp().setMVPMatrix(mTiler.getMVP());
+	mShaders->getTexture().renderTexture(mCurrentImageTextureTarget, mCurrentImageTextureId, mImageSize);
+
+	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+	mShaders->getTextureWarp().renderTextureAsAlpha(mEvalPositionsTexture.getTarget(), mEvalPositionsTexture.getId(), Eigen::Matrix3fr::Identity(), StaticColors::Blue(), mImageSize);
 }
 
 } /* namespace dtslam */
