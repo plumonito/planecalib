@@ -9,10 +9,6 @@ varying vec3 vTexCoord;
 void main(void)
 {
 	vec4 texColor;
-#ifdef GL_ES_VERSION_2_0
-    texColor = texture2D(uTexture, vTexCoord);
-#else
-    texColor = texture2D(uTexture, vTexCoord.xy, vTexCoord.z);
-#endif
+    texColor = texture2DProj(uTexture, vTexCoord);
 	gl_FragColor = vec4(uColor.rgb, texColor.r);
 }

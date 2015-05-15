@@ -51,9 +51,13 @@ protected:
 
 	//Draw data
 	TextureHelper mRefTexture;
+	TextureHelper mImgTexture;
 	TextureHelper mEvalPositionsTexture;
 	TextureHelper mCostAffineTexture;
 	TextureHelper mCostHomographyTexture;
+
+	std::vector<Eigen::Vector2f> mCornerPosAffine;
+	std::vector<Eigen::Vector2f> mCornerPosHomography;
 
 	void loadRefFrame();
 	void alignAffine(const cv::Mat1b &img, const cv::Mat1s &imgDx, const cv::Mat1s &imgDy, Eigen::Matrix3fr &pose, TextureHelper &tex);

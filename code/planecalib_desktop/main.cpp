@@ -34,8 +34,10 @@ DEFINE_string(DriverRecordVideoFile, "video.avi", "Output video file for recordi
 
 ///////////////////////////////////////////////////////
 
-DEFINE_int32(WindowWidth, 1280, "Initial width of the window.");
-DEFINE_int32(WindowHeight, 960, "Initial height of the window.");
+//DEFINE_int32(WindowWidth, 1280, "Initial width of the window.");
+//DEFINE_int32(WindowHeight, 960, "Initial height of the window.");
+DEFINE_int32(WindowWidth, 800, "Initial width of the window.");
+DEFINE_int32(WindowHeight, 600, "Initial height of the window.");
 
 }
 
