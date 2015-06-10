@@ -20,6 +20,11 @@
 
 namespace planecalib {
 
+PoseTracker::~PoseTracker()
+{
+
+}
+
 void PoseTracker::init(const Eigen::Vector2i &imageSize, int octaveCount)
 {
 	mImageSize = imageSize;
@@ -38,7 +43,7 @@ void PoseTracker::init(const Eigen::Vector2i &imageSize, int octaveCount)
 	//mMatcher->setCamera(mCamera);
 
 	//Model refiners
-	//mHomographyEstimator.reset(new HomographyEstimation());
+	mHomographyEstimator.reset(new HomographyEstimation());
 
 	//mPoseEstimator.reset(new PoseEstimator());
 	//mPoseEstimator->init(mCamera, (float)FLAGS_TrackerOutlierPixelThreshold);
@@ -101,6 +106,40 @@ bool PoseTracker::trackFrame(std::unique_ptr<Keyframe> frame_)
 	mMatchMap.clear();
 	mReprojectionErrors.clear();
 
+	//Find closest keyframe
+	auto &keyframes = mMap->getKeyframes();
+	HomographyDistance hdist(mImageSize);
+	Eigen::Matrix3f hinv = mCurrentPose.inverse();
+	
+	float minDistance = std::numeric_limits<float>::infinity();
+	Keyframe *refFrame = NULL;
+	for (auto &framePtr : mMap->getKeyframes())
+	{
+		float dist = hdist.calculateSq(hinv, framePtr->getPose());
+		if (dist < minDistance)
+		{
+			minDistance = dist;
+			refFrame = framePtr.get();
+		}
+	}
+
+	//MYAPP_LOG << "Closest keyframe: " << (minIt - distances.begin()) << "\n";
+
+	//Optical alignment
+	if (mLastFrame)
+	{
+		Eigen::Matrix3fr similarity;
+		estimateSimilarityFromLastFrame(*mFrame, similarity);
+
+		mCurrentPose = mLastFrame->getPose()*similarity;
+	}
+	else
+	{
+		mCurrentPose = Eigen::Matrix3fr::Identity();
+	}
+	mFrame->setPose(mCurrentPose);
+	return true;
+
 	//Matches
 	findMatches();
 
@@ -115,6 +154,28 @@ bool PoseTracker::trackFrame(std::unique_ptr<Keyframe> frame_)
 		mMatchMap.insert(std::make_pair(&match.getFeature(), &match));
 
 	return !mIsLost;
+}
+
+bool PoseTracker::estimateSimilarityFromLastFrame(const Keyframe &frame, Eigen::Matrix3fr &similarity_)
+{
+	cv::Matx23f similarity = cv::Matx23f::eye(); //Identity is used as the initial guess
+	if (mLastFrame)
+	{
+		ProfileSection ss("estimateSimilarity");
+		bool res = mHomographyEstimator->estimateSimilarityDirect(mLastFrame->getSBI(), mLastFrame->getSBIdx(), mLastFrame->getSBIdy(), frame.getSBI(), similarity);
+
+		//Scale similarity matrix
+		//similarity = scaleUp*similarity*scaleDown
+		const float scale = (float)mImageSize[0] / frame.getSBI().cols;
+		similarity(0, 2) *= scale;
+		similarity(1, 2) *= scale;
+		similarity_ << similarity(0, 0), similarity(0, 1), similarity(0, 2), similarity(1, 0), similarity(1, 1), similarity(1, 2), 0, 0, 1;
+		return res;
+	}
+	else
+	{
+		return false;
+	}
 }
 
 void PoseTracker::findMatches()

@@ -17,10 +17,13 @@ namespace planecalib {
 ///////////////////////////////////
 // Classes
 class Keyframe;
+class HomographyEstimation;
 
 class PoseTracker
 {
 public:
+	~PoseTracker();
+
 	void init(const Eigen::Vector2i &imageSize, int octaveCount);
 	void resetTracking(Map *map, const Eigen::Matrix3fr &initialPose);
 
@@ -77,6 +80,8 @@ public:
 	Eigen::Vector3f mCurrentPoseT; //This is a rotation, used after calibration
 protected:
 
+	std::unique_ptr<HomographyEstimation> mHomographyEstimator;
+
 	//Data from the previous frame
 	//Only inliers are kept here
 	//std::unique_ptr<FrameTrackingData> mLastTrackedFrameDat;
@@ -97,6 +102,7 @@ protected:
 	/////////////////////////////////////////////////////
 	// Protected methods
 
+	bool estimateSimilarityFromLastFrame(const Keyframe &frame, Eigen::Matrix3fr &similarity);
 	void findMatches();
 };
 

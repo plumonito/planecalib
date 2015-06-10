@@ -20,6 +20,29 @@
 namespace planecalib {
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// HomographyDistance
+/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+HomographyDistance::HomographyDistance(const Eigen::Vector2i &imageSize)
+{
+	mPoints.push_back(Eigen::Vector2f(0, 0));
+	mPoints.push_back(Eigen::Vector2f(imageSize[0], 0));
+	mPoints.push_back(Eigen::Vector2f(0, imageSize[1]));
+	mPoints.push_back(Eigen::Vector2f(imageSize[0], imageSize[1]));
+}
+
+float HomographyDistance::calculateSq(const Eigen::Matrix3f &h)
+{
+	float totalSq = 0;
+
+	for (auto &p : mPoints)
+	{
+		totalSq += (p-(h*p.homogeneous()).eval().hnormalized()).squaredNorm();
+	}
+	
+	return totalSq;
+}
+
+/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 // HomographyRansac
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 HomographyRansac::HomographyRansac()
@@ -391,9 +414,10 @@ bool HomographyEstimation::estimateSimilarityDirect(const cv::Mat1b &imgRef, con
     return converged;
 }
 
-bool HomographyEstimation::estimateSimilarityDirect(const cv::Mat1b &imgRef, const cv::Mat1b &imgNew, cv::Matx33f &transform)
+bool HomographyEstimation::estimateSimilarityDirect(const cv::Mat1b &imgRef, const cv::Mat1b &imgNew, Eigen::Matrix3fr &transform_)
 {
     bool converged = false;
+	cv::Matx33f transform = eutils::ToCV(transform_);
     cv::Matx33f hInitial = transform;
 
 	cv::Vec2f center = cv::Vec2f((float)(imgRef.cols / 2), (float)(imgRef.rows / 2));
@@ -537,6 +561,7 @@ bool HomographyEstimation::estimateSimilarityDirect(const cv::Mat1b &imgRef, con
     //if(!converged)
     //    LOG("Not converged!");
 
+	transform_ = eutils::FromCV(transform);
     return converged;
 }
 
