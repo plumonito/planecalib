@@ -219,7 +219,7 @@ void MainWindow::draw()
 	//Draw textures
 	mShaders->getTexture().renderTexture(mRefTexture.getTarget(), mRefTexture.getId(), mImageSize, 1.0f);
 	if (!mIsLost)
-		mShaders->getTextureWarp().renderTexture(mCurrentImageTextureTarget, mCurrentImageTextureId, mTrackerPose, 0.5f, mImageSize);
+		mShaders->getTextureWarp().renderTextureFixedAlpha(mCurrentImageTextureTarget, mCurrentImageTextureId, mTrackerPose, 0.5f, mImageSize);
 
 	std::vector<Eigen::Vector2f> pointsSrc;
 	pointsSrc.push_back(Eigen::Vector2f(0, 0));

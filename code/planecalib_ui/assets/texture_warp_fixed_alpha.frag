@@ -8,6 +8,6 @@ varying vec3 vTexCoord;
 
 void main(void)
 {
-	gl_FragColor = texture2DProj(uTexture, vTexCoord);
+    gl_FragColor.rgb = texture2DProj(uTexture, vTexCoord).rgb;
 	gl_FragColor.a = uAlpha;
 }

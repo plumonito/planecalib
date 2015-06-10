@@ -11,9 +11,10 @@ P(3,:) = 1;
 
 HP = H*P;
 
-for i=1:4
+
+for i=1:4    
     for j=1:2
-        name = sprintf('P%d%d',j,i);
+        name = sprintf('P%c%c','a'+i-1,'x'+j-1);
         P2(j,i) = sym(name,'real');
     end
 end
@@ -33,4 +34,7 @@ c=expand(c);
 x = reshape(H',1,9);
 [A,b]=linearSystemFromConstraints(c,x(1:8));
 sol=expand(A\b);
-expand(sol)
+for i=1:length(sol)
+    sol(i) = collect(sol(i));
+end
+sol
