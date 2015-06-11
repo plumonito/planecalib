@@ -10,6 +10,7 @@
 #include "Profiler.h"
 
 #include "flags.h"
+#include "HomographyEstimation.h"
 
 namespace planecalib {
 
@@ -21,23 +22,61 @@ void Map::getFeaturesInView(const Eigen::Matrix3fr &pose, const Eigen::Vector2i 
 {
 	ProfileSection s("getFeaturesInView");
 
-	featuresInView.clear();
-	featuresInView.resize(octaveCount);
+	//Find closest keyframe
+	HomographyDistance hdist(imageSize);
+	Eigen::Matrix3f hinv = pose.inverse();
+
+	float minDistance = std::numeric_limits<float>::infinity();
+	Keyframe *refFrame = NULL;
+	for (auto &framePtr : mKeyframes)
+	{
+		float dist = hdist.calculateSq(hinv, framePtr->getPose());
+		if (dist < minDistance)
+		{
+			minDistance = dist;
+			refFrame = framePtr.get();
+		}
+	}
+
 
 	//Add 3D features
-	for (auto &pfeature : mFeatures)
+	featuresInView.clear();
+	featuresInView.resize(octaveCount);
+	for (auto &mPtr : refFrame->getMeasurements())
 	{
-		Feature &feature = *pfeature;
+		Feature &feature = mPtr->getFeature();
 
 		//Ignore?
 		if (featuresToIgnore.find(&feature) != featuresToIgnore.end())
 			continue;
 
-		FeatureProjectionInfo projection = projectFeature(pose, feature);
-		if (projection.getSourceMeasurement() && projection.getOctave() < octaveCount && eutils::IsInside(imageSize, projection.getPosition()))
+		//Is the feature inside our image?
+		Eigen::Vector2f pos = eutils::HomographyPoint(pose, feature.getPosition());
+		if (!eutils::IsInside(imageSize, pos))
+			continue;
+
+		//Scale
+		Eigen::Vector2f posPlusOne = eutils::HomographyPoint(pose, feature.getPositionPlusOne());
+		Eigen::Vector2f d = pos - posPlusOne;
+		float distSq = d.squaredNorm();
+
+		//Scale too small?
+		if (distSq < 0.8f)
+			continue;
+
+		int octave = 0;
+		while (distSq > 1.5f)
 		{
-			featuresInView[projection.getOctave()].push_back(projection);
+			distSq /= 4;
+			octave++;
 		}
+
+		//Scale too big?
+		if (octave > octaveCount - 1 + 0.2f)
+			continue;
+
+		int octavei = (int)std::roundf(octave);
+		featuresInView[octavei].push_back(FeatureProjectionInfo(&feature, mPtr, octavei, pos));
 	}
 }
 

@@ -138,7 +138,7 @@ bool PoseTracker::trackFrame(std::unique_ptr<Keyframe> frame_)
 		mCurrentPose = Eigen::Matrix3fr::Identity();
 	}
 	mFrame->setPose(mCurrentPose);
-	return true;
+	//return true;
 
 	//Matches
 	findMatches();
