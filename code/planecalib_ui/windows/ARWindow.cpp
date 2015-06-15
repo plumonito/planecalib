@@ -143,21 +143,25 @@ void ARWindow::updateState()
 
 	//Add features
 	mTrackerCamera = &mApp->getSystem().getCamera();
-	mTrackerPoseR = mTracker->mCurrentPoseR;
-	mTrackerPoseT = mTracker->mCurrentPoseT;
+	mTrackerPoseR = mTracker->getPose3D().R;
+	mTrackerPoseT = mTracker->getPose3D().t;
 
 	const float pointAlpha = 0.6f;
 
 	if (mDisplayType == EDisplayType::ShowMatches)
 	{
 		//Get matches from tracker
-		for (auto &match : mTracker->getMatches())
+		const TrackingFrame *frame = mTracker->getFrame();
+		if (frame)
 		{
-			Eigen::Vector4f color = StaticColors::Blue(pointAlpha);
+			for (auto &match : frame->getMatches())
+			{
+				Eigen::Vector4f color = StaticColors::Blue(pointAlpha);
 
-			//Position is in 3D world coordinates
-			mFeatureVertices.push_back(match.getFeature().mPosition3D.homogeneous());
-			mFeatureColors.push_back(color);
+				//Position is in 3D world coordinates
+				mFeatureVertices.push_back(match.getFeature().mPosition3D.homogeneous());
+				mFeatureColors.push_back(color);
+			}
 		}
 	}
 	else

@@ -29,37 +29,33 @@ public:
 
 	int getMatcherSearchRadius() const {return mMatcherSearchRadius;}
 
-	bool trackFrame(std::unique_ptr<Keyframe> frame);
-	bool trackFrameHomography(std::unique_ptr<Keyframe> frame);
-	bool trackFrame3D(std::unique_ptr<Keyframe> frame);
+	bool trackFrame(double timestamp, const cv::Mat3b &imageColor, const cv::Mat1b &imageGray);
 
 	void resync();
 
 	bool isLost() const { return mIsLost; }
 
-	const Eigen::Matrix3fr &getCurrentPose() const { return mCurrentPose; }
-	void setCurrentPose(const Eigen::Matrix3fr &pose) { mCurrentPose = pose; }
+	const Eigen::Matrix3fr &getCurrentPose2D() const;
 
 	const Eigen::Vector2i getImageSize() const {return mImageSize;}
 	const int getOctaveCount() const {return mOctaveCount;}
 
-	const Keyframe *getFrame() const { return mFrame.get(); }
+	const TrackingFrame *getFrame() const { return mFrame.get(); }
 
 	//const cv::Matx23f &getFrameToLastSimilarity() const { return mSimilarityInv; }
 	//const cv::Matx23f &getLastToFrameSimilarity() const { return mSimilarity; }
 
-	const std::vector<FeatureMatch> &getMatches() const { return mMatches; }
-	const std::unordered_map<const Feature*, FeatureMatch*> &getMatchMap() const { return mMatchMap; }
-	const FeatureMatch *getMatch(const Feature *feature) const
-	{
-		auto it = mMatchMap.find(feature);
-		return (it == mMatchMap.end()) ? NULL : it->second;
-	}
-
 	int getMatchInlierCount() const { return mMatchInlierCount; }
-	const std::vector<MatchReprojectionErrors> &getReprojectionErrors() const { return mReprojectionErrors; }
 
 	bool mForceRansac;
+	
+	//stats
+	int mTotalMatchAttempts;
+	int mTotalMatchSuccess;
+
+	//Pose
+	const Eigen::Matrix3fr &getPose2D() const { return mPose2D; }
+	const Pose3D &getPose3D() const { return mPose3D; }
 
 protected:
 	/////////////////////////////////////////////////////
@@ -74,36 +70,32 @@ protected:
 
 	int mMatcherSearchRadius; //Contrary to the flag, this is in image pixel units
 
-	Eigen::Matrix3fr mCurrentPose; //This is a homography, used before calibration
-public:
-	Eigen::Matrix3fr mCurrentPoseR; //This is a rotation, used after calibration
-	Eigen::Vector3f mCurrentPoseT; //This is a rotation, used after calibration
-protected:
+	Eigen::Matrix3fr mPose2D; //This is a homography, used before calibration
+	Pose3D mPose3D;	//This is a rigid pose, used after calibration
+
+	Eigen::Matrix3fr mLastPose2D;
 
 	std::unique_ptr<HomographyEstimation> mHomographyEstimator;
 
 	//Data from the previous frame
 	//Only inliers are kept here
 	//std::unique_ptr<FrameTrackingData> mLastTrackedFrameDat;
-	std::unique_ptr<Keyframe> mLastFrame;
-	std::vector<FeatureMatch> mLastMatches;
+	std::unique_ptr<TrackingFrame> mLastFrame;
 
 	//Data from the current frame
-	std::unique_ptr<Keyframe> mFrame;
+	std::unique_ptr<TrackingFrame> mFrame;
 
 	std::vector<std::vector<FeatureProjectionInfo>> mFeaturesInView; //Outer vector is of octaves, inner of projections
 
-	std::vector<FeatureMatch> mMatches;
-	std::unordered_map<const Feature*, FeatureMatch *> mMatchMap; //Second is pointer into mMatches
-
 	int mMatchInlierCount;
-	std::vector<MatchReprojectionErrors> mReprojectionErrors;	//Same index as mMatches
 
 	/////////////////////////////////////////////////////
 	// Protected methods
 
-	bool estimateSimilarityFromLastFrame(const Keyframe &frame, Eigen::Matrix3fr &similarity);
-	void findMatches();
+	bool estimateSimilarityFromLastFrame(const TrackingFrame &frame, Eigen::Matrix3fr &similarity);
+	void findMatches(const Eigen::Matrix3fr &poseGuess);
+	bool trackFrameHomography(const Eigen::Matrix3fr &poseGuess);
+	bool trackFrame3D();
 };
 
 } /* namespace dtslam */

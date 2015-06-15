@@ -49,157 +49,146 @@ void PoseTracker::init(const Eigen::Vector2i &imageSize, int octaveCount)
 	//mPoseEstimator->init(mCamera, (float)FLAGS_TrackerOutlierPixelThreshold);
 }
 
-//const FeatureMatch *PoseTracker::getMatch(const SlamFeature *feature) const
-//{
-//	auto it = mMatchMap.find(feature);
-//	if (it == mMatchMap.end())
-//		return NULL;
-//	else
-//		return it->second;
-//}
+const Eigen::Matrix3fr &PoseTracker::getCurrentPose2D() const 
+{ 
+	return mPose2D; 
+}
 
 void PoseTracker::resetTracking(Map *map, const Eigen::Matrix3fr &initialPose)
 {
 	mMap = map;
-	mCurrentPose = initialPose;
+	mLastPose2D = mPose2D = initialPose;
 	mIsLost = true;
 
 	//Forget all previous matches
 	mLastFrame.reset(NULL);
-	mLastMatches.clear();
-
-	//Forget current frame
 	mFrame.reset(NULL);
 	mFeaturesInView.clear();
 	mFeaturesInView.resize(mOctaveCount);
-	mMatches.clear();
-	mReprojectionErrors.clear();
 }
 
-bool PoseTracker::trackFrame(std::unique_ptr<Keyframe> frame_)
+bool PoseTracker::trackFrame(double timestamp, const cv::Mat3b &imageColor, const cv::Mat1b &imageGray)
 {
 	ProfileSection s("trackFrame");
 
-
 	//Save old data 
+	mLastPose2D = mPose2D;
 	mLastFrame.reset(NULL);
-	mLastMatches.clear();
 	if (mFrame)
 	{
 		mLastFrame = std::move(mFrame);
 
-		for (int i = 0, end = mMatches.size(); i != end; ++i)
-		{
-			if (mReprojectionErrors[i].isInlier)
-			{
-				mLastMatches.push_back(mMatches[i]);
-				//featuresToIgnore.insert(&mMatches[i].getFeature());
-			}
-		}
+		//Remove outliers
+		std::remove_if(mLastFrame->getMatches().begin(), mLastFrame->getMatches().end(), 
+			[](FeatureMatch &match){ return !match.getReprojectionErrors().isInlier; });
 	}
 
 	//Reset new frame data
-	mFrame = std::move(frame_);
+	mFrame.reset(new TrackingFrame());
+	mFrame->initImageData(imageColor, imageGray);
+	mFrame->setTimestamp(timestamp);
+
 	mFeaturesInView.clear();
 	mFeaturesInView.resize(mOctaveCount);
-	mMatches.clear();
-	mMatchMap.clear();
-	mReprojectionErrors.clear();
 
-	//Find closest keyframe
-	auto &keyframes = mMap->getKeyframes();
-	HomographyDistance hdist(mImageSize);
-	Eigen::Matrix3f hinv = mCurrentPose.inverse();
-	
-	float minDistance = std::numeric_limits<float>::infinity();
-	Keyframe *refFrame = NULL;
-	for (auto &framePtr : mMap->getKeyframes())
-	{
-		float dist = hdist.calculateSq(hinv, framePtr->getPose());
-		if (dist < minDistance)
-		{
-			minDistance = dist;
-			refFrame = framePtr.get();
-		}
-	}
+	////Find closest keyframe
+	//auto &keyframes = mMap->getKeyframes();
+	//HomographyDistance hdist(mImageSize);
+	//Eigen::Matrix3f hinv = mCurrentPose.inverse();
+	//
+	//float minDistance = std::numeric_limits<float>::infinity();
+	//Keyframe *refFrame = NULL;
+	//for (auto &framePtr : mMap->getKeyframes())
+	//{
+	//	float dist = hdist.calculateSq(hinv, framePtr->getPose());
+	//	if (dist < minDistance)
+	//	{
+	//		minDistance = dist;
+	//		refFrame = framePtr.get();
+	//	}
+	//}
 
 	//MYAPP_LOG << "Closest keyframe: " << (minIt - distances.begin()) << "\n";
 
 	//Optical alignment
+	Eigen::Matrix3fr poseGuess;
 	if (mLastFrame)
 	{
 		Eigen::Matrix3fr similarity;
 		estimateSimilarityFromLastFrame(*mFrame, similarity);
 
-		mCurrentPose = mLastFrame->getPose()*similarity;
+		poseGuess = mLastPose2D*similarity;
 	}
 	else
 	{
-		mCurrentPose = Eigen::Matrix3fr::Identity();
+		poseGuess = Eigen::Matrix3fr::Identity();
 	}
-	mFrame->setPose(mCurrentPose);
-	//return true;
 
 	//Matches
-	findMatches();
+	findMatches(poseGuess);
 
 	//Estimate pose
 	if (mMap->getIs3DValid())
-		trackFrame3D(std::move(frame_));
+		trackFrame3D();
 	else
-		trackFrameHomography(std::move(frame_));
+		trackFrameHomography(poseGuess);
 
 	//Build match map
-	for (auto &match : mMatches)
-		mMatchMap.insert(std::make_pair(&match.getFeature(), &match));
+	mFrame->createMatchMap();
 
 	return !mIsLost;
 }
 
-bool PoseTracker::estimateSimilarityFromLastFrame(const Keyframe &frame, Eigen::Matrix3fr &similarity_)
+bool PoseTracker::estimateSimilarityFromLastFrame(const TrackingFrame &frame, Eigen::Matrix3fr &similarity_)
 {
 	cv::Matx23f similarity = cv::Matx23f::eye(); //Identity is used as the initial guess
-	if (mLastFrame)
-	{
-		ProfileSection ss("estimateSimilarity");
-		bool res = mHomographyEstimator->estimateSimilarityDirect(mLastFrame->getSBI(), mLastFrame->getSBIdx(), mLastFrame->getSBIdy(), frame.getSBI(), similarity);
 
-		//Scale similarity matrix
-		//similarity = scaleUp*similarity*scaleDown
-		const float scale = (float)mImageSize[0] / frame.getSBI().cols;
-		similarity(0, 2) *= scale;
-		similarity(1, 2) *= scale;
-		similarity_ << similarity(0, 0), similarity(0, 1), similarity(0, 2), similarity(1, 0), similarity(1, 1), similarity(1, 2), 0, 0, 1;
-		return res;
-	}
-	else
-	{
-		return false;
-	}
+	ProfileSection ss("estimateSimilarity");
+	bool res = mHomographyEstimator->estimateSimilarityDirect(mLastFrame->getSBI(), mLastFrame->getSBIdx(), mLastFrame->getSBIdy(), frame.getSBI(), similarity);
+
+	//Scale similarity matrix
+	//similarity = scaleUp*similarity*scaleDown
+	const float scale = (float)mImageSize[0] / frame.getSBI().cols;
+	similarity(0, 2) *= scale;
+	similarity(1, 2) *= scale;
+	similarity_ << similarity(0, 0), similarity(0, 1), similarity(0, 2), similarity(1, 0), similarity(1, 1), similarity(1, 2), 0, 0, 1;
+	return res;
 }
 
-void PoseTracker::findMatches()
+void PoseTracker::findMatches(const Eigen::Matrix3fr &poseGuess)
 {
-	const int kMatchThresholdSq0 = 40 * 40;
+	const int kDistanceThresholdSq0 = 40 * 40;
 	const float kRatioThreshold = 0.8f;
 	const int kMinScoreThreshold = 50;
+
+	mTotalMatchAttempts = mTotalMatchSuccess = 0;
 
 	std::unordered_set<const Feature*> featuresToIgnore;
 
 	//Get features in view
-	mMap->getFeaturesInView(mCurrentPose, mImageSize, mOctaveCount, featuresToIgnore, mFeaturesInView);
+	mMap->getFeaturesInView(poseGuess, mImageSize, mOctaveCount, featuresToIgnore, mFeaturesInView);
+	if (mFeaturesInView.empty() || mFeaturesInView[0].empty())
+		return;
+
+	//Warp
+	Keyframe *refFrame = &mFeaturesInView[0][0].getSourceMeasurement()->getKeyframe();
+	Eigen::Matrix3fr warpHomography = poseGuess * refFrame->getPose().inverse();
+
+	mFrame->createKeypoints(warpHomography);
+
+	Eigen::Matrix3fr warpHomographyInv = warpHomography.inverse();
 
 	//Match
 	//int octave = 0;
 	for (int octave = mOctaveCount - 1; octave >= 0; octave--)
 	{
 		const int scale = 1 << octave;
-		const int kMatchThresholdSq = kMatchThresholdSq0 * (scale*scale);
+		const int kDistanceThresholdSq = kDistanceThresholdSq0 * (scale*scale);
 		{
 			ProfileSection sm("matching");
 
-			auto &imgKeypoints = mFrame->getKeypoints(octave);
-			auto &imgDesc = mFrame->getDescriptors(octave);
+			auto &imgKeypoints = mFrame->getWarpedKeypoints(octave);
+			auto &imgDesc = mFrame->getWarpedDescriptors(octave);
 			//std::vector<cv::Point2f> refPoints, imgPoints;
 
 			for (auto &projection : mFeaturesInView[octave])
@@ -209,16 +198,19 @@ void PoseTracker::findMatches()
 
 				auto &refDesc_i = m.getDescriptor();
 
+				mTotalMatchAttempts++;
+
 				//Find best match
 				int bestScore = std::numeric_limits<int>::max();
-				Eigen::Vector2f bestPosition;
+				cv::KeyPoint bestPosition;
 				const uchar *bestDescriptor;
 				int secondScore = std::numeric_limits<int>::max();
 				cv::Hamming distFunc;
 				for (int j = 0; j < (int)imgKeypoints.size(); j++)
 				{
-					auto diff = projection.getPosition() - eutils::FromCV(imgKeypoints[j].pt);
-					if (diff.squaredNorm() < kMatchThresholdSq || mIsLost)
+					//auto diff = projection.getPosition() - eutils::FromCV(imgKeypoints[j].pt);
+					auto diff = m.getPosition() - eutils::FromCV(imgKeypoints[j].pt);
+					if (diff.squaredNorm() < kDistanceThresholdSq || mIsLost)
 					{
 						const uchar *imgDesc_j = &imgDesc(j, 0);
 						int score = distFunc(refDesc_i.data(), imgDesc_j, 32);
@@ -226,7 +218,7 @@ void PoseTracker::findMatches()
 						{
 							secondScore = bestScore;
 							bestScore = score;
-							bestPosition = eutils::FromCV(imgKeypoints[j].pt);
+							bestPosition = imgKeypoints[j];
 							bestDescriptor = imgDesc_j;
 						}
 						else if (score < secondScore)
@@ -248,7 +240,12 @@ void PoseTracker::findMatches()
 
 				if (add)
 				{
-					mMatches.push_back(FeatureMatch(&m, octave, bestPosition, bestDescriptor, 0));
+					mTotalMatchSuccess++;
+
+					//Unwarp position
+					Eigen::Vector2f realPosition = eutils::HomographyPoint(warpHomography, eutils::FromCV(bestPosition.pt));
+
+					mFrame->getMatches().push_back(FeatureMatch(&m, octave, bestPosition, realPosition, 0));
 				}
 			}
 		}
@@ -257,15 +254,17 @@ void PoseTracker::findMatches()
 	//MYAPP_LOG << "Matches=" << refPoints.size() << "\n";
 }
 
-bool PoseTracker::trackFrameHomography(std::unique_ptr<Keyframe> frame_)
+bool PoseTracker::trackFrameHomography(const Eigen::Matrix3fr &poseGuess)
 {
 	const int kMinInlierCount = 20;
 	ProfileSection s("trackFrameHomography");
 
+	int matchCount = mFrame->getMatches().size();
+
 	//Homography
-	if (mMatches.size() < kMinInlierCount)
+	if (matchCount < kMinInlierCount)
 	{
-		MYAPP_LOG << "Lost in 2D, only " << mMatches.size() << " matches\n";
+		MYAPP_LOG << "Lost in 2D, only " << matchCount << " matches\n";
 		mIsLost = true;
 	}
 	else
@@ -273,9 +272,8 @@ bool PoseTracker::trackFrameHomography(std::unique_ptr<Keyframe> frame_)
 		//Create cv vectors
 		std::vector<Eigen::Vector2f> refPoints, imgPoints;
 		std::vector<float> scales;
-		for (int i = 0; i < (int)mMatches.size(); i++)
+		for (auto &match : mFrame->getMatches())
 		{
-			auto &match = mMatches[i];
 			refPoints.push_back(match.getFeature().getPosition());
 			imgPoints.push_back(match.getPosition());
 			scales.push_back((float)(1<<match.getOctave()));
@@ -290,14 +288,14 @@ bool PoseTracker::trackFrameHomography(std::unique_ptr<Keyframe> frame_)
 			ProfileSection s("homographyRansac");
 
 			HomographyRansac ransac;
-			ransac.setParams(3, 10, 100, (int)(0.99f * mMatches.size()));
+			ransac.setParams(3, 10, 100, (int)(0.99f * matchCount));
 			ransac.setData(&refPoints, &imgPoints, &scales);
 			ransac.doRansac();
 			H = ransac.getBestModel().cast<float>();
-			MYAPP_LOG << "Homography ransac: inliers=" << ransac.getBestInlierCount() << "/" << mMatches.size() << "\n";
+			MYAPP_LOG << "Homography ransac: inliers=" << ransac.getBestInlierCount() << "/" << matchCount << "\n";
 		}
 		else
-			H = mCurrentPose;
+			H = poseGuess;
 
 		//Refine
 		HomographyEstimation hest;
@@ -309,7 +307,7 @@ bool PoseTracker::trackFrameHomography(std::unique_ptr<Keyframe> frame_)
 		//std::vector<FeatureMatch> goodMatches;
 		//int inlierCountBefore = mask.sum();
 		mMatchInlierCount = 0;
-		for (int i = 0; i<(int)mMatches.size(); i++)
+		for (int i = 0; i<(int)matchCount; i++)
 		{
 			if (inliersVec[i])
 				mMatchInlierCount++;
@@ -321,8 +319,7 @@ bool PoseTracker::trackFrameHomography(std::unique_ptr<Keyframe> frame_)
 
 		if (mMatchInlierCount > kMinInlierCount)
 		{
-			mCurrentPose = H;
-			mFrame->setPose(mCurrentPose);
+			mPose2D = H;
 			mIsLost = false;
 		}
 		else
@@ -333,26 +330,24 @@ bool PoseTracker::trackFrameHomography(std::unique_ptr<Keyframe> frame_)
 	}
 
 	//Eval
-	int matchCount = mMatches.size();
-	mReprojectionErrors.resize(matchCount);
-	for (int i = 0; i < matchCount; i++)
+	for (auto &match : mFrame->getMatches())
 	{
-		auto &match = mMatches[i];
-		
-		mReprojectionErrors[i].isInlier = true;
+		match.getReprojectionErrors().isInlier = true;
 	}
 
 	return !mIsLost;
 }
 
-bool PoseTracker::trackFrame3D(std::unique_ptr<Keyframe> frame_)
+bool PoseTracker::trackFrame3D()
 {
 	const int kMinInlierCount = 20;
 	ProfileSection s("trackFrame3D");
 
-	if (mMatches.size() < kMinInlierCount)
+	int matchCount = mFrame->getMatches().size();
+
+	if (matchCount < kMinInlierCount)
 	{
-		MYAPP_LOG << "Lost in 3D, only " << mMatches.size() << " matches\n";
+		MYAPP_LOG << "Lost in 3D, only " << matchCount << " matches\n";
 		mIsLost = true;
 	}
 	else
@@ -361,7 +356,7 @@ bool PoseTracker::trackFrame3D(std::unique_ptr<Keyframe> frame_)
 		std::vector<Eigen::Vector2f> imgPoints;
 		std::vector<float> scales;
 
-		for (auto &match : mMatches)
+		for (auto &match : mFrame->getMatches())
 		{
 			refPoints.push_back(match.getFeature().mPosition3D);
 			imgPoints.push_back(match.getPosition());
@@ -371,17 +366,18 @@ bool PoseTracker::trackFrame3D(std::unique_ptr<Keyframe> frame_)
 		if (mIsLost)
 		{
 			PnPRansac ransac;
-			ransac.setParams(3, 10, 100, (int)(0.9f*mMatches.size()));
+			ransac.setParams(3, 10, 100, (int)(0.9f*matchCount));
 			ransac.setData(&refPoints, &imgPoints, &scales, mMap->mCamera.get());
 			ransac.doRansac();
-			mCurrentPoseR = ransac.getBestModel().first.cast<float>();
-			mCurrentPoseT = ransac.getBestModel().second.cast<float>();
+			mPose3D.R = ransac.getBestModel().first.cast<float>();
+			mPose3D.t = ransac.getBestModel().second.cast<float>();
 		}
 
 		PnPRefiner refiner;
 		refiner.setCamera(mMap->mCamera.get());
 		refiner.setOutlierThreshold(3);
-		refiner.refinePose(mMatches, mCurrentPoseR, mCurrentPoseT, mMatchInlierCount, mReprojectionErrors);
+		std::vector<MatchReprojectionErrors> reprojectionErrors;
+		refiner.refinePose(mFrame->getMatches(), mPose3D.R, mPose3D.t, mMatchInlierCount, reprojectionErrors);
 
 		//MYAPP_LOG << "Inliers before=" << inlierCountBefore << ", inliers after=" << inlierCountAfter << "\n";
 
@@ -392,19 +388,16 @@ bool PoseTracker::trackFrame3D(std::unique_ptr<Keyframe> frame_)
 		Eigen::Vector3f refT = refFrame.mPose3DT - refR*Eigen::Vector3f::UnitZ();
 		Eigen::Matrix3fr worldToRefH = mMap->mCamera->getK() * (refR + refT*Eigen::Vector3f::UnitZ().transpose());
 
-		Eigen::Matrix3fr &imgR = mCurrentPoseR;
-		Eigen::Vector3f imgT = mCurrentPoseT - imgR*Eigen::Vector3f::UnitZ();
+		Eigen::Matrix3fr &imgR = mPose3D.R;
+		Eigen::Vector3f imgT = mPose3D.t - imgR*Eigen::Vector3f::UnitZ();
 		Eigen::Matrix3fr worldToImgH = mMap->mCamera->getK() * (imgR + imgT*Eigen::Vector3f::UnitZ().transpose());
 
-		mCurrentPose = worldToImgH*worldToRefH.inverse();
+		mPose2D = worldToImgH*worldToRefH.inverse();
 
 		
 
 		if (mMatchInlierCount > kMinInlierCount)
 		{
-			mFrame->mPose3DR = mCurrentPoseR;
-			mFrame->mPose3DT = mCurrentPoseT;
-			mFrame->setPose(mCurrentPose);
 			mIsLost = false;
 		}
 		else

@@ -387,7 +387,7 @@ void TestWindow::updateState()
 	if (mApp->getSystem().getMap().getKeyframes()[0].get() != mRefKeyframe)
 		loadRefFrame();
 
-	const Keyframe *frame = mApp->getSystem().getTracker().getFrame();
+	const TrackingFrame *frame = mApp->getSystem().getTracker().getFrame();
 	if (!frame)
 		return;
 
@@ -398,7 +398,7 @@ void TestWindow::updateState()
 	cv::Mat1s imgDx;
 	cv::Mat1s imgDy;
 
-	img = frame->getImage(0);
+	img = frame->getOriginalPyramid()[0];
 	cv::Sobel(img, imgDx, CV_16S, 1, 0, 1);
 	cv::Sobel(img, imgDy, CV_16S, 0, 1, 1);
 

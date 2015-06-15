@@ -47,7 +47,7 @@ bool MainWindow::init(PlaneCalibApp *app, const Eigen::Vector2i &imageSize)
 
 	mRefTexture.create(GL_RGB, eutils::ToSize(imageSize));
 	mRefTexture.update(mSystem->getMap().getKeyframes()[0]->getColorImage());
-	mDisplayTexture.create(GL_RGB, eutils::ToSize(imageSize));
+	mDisplayTexture.create(GL_LUMINANCE, eutils::ToSize(imageSize));
 
 	return true;
 }
@@ -58,37 +58,18 @@ void MainWindow::updateState()
 
 	mTracker = &mSystem->getTracker();
 	mMap = &mSystem->getMap();
+	const TrackingFrame *trackingFrame = mTracker->getFrame();
 
-	//Display frame
-	Keyframe *displayFrame;
+	//Check display frame idx
 	if (mDisplayFrameIdx < -1)
 		mDisplayFrameIdx = mMap->getKeyframes().size() - 1;
 	else if (mDisplayFrameIdx >= mMap->getKeyframes().size())
 		mDisplayFrameIdx = -1;
 
-	mDisplayPoints.clear();
-
-	if (mDisplayFrameIdx == -1)
-		displayFrame = NULL;
-	else
-	{
-		displayFrame = mMap->getKeyframes()[mDisplayFrameIdx].get();
-		mDisplayTexture.update(displayFrame->getColorImage());
-
-		for (auto &mPtr : displayFrame->getMeasurements())
-		{
-			auto &m = *mPtr;
-			mDisplayPoints.push_back(m.getPosition());
-		}
-		//for (int octave = 0; octave < displayFrame->getOctaveCount(); octave++)
-		//for (auto &mPtr : displayFrame->getKeypoints(octave))
-		//{
-		//	//auto &m = *mPtr;
-		//	mDisplayPoints.push_back(eutils::FromCV(mPtr.pt));
-		//}
-	}
 
 	//Clear all
+	mDisplayPoints.clear();
+	mDisplayColors.clear();
 	mImagePoints.clear();
 	mImagePointColors.clear();
 	mImageLines.clear();
@@ -96,8 +77,57 @@ void MainWindow::updateState()
 	mFrameHomographies.clear();
 	mFrameColors.clear();
 
-	mTrackerPose = mTracker->getCurrentPose();
+	mTrackerPose = mTracker->getCurrentPose2D();
 	mIsLost = mTracker->isLost();
+
+	//Display points for small thumbnail
+	const Keyframe *displayFrame;
+	Eigen::Vector4f colors[] = { StaticColors::Blue(), StaticColors::Green(), StaticColors::Red() };
+	if (mDisplayFrameIdx == -1)
+	{
+		displayFrame = NULL;
+		//mDisplayTextureTarget = mCurrentImageTextureTarget;
+		//mDisplayTextureId = mCurrentImageTextureId;
+		mDisplayTextureTarget = mDisplayTexture.getTarget();
+		mDisplayTextureId = mDisplayTexture.getId();
+
+		if (trackingFrame && trackingFrame->getWarpedPyramid().getOctaveCount())
+		{
+			mDisplayTexture.update(trackingFrame->getWarpedPyramid()[0]);
+			Eigen::Matrix3fr H = trackingFrame->getWarpHomography().inverse();
+			for (auto &m : trackingFrame->getMatches())
+			{
+				mDisplayPoints.push_back(eutils::HomographyPoint(H, m.getPosition()));
+				mDisplayColors.push_back(colors[m.getOctave()]);
+			}
+		}
+
+	}
+	else
+	{
+		displayFrame = mMap->getKeyframes()[mDisplayFrameIdx].get();
+		mDisplayTexture.update(displayFrame->getImage(0));
+		mDisplayTextureTarget = mDisplayTexture.getTarget();
+		mDisplayTextureId = mDisplayTexture.getId();
+
+		for (auto &mPtr : displayFrame->getMeasurements())
+		{
+			auto &m = *mPtr;
+			mDisplayPoints.push_back(m.getPosition());
+			mDisplayColors.push_back(colors[m.getOctave()]);
+		}
+	}
+
+	// Use this to show keypoints
+	//int maxOctave = std::min(3, mTracker->getFrame()->getOctaveCount());
+	//for (int octave = 0; octave < maxOctave; octave++)
+	//{
+	//	for (auto &kp : mTracker->getFrame()->getKeypoints(octave))
+	//	{
+	//		mDisplayPoints.push_back(eutils::FromCV(kp.pt));
+	//		mDisplayColors.push_back(colors[octave]);
+	//	}
+	//}
 
 	//Add features
 	//mTrackerPose = &mTracker->getCurrentPose();
@@ -106,11 +136,13 @@ void MainWindow::updateState()
 		const Feature &feature = *p;
 
 		Eigen::Vector4f color;
-		auto match = mTracker->getMatch(&feature);
+		const FeatureMatch *match=NULL;
+		if (trackingFrame)
+			match = trackingFrame->getMatch(&feature);
 		if (match)
 		{
 			color = StaticColors::Blue();
-			Eigen::Vector2f pos = (mTracker->getCurrentPose()*match->getPosition().homogeneous()).eval().hnormalized();
+			Eigen::Vector2f pos = eutils::HomographyPoint(mTracker->getCurrentPose2D(), match->getPosition());
 			//Add line
 			mImageLines.push_back(feature.getPosition());
 			mImageLines.push_back(pos);
@@ -147,11 +179,13 @@ void MainWindow::updateState()
 	}
 
 	Eigen::Vector4f color;
-	mFrameHomographies.push_back(mSystem->getTracker().getCurrentPose().inverse());
+	mFrameHomographies.push_back(mSystem->getTracker().getCurrentPose2D().inverse());
 	if (mSystem->getTracker().isLost())
 		color = StaticColors::Red();
 	else if (mSystem->mKeyframeAdded)
 		color = StaticColors::Green();
+	else if (mDisplayFrameIdx == -1)
+		color = StaticColors::Blue();
 	else
 		color = StaticColors::White();
 	mFrameColors.push_back(color);
@@ -182,34 +216,14 @@ void MainWindow::draw()
 {
 	glPointSize(3.0f);
 
-	//if (mDisplayFrameIdx != -1)
-	//{
-	//	mTiler.setActiveTile(1);
-	//	mShaders->getTexture().setMVPMatrix(mTiler.getMVP());
-	//	mShaders->getTexture().renderTexture(mDisplayTexture.getTarget(), mDisplayTexture.getId(), mImageSize, 1.0f);
-	//	
-	//	mShaders->getColor().setMVPMatrix(mTiler.getMVP());
-	//	mShaders->getColor().drawVertices(GL_POINTS, mDisplayPoints.data(), mDisplayPoints.size(), StaticColors::Green());
-	//}
-
 	mTiler.setActiveTile(1);
+
 	mShaders->getTexture().setMVPMatrix(mTiler.getMVP());
-	mShaders->getTexture().renderTexture(mCurrentImageTextureTarget, mCurrentImageTextureId, mImageSize, 1.0f);
+	mShaders->getTexture().renderTexture(mDisplayTextureTarget, mDisplayTextureId, mImageSize, 1.0f);
+			
 	mShaders->getColor().setMVPMatrix(mTiler.getMVP());
-	if (mTracker->getFrame())
-	{
-		Eigen::Vector4f colors[] = { StaticColors::Blue(), StaticColors::Green(), StaticColors::Red() };
-		int maxOctave = std::min(3, mTracker->getFrame()->getOctaveCount());
-		for (int octave = 0; octave < maxOctave; octave++)
-		{
-			std::vector<Eigen::Vector2f> points;
-			for (auto &kp : mTracker->getFrame()->getKeypoints(octave))
-			{
-				points.push_back(eutils::FromCV(kp.pt));
-			}
-			mShaders->getColor().drawVertices(GL_POINTS, points.data(), points.size(), colors[octave]);
-		}
-	}
+	mShaders->getColor().drawVertices(GL_POINTS, mDisplayPoints.data(), mDisplayColors.data(), mDisplayPoints.size());
+
 
 	mTiler.setActiveTile(0);
 	mShaders->getTexture().setMVPMatrix(mTiler.getMVP());

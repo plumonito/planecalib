@@ -459,9 +459,8 @@ void PlaneCalibApp::draw(void)
 			TextRendererStream ts(mShaders.getText());
 			int frameCount = mSystem->getMap().getKeyframes().size();
 			int count3D = mSystem->getMap().getFeatures().size();
-		//	if (!FLAGS_DisableRegions)
-		//		ts << "Regions: " << mSlam.getMap().getRegions().size() << ", ";
-			ts << "Keyframes: " << frameCount << ", Features: " << count3D << "";
+
+			ts << "Keyframes: " << frameCount << ", Features: " << count3D << ", Matches: " << mSystem->getTracker().mTotalMatchSuccess << "/" << mSystem->getTracker().mTotalMatchAttempts;
 
 		//	switch (mSlam.getTracker().getPoseType() )
 		//	{

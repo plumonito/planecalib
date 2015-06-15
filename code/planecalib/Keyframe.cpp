@@ -18,6 +18,64 @@
 
 namespace planecalib {
 
+const Feature &FeatureMatch::getFeature() const 
+{
+	return mSourceMeasurement->getFeature(); 
+}
+
+///////////////////////////////////
+// TrackingFrame class
+TrackingFrame::TrackingFrame()
+{
+}
+
+TrackingFrame::~TrackingFrame()
+{
+}
+
+void TrackingFrame::initImageData(const cv::Mat3b &imageColor, const cv::Mat1b &imageGray)
+{
+	mColorImage = imageColor;
+
+	mOriginalPyramid.create(imageGray, FLAGS_PyramidMaxTopLevelWidth);
+
+	//SBI
+	mSBI = mOriginalPyramid.getTopLevel();
+	while (mSBI.cols > FLAGS_SBIMaxWidth)
+	{
+		cv::Mat1b temp;
+		cv::pyrDown(mSBI, temp);
+		mSBI = temp;
+	}
+
+	//SBI derivatives
+	cvutils::CalculateDerivatives(mSBI, mSBIdx, mSBIdy);
+}
+
+void TrackingFrame::createKeypoints(const Eigen::Matrix3fr &warpHomography)
+{
+	cv::Mat1b warpedImage;
+
+	mWarpHomography = warpHomography;
+
+	warpedImage.create(mOriginalPyramid[0].size());
+	cv::warpPerspective(mOriginalPyramid[0], warpedImage, eutils::ToCV(warpHomography), mOriginalPyramid[0].size(), cv::WARP_INVERSE_MAP, cv::BORDER_CONSTANT, 0);
+
+	mWarpedPyramid.create(warpedImage, FLAGS_PyramidMaxTopLevelWidth);
+
+	Keyframe::CreateKeypoints(mWarpedPyramid, mWarpedKeypoints, mWarpedDescriptorBuffers, mWarpedDescriptors);
+}
+
+void TrackingFrame::createMatchMap()
+{
+	mMatchMap.clear();
+	for (auto &match : mMatches)
+		mMatchMap.insert(std::make_pair(&match.getFeature(), &match));
+}
+
+///////////////////////////////////
+// Keyframe class
+
 Keyframe::Keyframe() :
 		mKeypoints(new std::vector<std::vector<cv::KeyPoint>>())
 {
@@ -37,7 +95,7 @@ Keyframe::~Keyframe()
 void Keyframe::init(const cv::Mat3b &imageColor, const cv::Mat1b &imageGray)
 {
 	mColorImage = imageColor;
-
+	
 	mPyramid.create(imageGray, FLAGS_PyramidMaxTopLevelWidth);
 
 	//SBI
@@ -52,42 +110,69 @@ void Keyframe::init(const cv::Mat3b &imageColor, const cv::Mat1b &imageGray)
 	//SBI derivatives
 	cvutils::CalculateDerivatives(mSBI, mSBIdx, mSBIdy);
 
+	createKeypoints();
+}
+
+void Keyframe::init(const TrackingFrame &other)
+{
+	mColorImage = other.getColorImage();
+	mPyramid = other.getOriginalPyramid();
+	mSBI = other.getSBI();
+	mSBIdx = other.getSBIdx();
+	mSBIdy = other.getSBIdy();
+	mTimestamp = other.getTimestamp();
+
+	createKeypoints();
+}
+
+void Keyframe::CreateKeypoints(const ImagePyramid1b &pyramid, std::vector<std::vector<cv::KeyPoint>> &keypoints, std::vector<cv::Mat1b> &descriptorBuffers, std::vector<EigenDescriptorMap> &descriptors)
+{
+	keypoints.clear();
+	descriptorBuffers.clear();
+	descriptors.clear();
+
 	//Extract key points
-	mKeypoints->resize(mPyramid.getOctaveCount());
-	mDescriptors.resize(mPyramid.getOctaveCount());
-	mDescriptorsEigen.reserve(mPyramid.getOctaveCount());
+	keypoints.resize(pyramid.getOctaveCount());
+	descriptorBuffers.resize(pyramid.getOctaveCount());
+	descriptors.reserve(pyramid.getOctaveCount());
 
 	cv::Ptr<cv::ORB> orb = cv::ORB::create(2000, 2, 1);
+	orb->setEdgeThreshold(0);
 
-	for(int octave=0; octave<mPyramid.getOctaveCount(); octave++)
+	for (int octave = 0; octave < pyramid.getOctaveCount(); octave++)
 	{
-	    const int scale = 1<<octave;
+		const int scale = 1 << octave;
 
 		//std::vector<cv::KeyPoint> keypointsAll;
 		//cv::Mat1b descriptorsAll;
-		std::vector<cv::KeyPoint> &keypointsAll = mKeypoints->at(octave);
-		cv::Mat1b &descriptorsAll = mDescriptors[octave];
+		std::vector<cv::KeyPoint> &keypointsAll = keypoints[octave];
+		cv::Mat1b &descriptorsAll = descriptorBuffers[octave];
 
-	    //ORB features
-		orb->detectAndCompute(mPyramid[octave], cv::noArray(), keypointsAll, descriptorsAll);
+		//ORB features
+		orb->detectAndCompute(pyramid[octave], cv::noArray(), keypointsAll, descriptorsAll);
 
 		//Fix scale features
 		for (int i = 0; i < (int)keypointsAll.size(); i++)
-	    {
+		{
 			auto &keypoint = keypointsAll[i];
-			void *descriptor = &descriptorsAll(i,0);
+			void *descriptor = &descriptorsAll(i, 0);
 
 			keypoint.octave = octave;
 			keypoint.pt = scale*keypoint.pt;
 			keypoint.size *= scale;
-	    }
+		}
 
-		if (mDescriptors[octave].empty())
-			mDescriptors[octave].create(1, 32);
+		if (descriptorBuffers[octave].empty())
+			descriptorBuffers[octave].create(1, 32);
 
 		//Eigen
-		mDescriptorsEigen.push_back(EigenDescriptorMap(mDescriptors[octave].data, mDescriptors[octave].rows, mDescriptors[octave].cols));
-    }
+		descriptors.push_back(EigenDescriptorMap(descriptorBuffers[octave].data, descriptorBuffers[octave].rows, descriptorBuffers[octave].cols));
+	}
+}
+
+void Keyframe::createKeypoints()
+{
+	CreateKeypoints(mPyramid, *mKeypoints, mDescriptors, mDescriptorsEigen);
 }
 
 void Keyframe::freeSpace()

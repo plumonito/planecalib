@@ -18,9 +18,12 @@ namespace planecalib {
 // Map
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-void Map::getFeaturesInView(const Eigen::Matrix3fr &pose, const Eigen::Vector2i &imageSize, int octaveCount, std::unordered_set<const Feature*> &featuresToIgnore, std::vector<std::vector<FeatureProjectionInfo>> &featuresInView)
+void Map::getFeaturesInView(const Eigen::Matrix3fr &pose_, const Eigen::Vector2i &imageSize, int octaveCount, std::unordered_set<const Feature*> &featuresToIgnore, std::vector<std::vector<FeatureProjectionInfo>> &featuresInView)
 {
 	ProfileSection s("getFeaturesInView");
+	
+	Eigen::Matrix3fr pose = pose_;
+	//pose = Eigen::Matrix3fr::Identity();
 
 	//Find closest keyframe
 	HomographyDistance hdist(imageSize);
@@ -28,15 +31,16 @@ void Map::getFeaturesInView(const Eigen::Matrix3fr &pose, const Eigen::Vector2i 
 
 	float minDistance = std::numeric_limits<float>::infinity();
 	Keyframe *refFrame = NULL;
-	for (auto &framePtr : mKeyframes)
-	{
-		float dist = hdist.calculateSq(hinv, framePtr->getPose());
-		if (dist < minDistance)
-		{
-			minDistance = dist;
-			refFrame = framePtr.get();
-		}
-	}
+	//for (auto &framePtr : mKeyframes)
+	//{
+	//	float dist = hdist.calculateSq(hinv, framePtr->getPose());
+	//	if (dist < minDistance)
+	//	{
+	//		minDistance = dist;
+	//		refFrame = framePtr.get();
+	//	}
+	//}
+	refFrame = mKeyframes.begin()->get();
 
 
 	//Add 3D features
@@ -51,15 +55,17 @@ void Map::getFeaturesInView(const Eigen::Matrix3fr &pose, const Eigen::Vector2i 
 			continue;
 
 		//Is the feature inside our image?
-		Eigen::Vector2f pos = eutils::HomographyPoint(pose, feature.getPosition());
+		//Eigen::Vector2f pos = eutils::HomographyPoint(pose, feature.getPosition());
+		Eigen::Vector2f pos = feature.getPosition();
 		if (!eutils::IsInside(imageSize, pos))
 			continue;
 
 		//Scale
-		Eigen::Vector2f posPlusOne = eutils::HomographyPoint(pose, feature.getPositionPlusOne());
+		//Eigen::Vector2f posPlusOne = eutils::HomographyPoint(pose, feature.getPositionPlusOne());
+		Eigen::Vector2f posPlusOne = feature.getPositionPlusOne();
 		Eigen::Vector2f d = pos - posPlusOne;
-		float distSq = d.squaredNorm();
-
+		float distSq = std::roundf(d.squaredNorm());
+		
 		//Scale too small?
 		if (distSq < 0.8f)
 			continue;

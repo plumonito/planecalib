@@ -88,7 +88,10 @@ protected:
 	std::vector<Eigen::Vector4f> mFrameColors;
 
 	TextureHelper mDisplayTexture;
+	GLuint mDisplayTextureTarget;
+	GLuint mDisplayTextureId;
 	std::vector<Eigen::Vector2f> mDisplayPoints;
+	std::vector<Eigen::Vector4f> mDisplayColors;
 };
 
 } 

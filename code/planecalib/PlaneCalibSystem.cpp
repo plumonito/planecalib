@@ -144,14 +144,6 @@ void PlaneCalibSystem::processImage(double timestamp, cv::Mat3b &imgColor, cv::M
 
 	mKeyframeAdded = false;
 
-	//Build keyframe structure
-	std::unique_ptr<Keyframe> frame(new Keyframe());
-	{
-		ProfileSection ss("buildKeyFrame");
-		frame->init(imgColor, imgGray);
-		frame->setTimestamp(timestamp);
-	}
-
 	if (mSuccesfulTrackCount < 20)
 	{
 		mTracker->mForceRansac = true;
@@ -168,7 +160,7 @@ void PlaneCalibSystem::processImage(double timestamp, cv::Mat3b &imgColor, cv::M
 		shared_lock<shared_mutex> lockRead(mMap->getMutex());
 
 		//Track
-		trackingSuccesful = mTracker->trackFrame(std::move(frame));
+		trackingSuccesful = mTracker->trackFrame(timestamp, imgColor, imgGray);
 	}
 
 	if (trackingSuccesful)
@@ -200,7 +192,7 @@ void PlaneCalibSystem::processImage(double timestamp, cv::Mat3b &imgColor, cv::M
 		cornersOriginal.push_back(Eigen::Vector2f(mTracker->getImageSize().x(), mTracker->getImageSize().y()));
 
 		std::vector<std::pair<Eigen::Vector2f, Eigen::Vector2f>> corners;
-		Eigen::Matrix3fr poseInv = mTracker->getCurrentPose().inverse();
+		Eigen::Matrix3fr poseInv = mTracker->getCurrentPose2D().inverse();
 		for (auto &p : cornersOriginal)
 			corners.emplace_back(p, eutils::HomographyPoint(poseInv, p));
 
@@ -250,22 +242,60 @@ void PlaneCalibSystem::processImage(double timestamp, cv::Mat3b &imgColor, cv::M
 
 void PlaneCalibSystem::createKeyframe()
 {
-	std::unique_ptr<Keyframe> frame_(new Keyframe(*mTracker->getFrame()));
+	std::unique_ptr<Keyframe> frame_(new Keyframe());
 	Keyframe *frame = frame_.get();
-	frame->setPose(mTracker->getCurrentPose());
+
+	const TrackingFrame *trackerFrame = mTracker->getFrame();
+
+	frame->init(*mTracker->getFrame());
+	frame->setPose(mTracker->getCurrentPose2D());
 
 	//Add keyframe to map
 	mMap->addKeyframe(std::move(frame_));
 
-	//Create measurements
-	for (auto &match : mTracker->getMatches())
+	//Separate matches by octave
+	std::vector<std::vector<const FeatureMatch *>> matchesByOctave;
+	std::vector<std::vector<cv::KeyPoint>> keypointsByOctave;
+	matchesByOctave.resize(trackerFrame->getOriginalPyramid().getOctaveCount());
+	keypointsByOctave.resize(trackerFrame->getOriginalPyramid().getOctaveCount());
+	for (auto &match : mTracker->getFrame()->getMatches())
 	{
-		auto m = std::make_unique<FeatureMeasurement>(const_cast<Feature*>(&match.getFeature()), frame, match.getPosition(), match.getOctave(), match.getDescriptor());
-		frame->getMeasurements().push_back(m.get());
-		m->getFeature().getMeasurements().push_back(std::move(m));
+		const int scale = 1 << match.getOctave();
+		
+		cv::KeyPoint kp = match.getKeypoint();
+		kp.octave = 0;
+		kp.pt = eutils::ToCVPoint((match.getPosition() / scale).eval());
+		kp.size /= scale;
+
+		matchesByOctave[match.getOctave()].push_back(&match);
+		keypointsByOctave[match.getOctave()].push_back(kp);
+	}
+	//Create descriptors
+	cv::Ptr<cv::ORB> orb = cv::ORB::create(2000, 2, 1);
+	orb->setEdgeThreshold(0);
+	for (int octave = 0; octave < (int)matchesByOctave.size(); octave++)
+	{
+		if (keypointsByOctave.empty())
+			continue;
+
+		//ORB features
+		cv::Mat1b descriptorBuffer;
+		orb->detectAndCompute(frame->getImage(octave), cv::noArray(), keypointsByOctave[octave], descriptorBuffer, true);
+
+		//Create measurement
+		for (int i = 0; i < (int)matchesByOctave[octave].size(); i++)
+		{
+			auto &match = *matchesByOctave[octave][i];
+			uchar *descriptor = &descriptorBuffer(i, 0);
+			auto m = std::make_unique<FeatureMeasurement>(const_cast<Feature*>(&match.getFeature()), frame, match.getPosition(), octave, descriptor);
+
+			//Save measurement
+			frame->getMeasurements().push_back(m.get());
+			m->getFeature().getMeasurements().push_back(std::move(m));
+		}
 	}
 
-	frame->freeSpace();
+	//frame->freeSpace();
 }
 
 void PlaneCalibSystem::doHomographyBA()
@@ -454,7 +484,7 @@ void PlaneCalibSystem::doFullBA()
 			}
 		}
 		mMap->setIs3DValid(true);
-		auto poseH = mTracker->getCurrentPose();
+		auto poseH = mTracker->getCurrentPose2D();
 		mTracker->resetTracking(mMap.get(), poseH);
 	}
 

@@ -140,10 +140,10 @@ void MapWindow::updateState()
 	//mFrustumsToDraw.push_back(prepareFrameFrustum(mTracker->mCurrentPoseR, mTracker->mCurrentPoseT, mCurrentImageTextureTarget, mCurrentImageTextureId));
 
 	//Backproject
-	Eigen::Vector3f center = -mTracker->mCurrentPoseR.transpose()*mTracker->mCurrentPoseT;
+	Eigen::Vector3f center = -mTracker->getPose3D().R.transpose()*mTracker->getPose3D().t;
 	for (int i = 0, end = (int)mBackprojectedFrameXn.size(); i < end; i++)
 	{
-		auto xn = mTracker->mCurrentPoseR.transpose()*mBackprojectedFrameXn[i];
+		auto xn = mTracker->getPose3D().R.transpose()*mBackprojectedFrameXn[i];
 		Eigen::Vector3f x = center - (center[2] / xn[2])*xn;
 
 		mBackprojectedFrameVertices[i] << x[0], x[1], x[2], 1;
@@ -171,7 +171,11 @@ void MapWindow::updateState()
 
 bool MapWindow::isFeatureMatched(const Feature &feature)
 {
-	auto match = mApp->getSystem().getTracker().getMatch(&feature);
+	auto trackingFrame = mApp->getSystem().getTracker().getFrame();
+	if (!trackingFrame)
+		return false;
+
+	auto match = trackingFrame->getMatch(&feature);
 	if(match)
 		return true;
 	return false;

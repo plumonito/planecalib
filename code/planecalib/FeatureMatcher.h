@@ -20,31 +20,6 @@ namespace planecalib {
 ///////////////////////////////////
 // classes
 
-	class FeatureMatch
-{
-public:
-	FeatureMatch()
-	{
-	}
-
-	FeatureMatch(const FeatureMeasurement *source, int octave_, const Eigen::Vector2f &position_, const uchar *descriptor_, int tracklength_) :
-		mSourceMeasurement(source), mOctave(octave_), mPosition(position_), mDescriptor(descriptor_), mTrackLength(tracklength_)
-	{}
-
-	const FeatureMeasurement *getSourceMeasurement() const { return mSourceMeasurement; }
-	const Feature &getFeature() const { return mSourceMeasurement->getFeature(); }
-	const Eigen::Vector2f &getPosition() const { return mPosition; }
-	const uchar *getDescriptor() const { return mDescriptor; }
-	int getOctave() const { return mOctave; }
-	int getTrackLength() const { return mTrackLength; }
-
-protected:
-	const FeatureMeasurement *mSourceMeasurement;
-	Eigen::Vector2f mPosition;
-	const uchar *mDescriptor;
-	int mOctave;
-	int mTrackLength;
-};
 //
 //class matchingresultsdata
 //{
