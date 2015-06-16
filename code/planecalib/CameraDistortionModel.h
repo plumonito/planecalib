@@ -128,6 +128,121 @@ protected:
 	Eigen::Vector2f mCoefficients;
 	float mMaxRadiusSq; //Do not apply distortion after this radius. Keeps the distortion within the image limits where it was calibrated.
 };
-} 
+
+///////////////////////////////////////////////////////
+// DivisionDistortionModel
+class DivisionDistortionModel
+{
+public:
+	DivisionDistortionModel() {}
+
+	void init(const float lambda, const Eigen::Vector2i &imageSize)
+	{
+		init(lambda, imageSize.squaredNorm());
+	}
+	void init(const float lambda, float maxRadiusSq = 1e50)
+	{
+		mLambda = lambda;
+		mMaxRadiusSq = maxRadiusSq;
+	}
+
+	float getLambda() const { return mLambda; }
+	void setLambda(float lambda) { mLambda = lambda; }
+
+	static const int kParamCount = 1;
+	Eigen::Matrix<float, 1, 1> getCoefficients() const { Eigen::Matrix<float, 0, 1> p; p[0] = mLambda; return p; }
+	void setCoefficients(const Eigen::Matrix<float, 1, 1> &coeff) { mLambda = coeff[0]; }
+
+	float getMaxRadiusSq() const { return mMaxRadiusSq; }
+	void setMaxRadius(float maxRadiusSq)
+	{
+		mMaxRadiusSq = maxRadiusSq;
+	}
+
+
+	Eigen::Vector2f apply(const Eigen::Vector2f &x) const
+	{
+		Eigen::Vector2f res;
+		apply(x, res);
+		return res;
+	}
+
+	//du = [du/dx, du/dy, du/dlambda], dv = [dv/dx, dv/dy, dv/dlambda]
+	static void ApplyJacobian(float maxRadiusSq, float lambda, const Eigen::Vector2f &x, Eigen::Vector3f &du, Eigen::Vector3f &dv)
+	{
+		Eigen::Vector2f jac;
+
+		float r2 = x.squaredNorm();
+		if (r2 > maxRadiusSq)
+		{
+			const float factor = 1 + lambda*maxRadiusSq;
+			dv[0] = 1 / factor;
+			dv[1] = 0;
+			dv[2] = 0;
+			
+			du[0] = 0;
+			du[1] = 1 / factor;
+			du[2] = 0;
+		}
+		else
+		{
+			const float factor = 1/(1 + lambda*r2);
+			const float factor2 = factor*factor;
+			du[0] = (1 + lambda*(x[1] * x[1] - x[0] * x[0]))*factor2;
+			du[1] = -2*lambda*x[0]*x[1]*factor2;
+			du[2] = -x[0] * r2*factor2;
+
+			dv[0] = -2 * lambda*x[0] * x[1] * factor2;
+			dv[1] = (1 + lambda*(x[0] * x[0] - x[1] * x[1]))*factor2;
+			dv[2] = -x[1] * r2*factor2;
+		}
+	}
+
+	template <class TPointMatA, class TPointMatB>
+	void apply(const Eigen::MatrixBase<TPointMatA> &x, Eigen::MatrixBase<TPointMatB> &xd) const
+	{
+		Apply(mMaxRadiusSq, mLambda, x, xd);
+	}
+
+	template <class TLambda, class TPointMatA, class TPointMatB>
+	static void Apply(double maxRadiusSq, const TLambda lambda, const Eigen::MatrixBase<TPointMatA> &x, Eigen::MatrixBase<TPointMatB> &xd)
+	{
+		static_assert(TPointMatA::SizeAtCompileTime == 2, "Param x must be of size 2");
+		static_assert(TPointMatB::SizeAtCompileTime == 2, "Param xd must be of size 2");
+
+		typedef typename TPointMatA::Scalar TScalar;
+
+		TScalar r2 = x.squaredNorm();
+		if (CeresUtils::ToDouble(r2) > maxRadiusSq)
+			r2 = TScalar(maxRadiusSq);
+
+		const TScalar factor = TScalar(1) + TScalar(lambda)*r2;
+		xd[0] = x[0] / factor;
+		xd[1] = x[1] / factor;
+	}
+
+	template <class TLambda, class TPointMatA, class TPointMatB>
+	static void Apply(const TLambda lambda, const Eigen::MatrixBase<TPointMatA> &x, Eigen::MatrixBase<TPointMatB> &xd)
+	{
+		static_assert(TPointMatA::SizeAtCompileTime == 2, "Param x must be of size 2");
+		static_assert(TPointMatB::SizeAtCompileTime == 2, "Param xd must be of size 2");
+
+		typedef typename TPointMatA::Scalar TScalar;
+
+		TScalar r2 = x.squaredNorm();
+		const TScalar factor = TScalar(1) + TScalar(lambda)*r2;
+		xd[0] = x[0] / factor;
+		xd[1] = x[1] / factor;
+	}
+
+
+	//Non-linear
+	Eigen::Vector2f applyInv(const Eigen::Vector2f &pd) const;
+
+protected:
+	float mLambda;
+	float mMaxRadiusSq; //Do not apply distortion after this radius. Keeps the distortion within the image limits where it was calibrated.
+};
+}
 
 #endif /* CAMERADISTORTIONMODEL_H_ */

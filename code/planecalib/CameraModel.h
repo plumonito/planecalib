@@ -18,7 +18,7 @@ class CameraModel_;
 //This typedef decides which camera model to use in the system
 //It has to be a typedef because ceres requires templated functions
 //to build the automatic diff cost functions and templated methods cannot be virtual.
-typedef CameraModel_<RadialCameraDistortionModel> CameraModel;
+typedef CameraModel_<DivisionDistortionModel> CameraModel;
 
 template<class TDistortionModel_>
 class CameraModel_
@@ -30,52 +30,41 @@ public:
 
 	typedef TDistortionModel_ TDistortionModel;
 
-	void init(float fx, float fy, float u0, float v0, int width, int height)
+	void init(const Eigen::Vector2f &principalPoint, const Eigen::Vector2f &focalLengths, Eigen::Vector2i &imageSize)
 	{
-		mFx = fx;
-		mFy = fy;
-		mU0 = u0;
-		mV0 = v0;
-		mImageSize = Eigen::Vector2i(width, height);
+		mPrincipalPoint = principalPoint;
+		mFocalLengths = focalLengths;
+		mImageSize = imageSize;
 	}
 
-	float getFx() const {return mFx;}
-	float getFy() const {return mFy;}
-	float getU0() const {return mU0;}
-	float getV0() const {return mV0;}
+	const Eigen::Vector2f &getPrincipalPoint() const { return mPrincipalPoint; }
+	const Eigen::Vector2f &getFocalLength() const { return mFocalLengths; }
 	
 	static const int kParamCount=4;
-	Eigen::Vector4d getParams() const { return Eigen::Vector4d(mFx,mFy,mU0,mV0); }
+	Eigen::Vector4d getParams() const { return Eigen::Vector4d(mPrincipalPoint[0], mPrincipalPoint[1], mFocalLengths[0], mFocalLengths[1]); }
 	void setParams(const Eigen::Vector4d &params) 
 	{ 
-		mFx = (float)params[0]; 
-		mFy = (float)params[1];
-		mU0 = (float)params[2];
-		mV0 = (float)params[3];
+		mPrincipalPoint[0] = (float)params[0];
+		mPrincipalPoint[1] = (float)params[1];
+		mFocalLengths[0] = (float)params[2];
+		mFocalLengths[1] = (float)params[3];
 	}
 
 	const Eigen::Vector2i &getImageSize() const { return mImageSize; }
 	TDistortionModel &getDistortionModel() {return mDistortionModel;}
 	const TDistortionModel &getDistortionModel() const {return mDistortionModel;}
 
-	float getMaxRadiusSq() const;
-
-	Eigen::Matrix3fr getK() const 
-	{ 
-		Eigen::Matrix3fr k; 
-		k << mFx, 0, mU0, 0, mFy, mV0, 0, 0, 1; 
-		return k; 
-	}
 	void setFromK(const Eigen::Matrix3fr &K)
 	{
-		init(K(0, 0), K(1, 1), K(0, 2), K(1, 2), mImageSize[0], mImageSize[1]);
+		mPrincipalPoint = Eigen::Vector2f(K(0, 2), K(1, 2));
+		mFocalLengths = Eigen::Vector2f(K(0, 0), K(1, 1));
 	}
 
 	void initLUT();
 
-	bool isPointInside(const Eigen::Vector3f &xc, const Eigen::Vector2f &p) const
+	bool isPointInside(float depth, const Eigen::Vector2f &p) const
 	{
-		return xc[2] > 0 &&  //Depth is positive
+		return depth > 0 &&  //Depth is positive
 			p[0] >= 0 && p[1] >= 0 && p[0] < mImageSize[0] && p[1] < mImageSize[1]; //Inside image
 	}
 
@@ -84,7 +73,9 @@ public:
 	// Same code, one using return value, one using args by-reference (for ceres)
 	Eigen::Vector2f projectFromWorld(const Eigen::Vector3f &xc) const
 	{
-		return projectFromDistorted(mDistortionModel.distortPoint(xc.hnormalized()));
+		const Eigen::Vector2f xn = xc.hnormalized();
+		Eigen::Vector2f uv(xn[0] * mFocalLengths[0], xn[1] * mFocalLengths[1]);
+		return mDistortionModel.distortPoint(uv) + mPrincipalPoint;
 	}
 	
 	template <class TPointMatA, class TPointMatB>
@@ -168,10 +159,8 @@ public:
 
 protected:
 	//Four parameters of the intrinsic matrix
-	float mFx;
-	float mFy;
-	float mU0;
-	float mV0;
+	Eigen::Vector2f mPrincipalPoint;
+	Eigen::Vector2f mFocalLengths;
 	Eigen::Vector2i mImageSize;
 
 	//Distortion model

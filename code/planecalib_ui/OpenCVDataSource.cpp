@@ -34,8 +34,7 @@ bool OpenCVDataSource::open(const std::string &videoFile)
     {
         return false;
     }
-	mOpenCVCamera.set(cv::CAP_PROP_FRAME_WIDTH, 1280);
-	mOpenCVCamera.set(cv::CAP_PROP_FRAME_HEIGHT, 720);
+
 	return finishOpen();
 }
 
@@ -51,6 +50,8 @@ bool OpenCVDataSource::open(int deviceId)
     {
         return false;
     }
+	//mOpenCVCamera.set(cv::CAP_PROP_FRAME_WIDTH, 1920);
+	//mOpenCVCamera.set(cv::CAP_PROP_FRAME_HEIGHT, 1080);
 
     dropFrames(5);
     return finishOpen();

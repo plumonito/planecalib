@@ -76,8 +76,9 @@ protected:
 
 	float mExpectedPixelNoiseStd;
 
-	Eigen::Vector2f mHomographyP0;
-	RadialCameraDistortionModel mHomographyDistortion;	
+	Eigen::Vector2f mPrincipalPoint;
+	DivisionDistortionModel mDistortion;	
+	Eigen::Vector2f mFocalLengths;
 
 	Eigen::Vector3f mNormal;
 
