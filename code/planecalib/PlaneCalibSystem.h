@@ -73,17 +73,13 @@ protected:
 	bool mUse3DGroundTruth;
 	bool mFix3DPoints;
 	bool mUseNormalizedConstraints;
+	Eigen::Vector2i mImageSize;
 
 	float mExpectedPixelNoiseStd;
 
-	Eigen::Vector2f mPrincipalPoint;
-	DivisionDistortionModel mDistortion;	
-	Eigen::Vector2f mFocalLengths;
-
-	Eigen::Vector3f mNormal;
-
 	CameraModel mCamera;
-
+	Eigen::Vector3f mNormal;
+	
 	std::unique_ptr<Map> mMap;
 
 	std::unique_ptr<PoseTracker> mTracker;

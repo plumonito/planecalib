@@ -40,22 +40,22 @@ bool PlaneCalibSystem::init(double timestamp, cv::Mat3b &imgColor, cv::Mat1b &im
     keyframe->setTimestamp(timestamp);
     keyframe->setPose(Eigen::Matrix3fr::Identity());
 
-	Eigen::Vector2i imageSize = keyframe->getImageSize();
+	mImageSize = keyframe->getImageSize();
 
     MYAPP_LOG << "Pyramid sizes: ";
-	MYAPP_LOG << eutils::ToSize(imageSize);
+	MYAPP_LOG << eutils::ToSize(mImageSize);
     for(int octave=1; octave<keyframe->getPyramid().getOctaveCount(); octave++)
 		MYAPP_LOG << ", " << keyframe->getImage(octave).size();
 	MYAPP_LOG << "\n";
 
 	MYAPP_LOG << "SBI size: " << keyframe->getSBI().size() << "\n";
 
-	//Distortion
-	mHomographyP0 = imageSize.cast<float>() / 2;
-	mHomographyDistortion.init(Eigen::Vector2f::Zero(), imageSize);
-	mCamera.getDistortionModel().init(Eigen::Vector2f::Zero(), 1e10);
 
-	mCamera.init(0,0,0,0,imageSize[0],imageSize[1]);
+	//Init camera
+	mCamera.init(mImageSize.cast<float>() / 2, Eigen::Vector2f(1,1), mImageSize);
+	mCamera.getDistortionModel().init();
+
+	//Normal
 	mNormal = Eigen::Vector3f::Zero();
 
 	//Reset map
@@ -63,7 +63,7 @@ bool PlaneCalibSystem::init(double timestamp, cv::Mat3b &imgColor, cv::Mat1b &im
 
 	//Reset tracker
 	mTracker.reset(new PoseTracker());
-	mTracker->init(imageSize, keyframe->getOctaveCount());
+	mTracker->init(mImageSize, keyframe->getOctaveCount());
 
 	//Prepare map expander
 	//mMapExpander.reset(new SlamMapExpander());
@@ -122,7 +122,9 @@ void PlaneCalibSystem::setMap(std::unique_ptr<Map> map)
 void PlaneCalibSystem::resetCalib()
 {
 	auto &frame = *mMap->getKeyframes().back();
-	mTracker->init(frame.getImageSize(), frame.getOctaveCount());
+	mImageSize = frame.getImageSize();
+
+	mTracker->init(mImageSize, frame.getOctaveCount());
 	mTracker->resetTracking(mMap.get(), frame.getPose());
 
 	std::vector<Eigen::Matrix3fr> allPoses;
@@ -132,8 +134,8 @@ void PlaneCalibSystem::resetCalib()
 	}
 
 	//Calibrate
-	mHomographyP0 = frame.getImageSize().cast<float>() / 2;
-	mHomographyDistortion.init(Eigen::Vector2f::Zero(), frame.getImageSize());
+	mCamera.init(mImageSize.cast<float>() / 2, Eigen::Vector2f::Zero(), mImageSize);
+	mCamera.getDistortionModel().init();
 	//mCalib->calibrate(mHomographyP0, allPoses);
 }
 
@@ -311,12 +313,11 @@ void PlaneCalibSystem::doHomographyBA()
 	}
 
 	ba.setOnlyDistortion(false);
-	ba.setP0(mHomographyP0.cast<double>());
-	ba.setDistortion(mHomographyDistortion.getCoefficients().cast<double>());
+	ba.initFromCamera(mCamera);
 	ba.bundleAdjust();
 
-	mHomographyP0 = ba.getP0().cast<float>();
-	mHomographyDistortion.setCoefficients(ba.getDistortion().cast<float>());
+
+	ba.updateCamera(mCamera);
 
 	//Calib
 	//doHomographyCalib();
@@ -342,18 +343,13 @@ void PlaneCalibSystem::doHomographyCalib(bool fixP0)
 	//Calibrate
 	mCalib->setUseNormalizedConstraints(mUseNormalizedConstraints);
 	mCalib->setFixPrincipalPoint(fixP0);
-	mCalib->calibrate(mHomographyP0, allPoses);
-	mCamera.setFromK(mCalib->getK());
+	mCalib->initFromCamera(mCamera);
+	mCalib->calibrate(allPoses);
+
+	mCalib->updateCamera(mCamera);
 	mNormal = mCalib->getNormal().cast<float>();
 	//mK << 600, 0, 320, 0, 600, 240, 0, 0, 1;
 	//mNormal << 0, 0, 1;
-
-	float fx2 = mCamera.getFx()*mCamera.getFx();
-	Eigen::Vector2f distortion;
-	distortion << mHomographyDistortion.getCoefficients()[0] * fx2, mHomographyDistortion.getCoefficients()[1] * fx2*fx2;
-	MYAPP_LOG << "Transformed distortion: " << distortion[0] << ", " << distortion[1] << "\n";
-
-	mCamera.getDistortionModel().setCoefficients(distortion);
 }
 
 void PlaneCalibSystem::doFullBA()

@@ -13,6 +13,7 @@
 #include <memory>
 #include <opencv2/core.hpp>
 #include "Map.h"
+#include "CameraModel.h"
 
 namespace planecalib {
 
@@ -21,8 +22,10 @@ class PoseTracker;
 class BundleAdjuster
 {
 public:
+	typedef CameraModel::TDistortionModel::TParamVector TDistortionParamVector;
+
 	BundleAdjuster():
-		mUseLocks(true), mOnlyDistortion(false), mParamsDistortion(0, 0), mOutlierPixelThreshold(3), mOutlierPixelThresholdSq(9)
+		mUseLocks(true), mOnlyDistortion(false), mParamsDistortion(TDistortionParamVector::Zero()), mOutlierPixelThreshold(3), mOutlierPixelThresholdSq(9)
 	{}
 
 	void setOutlierThreshold(float pixelThreshold)
@@ -39,17 +42,13 @@ public:
 
 	void setMap(Map *map) { mMap = map; }
 
-	const std::unordered_set<Keyframe *> getFramesToAdjust() const {return mFramesToAdjust;}
+	void addFrameToAdjust(Keyframe &newFrame);
+	const std::unordered_set<Keyframe *> getFramesToAdjust() const { return mFramesToAdjust; }
 	const std::unordered_set<Feature *> getFeaturesToAdjust() const {return mFeaturesToAdjust;}
 
-	const Eigen::Vector2d &getDistortion() const { return mParamsDistortion; }
-	void setDistortion(const Eigen::Vector2d &coeff) { mParamsDistortion = coeff; }
-
-	const Eigen::Vector2d &getP0() const { return mParamsP0; }
-	void setP0(const Eigen::Vector2d &p0) { mParamsP0 = p0; } 
-
-	void addFrameToAdjust(Keyframe &newFrame);
-
+	void initFromCamera(const CameraModel &mCamera);
+	void updateCamera(CameraModel &mCamera) const;
+	
 	bool bundleAdjust();
 
 protected:
@@ -64,8 +63,8 @@ protected:
 
 	Eigen::Vector2i mImageSize;
 
-	Eigen::Vector2d mParamsDistortion;
-	Eigen::Vector2d mParamsP0;
+	Eigen::Vector2d mParamsPrincipalPoint;
+	TDistortionParamVector mParamsDistortion;
 	std::vector<FeatureMeasurement *> mMeasurementsInProblem;
 
 	bool isInlier(const FeatureMeasurement &measurement);

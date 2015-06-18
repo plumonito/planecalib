@@ -3,6 +3,7 @@
 #define HOMOGRAPHYCALIBRATION_H_
 
 #include "eutils.h"
+#include "CameraModel.h"
 
 namespace planecalib {
 
@@ -20,18 +21,25 @@ public:
 	void setFixPrincipalPoint(bool value)  { mFixPrincipalPoint = value; }
 
 	double getInitialAlpha() const { return mInitialAlpha; }
-	
-	const Eigen::Matrix3fr &getK() const { return mK; }
+	const Eigen::Vector2d &getPrincipalPoint() const { return mPrincipalPoint; }
+	//const CameraModel::TDistortionModel::TParamVector &getDistortionParams() const { return mDistortionParams; }
+	const Eigen::Vector2d &getFocalLengths() const { return mFocalLengths; }
+
 	const Eigen::Vector3d &getNormal() const { return mNormal; }
 
-	void calibrate(const Eigen::Vector2f &p0, const std::vector<Eigen::Matrix3fr> &H);
+	void initFromCamera(const CameraModel &camera);
+	void updateCamera(CameraModel &camera) const;
+
+	void calibrate(const std::vector<Eigen::Matrix3fr> &H);
 
 protected:
 	bool mUseNormalizedConstraints;
 	bool mFixPrincipalPoint;
 
 	double mInitialAlpha;
-	Eigen::Matrix3fr mK;
+	Eigen::Vector2d mPrincipalPoint;
+	//CameraModel::TDistortionModel::TParamVector mDistortionParams;
+	Eigen::Vector2d mFocalLengths;
 	Eigen::Vector3d mNormal;
 };
 

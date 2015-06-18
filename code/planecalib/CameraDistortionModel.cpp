@@ -3,19 +3,20 @@
 
 namespace planecalib {
 
-Eigen::Vector2f RadialCameraDistortionModel::undistortPoint(const Eigen::Vector2f &pd) const
-{
-		const int kMaxIters = 11;
-		Eigen::Vector2f pn = pd;
-	    for( int j = 0; j < kMaxIters; j++ )
-	    {
-	    	float r2 = pn.squaredNorm();
-			float icdist = 1 + r2*mCoefficients[0] + r2*r2*mCoefficients[1];
-			pn = (1 / icdist)*pd;
-	    }
+//Eigen::Vector2f RadialCameraDistortionModel::undistortPoint(const Eigen::Vector2f &pd) const
+//{
+//		const int kMaxIters = 11;
+//		Eigen::Vector2f pn = pd;
+//	    for( int j = 0; j < kMaxIters; j++ )
+//	    {
+//	    	float r2 = pn.squaredNorm();
+//			float icdist = 1 + r2*mCoefficients[0] + r2*r2*mCoefficients[1];
+//			pn = (1 / icdist)*pd;
+//	    }
+//
+//	return pn;
+//}
 
-	return pn;
-}
 
 //class CreateInverseError
 //{
@@ -86,19 +87,5 @@ Eigen::Vector2f RadialCameraDistortionModel::undistortPoint(const Eigen::Vector2
 //
 //	return invModel;
 //}
-
-Eigen::Vector2f DivisionDistortionModel::applyInv(const Eigen::Vector2f &pd) const
-{
-	const int kMaxIters = 11;
-	Eigen::Vector2f pn = pd;
-	for (int j = 0; j < kMaxIters; j++)
-	{
-		float r2 = pn.squaredNorm();
-		float icdist = 1 + r2*mLambda;
-		pn = icdist*pd;
-	}
-
-	return pn;
-}
 
 }

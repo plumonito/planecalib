@@ -38,7 +38,10 @@ public:
 	}
 
 	const Eigen::Vector2f &getPrincipalPoint() const { return mPrincipalPoint; }
+	Eigen::Vector2f &getPrincipalPoint() { return mPrincipalPoint; }
+	
 	const Eigen::Vector2f &getFocalLength() const { return mFocalLengths; }
+	Eigen::Vector2f &getFocalLength() { return mFocalLengths; }
 	
 	static const int kParamCount=4;
 	Eigen::Vector4d getParams() const { return Eigen::Vector4d(mPrincipalPoint[0], mPrincipalPoint[1], mFocalLengths[0], mFocalLengths[1]); }
@@ -173,24 +176,6 @@ protected:
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 // Template implementations
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-template<class TDistortionModel>
-float CameraModel_<TDistortionModel>::getMaxRadiusSq() const
-{
-	Eigen::Vector2f corners[] = { Eigen::Vector2f(0, 0), Eigen::Vector2f(0, mImageSize[1]),
-		Eigen::Vector2f(mImageSize[0], mImageSize[1]), Eigen::Vector2f(mImageSize[0], 0) };
-
-	float maxRadiusSq = 0;
-	for(int i=0; i<4; ++i)
-	{
-		const Eigen::Vector2f xn = unprojectToDistorted(corners[i]);
-		const float r2 = xn.squaredNorm();
-		if(r2>maxRadiusSq)
-			maxRadiusSq = r2;
-	}
-
-	return maxRadiusSq;
-}
 
 template<class TDistortionModel>
 void CameraModel_<TDistortionModel>::initLUT()

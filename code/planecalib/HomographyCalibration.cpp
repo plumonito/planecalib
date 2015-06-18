@@ -136,19 +136,34 @@ private:
 	const Eigen::Matrix3d &mH;
 };
 
-void HomographyCalibration::calibrate(const Eigen::Vector2f &p0, const std::vector<Eigen::Matrix3fr> &H)
+void HomographyCalibration::initFromCamera(const CameraModel &camera)
+{
+	mPrincipalPoint = camera.getPrincipalPoint().cast<double>();
+	//mDistortionParams = camera.getDistortionModel().getParams();
+	mFocalLengths = camera.getFocalLength().cast<double>();
+}
+
+void HomographyCalibration::updateCamera(CameraModel &camera) const
+{
+	camera.getPrincipalPoint() = mPrincipalPoint.cast<float>();
+	//camera.getDistortionModel.setParams(mDistortionParams);
+	camera.getFocalLength() = mFocalLengths.cast<float>();
+}
+
+void HomographyCalibration::calibrate(const std::vector<Eigen::Matrix3fr> &H)
 {
 	int hcount = H.size();
 
 	//Adjust for principal point
-	Eigen::Matrix3fr T, Ti;
-	T << 1, 0, -p0[0], 0, 1, -p0[1], 0, 0, 1;
-	Ti << 1, 0, +p0[0], 0, 1, +p0[1], 0, 0, 1;
+	//Eigen::Matrix3fr T, Ti;
+	//T << 1, 0, -p0[0], 0, 1, -p0[1], 0, 0, 1;
+	//Ti << 1, 0, +p0[0], 0, 1, +p0[1], 0, 0, 1;
 
 	std::vector<Eigen::Matrix3d> Ht(hcount);
 	for (int i = 0; i < hcount; i++)
 	{
-		Ht[i] = (T * H[i] * Ti).cast<double>();
+		Ht[i] = H[i].cast<double>();
+		//Ht[i] = (T * H[i] * Ti).cast<double>();
 		//Ht[i] /= Ht[i].determinant();
 	}
 
@@ -201,19 +216,20 @@ void HomographyCalibration::calibrate(const Eigen::Vector2f &p0, const std::vect
 	ceres::Solver::Summary summary;
 
 	ceres::Solve(options, &problem, &summary);
+
+	//Update
+	mPrincipalPoint += pp.cast<float>();
+	mFocalLengths[0] = mFocalLengths[1] = alpha;
+
+	//Show
 	MYAPP_LOG << "Homography calib results\n";
 	MYAPP_LOG << "Use normalized constraints: " << mUseNormalizedConstraints << "\n";
 	MYAPP_LOG << summary.FullReport();
 
 	MYAPP_LOG << "Initial alpha=" << mInitialAlpha << ", final=" << alpha << "\n";
 
-	//Shift pp
-	Eigen::Vector2f ppn = pp.cast<float>() + p0;
-	MYAPP_LOG << "PP=" << ppn.transpose() << "\n";
+	MYAPP_LOG << "PP=" << mPrincipalPoint.transpose() << "\n";
 	MYAPP_LOG << "Normal=" << mNormal.transpose() << "\n";
-
-	//Build final K
-	mK << (float)alpha, 0, ppn.x(), 0, (float)alpha, ppn.y(), 0, 0, 1;
 }
 
 } 
