@@ -11,40 +11,47 @@
 #include "CeresParametrization.h"
 //#include "ReprojectionError3D.h"
 #include "CameraDistortionModel.h"
+#include "CameraModelCeres.h"
 #include "PoseTracker.h"
 
 namespace planecalib
 {
 
+//////////////////////////////////////////////////////////////////////////////////////////////////
+// CalibratedReprojectionError
 
 class CalibratedReprojectionError
 {
 public:
-	CalibratedReprojectionError(const Eigen::Vector2i &imageSize, const FeatureMeasurement &m) :
-		CalibratedReprojectionError(imageSize, m.getOctave(), m.getPosition())
+	typedef CameraModel::TDistortionModel::TParamVector TDistortionParamVector;
+
+	CalibratedReprojectionError(const FeatureMeasurement &m) :
+		CalibratedReprojectionError(m.getOctave(), m.getPosition())
 	{
 	}
 
-	CalibratedReprojectionError(const Eigen::Vector2i &imageSize, const int octave, const Eigen::Vector2f &imgPoint) :
-		mMaxRadiusSq(RadialCameraDistortionModel::MaxRadiusSqFromImageSize(imageSize)), mScale(1 << octave), mImgPoint(imgPoint)
+	CalibratedReprojectionError(const int octave, const Eigen::Vector2f &imgPoint) :
+		mScale(1 << octave), mImgPoint(imgPoint), mForwardDistortion(new ForwardDistortionFunction<CameraModel::TDistortionModel>())
 	{
 	}
 
 	static const int kResidualCount = 2;
 
 	template<class T>
-	bool operator() (const T * const _distortion, const T * const kparams, const T * const rparams, const T * const tparams, const T * const x, T *residuals) const;
+	bool operator() (const T * const _pp, const T * const _distortion, const T * const _focalLengths, const T * const rparams, const T * const tparams, const T * const x, T *residuals) const;
 
 protected:
-	const double mMaxRadiusSq;
 	const int mScale;
 	const Eigen::Vector2f mImgPoint;
+	const ceres::CostFunctionToFunctor<2, TDistortionParamVector::SizeAtCompileTime, 2> mForwardDistortion;
 };
 
 template<class T>
-bool CalibratedReprojectionError::operator () (const T * const _distortion, const T * const kparams, const T * const rparams, const T * const _tparams, const T * const x, T *residuals) const
+bool CalibratedReprojectionError::operator () (const T * const _pp, const T * const _distortion, const T * const _focalLengths, const T * const rparams, const T * const _tparams, const T * const x, T *residuals) const
 {
+	Eigen::Map<Eigen::Matrix<T, 2, 1>> pp((T*)_pp);
 	Eigen::Map<Eigen::Matrix<T, 2, 1>> distortion((T*)_distortion);
+	Eigen::Map<Eigen::Matrix<T, 2, 1>> focalLengths((T*)_focalLengths);
 	Eigen::Map<Eigen::Matrix<T, 3, 1>> tparams((T*)_tparams);
 
 	Eigen::Matrix<T, 3, 1>  xw;
@@ -61,18 +68,20 @@ bool CalibratedReprojectionError::operator () (const T * const _distortion, cons
 	//Normalize
 	Eigen::Matrix<T, 2, 1> xn = xc.hnormalized();
 
+	//Focal lengths
+	xn[0] *= focalLengths[0];
+	xn[1] *= focalLengths[1];
+
 	//Distort
 	Eigen::Matrix<T, 2, 1> xd;
-	RadialCameraDistortionModel::DistortPoint(mMaxRadiusSq, distortion, xn, xd);
+	mForwardDistortion(_distortion, xn.data(), xd.data());
 
-	//Intrinsics
-	Eigen::Matrix<T, 2, 1> pd;
-	pd[0] = kparams[0] * xd[0] + kparams[2];
-	pd[1] = kparams[1] * xd[1] + kparams[3];
+	//Principal point
+	xd += pp;
 
 	//Residuals
-	residuals[0] = (T(mImgPoint.x()) - pd[0]) / T(mScale);
-	residuals[1] = (T(mImgPoint.y()) - pd[1]) / T(mScale);
+	residuals[0] = (T(mImgPoint.x()) - xd[0]) / T(mScale);
+	residuals[1] = (T(mImgPoint.y()) - xd[1]) / T(mScale);
 	return true;
 }
 
@@ -113,9 +122,9 @@ void CalibratedBundleAdjuster::getInliers()
 		auto &poseParams = mParamsPoses.find(&m.getKeyframe())->second;
 		auto &featureParams = mParamsFeatures.find(&m.getFeature())->second;
 
-		CalibratedReprojectionError err(mImageSize, m);
+		CalibratedReprojectionError err(m);
 		Eigen::Vector2d ri;
-		err(mParamsDistortion.data(), mParamsK.data(), poseParams.data(), poseParams.data() + 3, featureParams.data(), ri.data());
+		err(mPrincipalPoint.data(), mParamsDistortion.data(), mFocalLengths.data(), poseParams.data(), poseParams.data() + 3, featureParams.data(), ri.data());
 
 		float norm = (float)ri.norm();
 		if (norm < mOutlierPixelThreshold)
@@ -161,6 +170,15 @@ Eigen::Vector2d &CalibratedBundleAdjuster::getFeatureParams(Feature *featurep)
 	}
 
 	return params;
+}
+
+void CalibratedBundleAdjuster::setCamera(CameraModel *camera)
+{
+	mCamera = camera;
+
+	mPrincipalPoint = mCamera->getPrincipalPoint().cast<double>();
+	mParamsDistortion = mCamera->getDistortionModel().getParams();
+	mFocalLengths = mCamera->getFocalLength().cast<double>();
 }
 
 bool CalibratedBundleAdjuster::bundleAdjust()
@@ -241,7 +259,7 @@ bool CalibratedBundleAdjuster::bundleAdjust()
 				problem.SetParameterBlockConstant(params.data());
 			options.linear_solver_ordering->AddElementToGroup(params.data(), 0);
 
-			if (maxMcount < feature.getMeasurements().size())
+			if (maxMcount < (int)feature.getMeasurements().size())
 			{
 				maxMcount = feature.getMeasurements().size();
 				maxMparams = &params;
@@ -249,18 +267,19 @@ bool CalibratedBundleAdjuster::bundleAdjust()
 		}
 		//problem.SetParameterBlockConstant(maxMparams->data());
 
-		//K params
-		mParamsK[0] = mK(0, 0);
-		mParamsK[1] = mK(1, 1);
-		mParamsK[2] = mK(0, 2);
-		mParamsK[3] = mK(1, 2);
-		problem.AddParameterBlock(mParamsK.data(), mParamsK.size());
-		if (mFixK)
-			problem.SetParameterBlockConstant(mParamsK.data());
-		options.linear_solver_ordering->AddElementToGroup(mParamsK.data(), 1);
+		//Principal point
+		problem.AddParameterBlock(mPrincipalPoint.data(), mPrincipalPoint.size());
+		if (mFixPrincipalPoint)
+			problem.SetParameterBlockConstant(mPrincipalPoint.data());
+		options.linear_solver_ordering->AddElementToGroup(mPrincipalPoint.data(), 1);
+
+		//Focal lengths 
+		problem.AddParameterBlock(mFocalLengths.data(), mFocalLengths.size());
+		if (mFixFocalLengths)
+			problem.SetParameterBlockConstant(mFocalLengths.data());
+		options.linear_solver_ordering->AddElementToGroup(mFocalLengths.data(), 1);
 
 		//Distortion params
-		mImageSize = (**mFramesToAdjust.begin()).getImageSize(); //Image size is needed to determine the maximum radius for distortion
 		problem.AddParameterBlock(mParamsDistortion.data(), mParamsDistortion.size());
 		if (mFixDistortion)
 			problem.SetParameterBlockConstant(mParamsDistortion.data());
@@ -316,9 +335,9 @@ bool CalibratedBundleAdjuster::bundleAdjust()
 			lossFunc_i = new ceres::CauchyLoss(mOutlierPixelThreshold);
 
 			problem.AddResidualBlock(
-				new ceres::AutoDiffCostFunction<CalibratedReprojectionError, CalibratedReprojectionError::kResidualCount, 2, 4, 3, 3, 2>(
-				new CalibratedReprojectionError(mImageSize, m)),
-				lossFunc_i, mParamsDistortion.data(), mParamsK.data(), poseParams.data(), poseParams.data() + 3, featureParams.data());
+				new ceres::AutoDiffCostFunction<CalibratedReprojectionError, CalibratedReprojectionError::kResidualCount, 2, 2, 2, 3, 3, 2>(
+				new CalibratedReprojectionError(m)),
+				lossFunc_i, mPrincipalPoint.data(), mParamsDistortion.data(), mFocalLengths.data(), poseParams.data(), poseParams.data() + 3, featureParams.data());
 		}
 	}
 
@@ -335,11 +354,13 @@ bool CalibratedBundleAdjuster::bundleAdjust()
 	}
 
 	MYAPP_LOG << "Calibrated BA report:\n" << summary.FullReport();
-	MYAPP_LOG << "K fixed: " << mFixK << "\n";
+	MYAPP_LOG << "PP fixed: " << mFixPrincipalPoint << "\n";
 	MYAPP_LOG << "Distortion fixed: " << mFixDistortion << "\n";
+	MYAPP_LOG << "Focal fixed: " << mFixFocalLengths<< "\n";
 	MYAPP_LOG << "3D Points fixed: " << mFix3DPoints << "\n";
-	MYAPP_LOG << "Calibrated BA K: " << mParamsK.transpose() << "\n";
+	MYAPP_LOG << "Calibrated BA PP: " << mPrincipalPoint.transpose() << "\n";
 	MYAPP_LOG << "Calibrated BA distortion: " << mParamsDistortion.transpose() << "\n";
+	MYAPP_LOG << "Calibrated BA focal: " << mFocalLengths.transpose() << "\n";
 
 	//if (summary.termination_type == ceres::USER_FAILURE || (!mIsExpanderBA && mMap->getAbortBA()))
 	//{
@@ -364,11 +385,13 @@ bool CalibratedBundleAdjuster::bundleAdjust()
 	//MYAPP_LOG << "Calibrated BA K: " << mParamsK << "\n";
 
 
-	//Update K
-	mK(0, 0) = mParamsK[0];
-	mK(1, 1) = mParamsK[1];
-	mK(0, 2) = mParamsK[2];
-	mK(1, 2) = mParamsK[3];
+	//Update camera
+	if (!mFixPrincipalPoint)
+		mCamera->getPrincipalPoint() = mPrincipalPoint.cast<float>();
+	if (!mFixDistortion)
+		mCamera->getDistortionModel().setParams(mParamsDistortion);
+	if (!mFixFocalLengths)
+		mCamera->getFocalLength() = mFocalLengths.cast<float>();
 
 	//Update pose
 	for (auto &p : mParamsPoses)

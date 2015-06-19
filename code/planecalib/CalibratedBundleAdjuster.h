@@ -8,6 +8,7 @@
 #include <memory>
 #include <opencv2/core.hpp>
 #include "Map.h"
+#include "CameraModel.h"
 
 namespace planecalib {
 
@@ -17,7 +18,7 @@ class CalibratedBundleAdjuster
 {
 public:
 	CalibratedBundleAdjuster() :
-		mUseLocks(true), mFixK(false), mFixDistortion(false), mFix3DPoints(false), mParamsDistortion(0, 0), mK(Eigen::Matrix3dr::Identity()), mOutlierPixelThreshold(3), mOutlierPixelThresholdSq(9)
+		mUseLocks(true), mFixPrincipalPoint(false), mFixDistortion(false), mFixFocalLengths(false), mFix3DPoints(false), mPrincipalPoint(Eigen::Vector2d::Zero()), mParamsDistortion(TDistortionParamsVector::Zero()), mFocalLengths(Eigen::Vector2d::Zero()), mOutlierPixelThreshold(3), mOutlierPixelThresholdSq(9)
 	{}
 
 	void setOutlierThreshold(float pixelThreshold)
@@ -29,11 +30,14 @@ public:
 	bool getUseLocks() const {return mUseLocks;}
 	void setUseLocks(bool value) {mUseLocks = value;}
 
-	bool getFixK() const { return mFixK; }
-	void setFixK(bool value) { mFixK = value; }
+	bool getFixPrincipalPoint() const { return mFixPrincipalPoint; }
+	void setFixPrincipalPoint(bool value) { mFixPrincipalPoint = value; }
 
 	bool getFixDistortion() const { return mFixDistortion; }
 	void setFixDistortion(bool value) { mFixDistortion = value; }
+
+	bool getFixFocalLengths() const { return mFixFocalLengths; }
+	void setFixFocalLengths(bool value) { mFixFocalLengths = value; }
 
 	bool getFix3DPoints() const { return mFix3DPoints; }
 	void setFix3DPoints(bool value) { mFix3DPoints = value; }
@@ -43,33 +47,33 @@ public:
 
 	void setMap(Map *map) {mMap=map;}
 	
-	void setK(const Eigen::Matrix3dr &K) { mK = K; }
-	const Eigen::Matrix3dr &getK() const { return mK; }
-
-	void setDistortion(const Eigen::Vector2d &coeff) { mParamsDistortion = coeff; }
-	const Eigen::Vector2d &getDistortion() const { return mParamsDistortion; }
+	void setCamera(CameraModel *camera);
 
 	void addFrameToAdjust(Keyframe &newFrame);
 
 	bool bundleAdjust();
 
 protected:
+	typedef CameraModel::TDistortionModel::TParamVector TDistortionParamsVector;
+
 	float mOutlierPixelThreshold;
 	float mOutlierPixelThresholdSq;
 	bool mUseLocks;
-	bool mFixK;
+	bool mFixPrincipalPoint;
 	bool mFixDistortion;
+	bool mFixFocalLengths;
 	bool mFix3DPoints;
 
 	Map *mMap;
 	std::unordered_set<Keyframe *> mFramesToAdjust;
 	std::unordered_set<Feature *> mFeaturesToAdjust;
 
-	Eigen::Vector2i mImageSize;
-	Eigen::Matrix3dr mK;
+	CameraModel *mCamera; //Will be updated at the end of the BA
 
-	Eigen::Vector2d mParamsDistortion;
-	Eigen::Vector4d mParamsK;
+	Eigen::Vector4d mPrincipalPoint;
+	TDistortionParamsVector mParamsDistortion;
+	Eigen::Vector4d mFocalLengths;
+
 	std::unordered_map<Keyframe *, Eigen::Matrix<double, 1, 6>, std::hash<Keyframe*>, std::equal_to<Keyframe*>, Eigen::aligned_allocator<std::pair<Keyframe*,Eigen::Matrix<double,1,6>>>> mParamsPoses;
 	std::unordered_map<Feature *, Eigen::Vector2d, std::hash<Feature*>, std::equal_to<Feature*>, Eigen::aligned_allocator<std::pair<Feature*, Eigen::Vector2d>>> mParamsFeatures;
 	std::vector<FeatureMeasurement *> mMeasurementsInProblem;

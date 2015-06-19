@@ -38,8 +38,8 @@ public:
 
 	bool Evaluate(double const * const * parameters, double *output, double**jacobians) const
 	{
-		Eigen::Map<TDistortionModel::TParamVector> params(parameters[0]);
-		Eigen::Map<Eigen::Vector2d> x(parameters[1]);
+		Eigen::Map<TDistortionModel::TParamVector> params(const_cast<double*>(parameters[0]));
+		Eigen::Map<Eigen::Vector2d> x(const_cast<double*>(parameters[1]));
 		Eigen::Map<Eigen::Vector2d> xd(output);
 
 		TDistortionModel::EvaluateCeres(params, x, xd, jacobians);
@@ -54,8 +54,8 @@ public:
 
 	bool Evaluate(double const * const * parameters, double *output, double**jacobians) const
 	{
-		Eigen::Map<TDistortionModel::TParamVector> params(parameters[0]);
-		Eigen::Map<Eigen::Vector2d> xd(parameters[1]);
+		Eigen::Map<TDistortionModel::TParamVector> params(const_cast<double*>(parameters[0]));
+		Eigen::Map<Eigen::Vector2d> xd(const_cast<double*>(parameters[1]));
 		Eigen::Map<Eigen::Vector2d> x(output);
 
 		TDistortionModel::EvaluateInvCeres(params, x, xd, jacobians);

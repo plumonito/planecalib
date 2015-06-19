@@ -160,11 +160,11 @@ public:
 		static_assert(TParamsMat::SizeAtCompileTime == TParamVector::SizeAtCompileTime, "Params vector is wrong size");
 		const auto &lambda = params[0];
 
-		EvaluateCeres(lambda, x, xd, jacobians);
+		EvaluateCeres2(lambda, x, xd, jacobians);
 	}
 
 	template <class TLambda, class TXMat, class TXdMat>
-	static void EvaluateCeres(const TLambda &lambda, const Eigen::MatrixBase<TXMat> &x, Eigen::MatrixBase<TXdMat> &xd, double **jacobians)
+	static void EvaluateCeres2(const TLambda &lambda, const Eigen::MatrixBase<TXMat> &x, Eigen::MatrixBase<TXdMat> &xd, double **jacobians)
 	{
 		static_assert(TXMat::SizeAtCompileTime == 2, "Param x must be of size 2");
 		static_assert(TXdMat::SizeAtCompileTime == 2, "Param xd must be of size 2");
@@ -187,7 +187,7 @@ public:
 	Eigen::Vector2f apply(const Eigen::Vector2f &x) const
 	{
 		Eigen::Vector2f res;
-		EvaluateCeres(mLambda, x, res, NULL);
+		EvaluateCeres2(mLambda, x, res, NULL);
 		return res;
 	}
 
@@ -199,30 +199,25 @@ public:
 		static_assert(TParamsMat::SizeAtCompileTime == TParamVector::SizeAtCompileTime, "Params vector is wrong size");
 		const auto &lambda = params[0];
 
-		EvaluateInvCeres(lambda, xd, x, jacobians);
+		EvaluateInvCeres2(lambda, xd, x, jacobians);
 	}
 	template <class TLambda, class TXMat, class TXdMat>
-	static void EvaluateInvCeres(const TLambda &lambda, const Eigen::MatrixBase<TXdMat> &xd, Eigen::MatrixBase<TXMat> &x, double **jacobians)
+	static void EvaluateInvCeres2(const TLambda &lambda, const Eigen::MatrixBase<TXdMat> &xd, Eigen::MatrixBase<TXMat> &x, double **jacobians)
 	{
 		static_assert(TXMat::SizeAtCompileTime == 2, "Param x must be of size 2");
 		static_assert(TXdMat::SizeAtCompileTime == 2, "Param xd must be of size 2");
 
 		typedef typename TXMat::Scalar TScalar;
 
-		const TScalar r2 = x.squaredNorm();
-		const TScalar factor = TScalar(1) + TScalar(lambda)*r2;
-
-		xd[0] = x[0] / factor;
-		xd[1] = x[1] / factor;
-
 		//Iterative
+		TScalar r2, factorInv;
 		const int kMaxIters = 11;
-		Eigen::Matrix<TScalar,2,1> pn = pd;
+		Eigen::Matrix<TScalar,2,1> pn = xd;
 		for (int j = 0; j < kMaxIters; j++)
 		{
-			TScalar r2 = pn.squaredNorm();
-			TScalar factorInv = 1 + r2*lambda;
-			pn = factorInv*pd;
+			r2 = pn.squaredNorm();
+			factorInv = TScalar(1) + r2*lambda;
+			pn = factorInv*xd;
 		}
 
 		x = pn;
@@ -237,7 +232,7 @@ public:
 	Eigen::Vector2f applyInv(const Eigen::Vector2f &xd) const
 	{
 		Eigen::Vector2f res;
-		EvaluateInvCeres(mLambda, xd, res, NULL);
+		EvaluateInvCeres2(mLambda, xd, res, NULL);
 		return res;
 	}
 

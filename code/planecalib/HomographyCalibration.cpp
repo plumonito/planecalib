@@ -218,7 +218,7 @@ void HomographyCalibration::calibrate(const std::vector<Eigen::Matrix3fr> &H)
 	ceres::Solve(options, &problem, &summary);
 
 	//Update
-	mPrincipalPoint += pp.cast<float>();
+	mPrincipalPoint += pp;
 	mFocalLengths[0] = mFocalLengths[1] = alpha;
 
 	//Show

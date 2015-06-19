@@ -404,8 +404,8 @@ void PlaneCalibSystem::doFullBA()
 			//refFrame.mPose3DT = refFrame.mGroundTruthPose3DT;
 			//refCenter = -refFrame.mPose3DR.transpose() * refFrame.mPose3DT;
 
-			auto k = mCamera.getK();
-			cv::Mat1f cvK(3, 3, const_cast<float*>(k.data()));
+			//auto k = mCamera.getK();
+			//cv::Mat1f cvK(3, 3, const_cast<float*>(k.data()));
 
 			//Triangulate all features
 			for (auto &pfeature : mMap->getFeatures())
@@ -485,29 +485,21 @@ void PlaneCalibSystem::doFullBA()
 	}
 
 	//Camera params
-	Eigen::Matrix3fr k;
-	Eigen::Vector2f distortion;
-	k = mCamera.getK();
-	distortion = mCamera.getDistortionModel().getCoefficients();
 	//distortion[1] += 0.03;
 	//BAAAAA!!!
 	CalibratedBundleAdjuster ba;
 	ba.setUseLocks(false);
 	ba.setFix3DPoints(mFix3DPoints);
 	ba.setOutlierThreshold(3 * mExpectedPixelNoiseStd);
-	ba.setDistortion(distortion.cast<double>());
+	ba.setCamera(&mCamera);
 	//ba.setFixDistortion(true);
 	//ba.setDistortion(Eigen::Vector2d(0.0935491, -0.157975));
-	ba.setK(k.cast<double>());
 	ba.setMap(mMap.get());
 	for (auto &framep : mMap->getKeyframes())
 	{
 		ba.addFrameToAdjust(*framep);
 	}
 	ba.bundleAdjust();
-
-	mCamera.getDistortionModel().setCoefficients(ba.getDistortion().cast<float>());
-	mCamera.setFromK(ba.getK().cast<float>());
 
 	mMap->mCamera.reset(new CameraModel(mCamera));
 
@@ -551,21 +543,15 @@ void PlaneCalibSystem::doFullBA()
 
 void PlaneCalibSystem::doValidationBA()
 {
-	Eigen::Matrix3fr k;
-	Eigen::Vector2f distortion;
-
-	k = mCamera.getK();
-	distortion = mCamera.getDistortionModel().getCoefficients();
-
 	//BAAAAA!!!
 	CalibratedBundleAdjuster ba;
 	ba.setUseLocks(false);
-	ba.setFixK(true);
+	ba.setFixPrincipalPoint(true);
 	ba.setFixDistortion(true);
+	ba.setFixFocalLengths(true);
 	ba.setFix3DPoints(true);
 	ba.setOutlierThreshold(3 * mExpectedPixelNoiseStd);
-	ba.setDistortion(distortion.cast<double>());
-	ba.setK(k.cast<double>());
+	ba.setCamera(&mCamera);
 	ba.setMap(mMap.get());
 	for (auto &framep : mMap->getKeyframes())
 	{

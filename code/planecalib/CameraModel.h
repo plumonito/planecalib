@@ -78,16 +78,18 @@ public:
 	{
 		const Eigen::Vector2f xn = xc.hnormalized();
 		Eigen::Vector2f uv(xn[0] * mFocalLengths[0], xn[1] * mFocalLengths[1]);
-		return mDistortionModel.distortPoint(uv) + mPrincipalPoint;
+		return mDistortionModel.apply(uv) + mPrincipalPoint;
 	}
 	
 	template <class TPointMatA, class TPointMatB>
 	void projectFromWorld(const Eigen::MatrixBase<TPointMatA> &x, Eigen::MatrixBase<TPointMatB> &p) const
 	{
 		typedef typename TPointMatA::Scalar TScalar;
-		Eigen::Matrix<TScalar, 2, 1> xd;
-		mDistortionModel.distortPoint(x.hnormalized().eval(),xd);
-		projectFromDistorted(xd,p);
+		Eigen::Matrix<TScalar, 2, 1> xn = x.hnormalized();
+		xn[0] *= mFocalLengths[0];
+		xn[1] *= mFocalLengths[1];
+		mDistortionModel.apply(xn,xd);
+		p += mPrincipalPoint;
 	}
 
 	template <class TCameraParams, class TDistortionParams, class TPointMatA, class TPointMatB>
@@ -114,7 +116,10 @@ public:
 	// Also, use integer pixel positions so that we can use a LUT for undistortion
 	Eigen::Vector3f unprojectToWorld(const Eigen::Vector2f &uv) const
 	{
-		return mDistortionModel.undistortPoint(unprojectToDistorted(uv)).homogeneous();
+		Eigen::Vector3f pn = mDistortionModel.applyInv(uv - mPrincipalPoint);
+		pn[0] /= mFocalLengths[0];
+		pn[1] /= mFocalLengths[1];
+		return pn.homogeneous();
 	}
 	Eigen::Vector3f unprojectToWorldLUT(const Eigen::Vector2i &uv) const
 	{
@@ -124,40 +129,6 @@ public:
 			assert(uv[0] >= 0 && uv[0] < mUnprojectLUT.cols() && uv[1] >= 0 && uv[1] < mUnprojectLUT.rows());
 		//}
 		return mUnprojectLUT(uv[1], uv[0]);
-	}
-
-	//////////////////////////////////////
-	// Project form distorted
-	// Same code, one using return value, one using args by-reference (for ceres)
-	Eigen::Vector2f projectFromDistorted(const Eigen::Vector2f &pd) const
-	{
-		return Eigen::Vector2f(mFx*pd[0] + mU0, mFy*pd[1] + mV0);
-	}
-
-	template <class TPointMatA, class TPointMatB>
-	void projectFromDistorted(const Eigen::MatrixBase<TPointMatA> &xd, Eigen::MatrixBase<TPointMatB> &p) const
-	{
-		typedef typename TPointMatA::Scalar T;
-		p[0] = T(mFx)*xd[0] + T(mU0);
-		p[1] = T(mFy)*xd[1] + T(mV0);
-	}
-	template <class TParams, class TPointMatA, class TPointMatB>
-	static void ProjectFromDistorted(const Eigen::MatrixBase<TParams> &cameraParams, const Eigen::MatrixBase<TPointMatA> &xd, Eigen::MatrixBase<TPointMatB> &p)
-	{
-		static_assert(TParams::SizeAtCompileTime == 4, "Params must be of size 4");
-
-		auto &fx = cameraParams[0];
-		auto &fy = cameraParams[1];
-		auto &u0 = cameraParams[2];
-		auto &v0 = cameraParams[3];
-
-		p[0] = fx*xd[0] + u0;
-		p[1] = fy*xd[1] + v0;
-	}
-
-	Eigen::Vector2f unprojectToDistorted(const Eigen::Vector2f &uv) const
-	{
-		return Eigen::Vector2f((uv[0] - mU0) / mFx, (uv[1] - mV0) / mFy);
 	}
 
 protected:
