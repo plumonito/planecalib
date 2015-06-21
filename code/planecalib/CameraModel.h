@@ -63,8 +63,6 @@ public:
 		mFocalLengths = Eigen::Vector2f(K(0, 0), K(1, 1));
 	}
 
-	void initLUT();
-
 	bool isPointInside(float depth, const Eigen::Vector2f &p) const
 	{
 		return depth > 0 &&  //Depth is positive
@@ -81,54 +79,99 @@ public:
 		return mDistortionModel.apply(uv) + mPrincipalPoint;
 	}
 	
-	template <class TPointMatA, class TPointMatB>
-	void projectFromWorld(const Eigen::MatrixBase<TPointMatA> &x, Eigen::MatrixBase<TPointMatB> &p) const
+	template <class TXMat, class TPMat>
+	void projectFromWorld(const Eigen::MatrixBase<TXMat> &x, Eigen::MatrixBase<TPMat> &p) const
 	{
-		typedef typename TPointMatA::Scalar TScalar;
+		static_assert(TXMat::SizeAtCompileTime == 3, "Param x must be of size 3");
+		static_assert(TPMat::SizeAtCompileTime == 2, "Param p must be of size 2");
+
+		typedef typename TXMat::Scalar TScalar;
+
 		Eigen::Matrix<TScalar, 2, 1> xn = x.hnormalized();
-		xn[0] *= mFocalLengths[0];
-		xn[1] *= mFocalLengths[1];
-		mDistortionModel.apply(xn,xd);
-		p += mPrincipalPoint;
+		xn[0] *= TScalar(mFocalLengths[0]);
+		xn[1] *= TScalar(mFocalLengths[1]);
+		mDistortionModel.apply(xn, p);
+		p[0] += TScalar(mPrincipalPoint[0]);
+		p[1] += TScalar(mPrincipalPoint[1]);
 	}
 
-	template <class TCameraParams, class TDistortionParams, class TPointMatA, class TPointMatB>
-	static void ProjectFromWorld(const Eigen::MatrixBase<TCameraParams> &cameraParams, const Eigen::MatrixBase<TDistortionParams> &distortionParams, const Eigen::MatrixBase<TPointMatA> &x, Eigen::MatrixBase<TPointMatB> &p)
+	template <class TPPMat, class TFocalMat, class TDistortionParams, class TXMat, class TPMat>
+	static void ProjectFromWorld(const Eigen::MatrixBase<TPPMat> &pp, const Eigen::MatrixBase<TDistortionParams> &distortionParams, const Eigen::MatrixBase<TFocalMat> &focal, const Eigen::MatrixBase<TXMat> &x, Eigen::MatrixBase<TPMat> &p)
 	{
-		typedef typename TPointMatA::Scalar TScalar;
-		Eigen::Matrix<TScalar, 2, 1> xd;
-		TDistortionModel::DistortPoint(distortionParams, x.hnormalized(), xd);
-		ProjectFromDistorted(cameraParams,xd, p);
+		static_assert(TPPMat::SizeAtCompileTime == 2, "Param pp must be of size 2");
+		static_assert(TDistortionParams::SizeAtCompileTime == TDistortionModel::TParamVector::SizeAtCompileTime, "Param distortion wrong size");
+		static_assert(TFocalMat::SizeAtCompileTime == 2, "Param focal must be of size 2");
+		static_assert(TXMat::SizeAtCompileTime == 3, "Param x must be of size 3");
+		static_assert(TPMat::SizeAtCompileTime == 2, "Param p must be of size 2");
+
+		typedef typename TXMat::Scalar TScalar;
+
+		Eigen::Matrix<TScalar, 2, 1> xn = x.hnormalized();
+		xn[0] *= focal[0];
+		xn[1] *= focal[1];
+		TDistortionModel::Apply(distortionParams, xn, p);
+		p += pp;
 	}
 
 	void projectFromWorldJacobian(const Eigen::Vector3f &xc, Eigen::Vector3f &ujac, Eigen::Vector3f &vjac) const;
-	void projectFromWorldJacobianLUT(const Eigen::Vector2i &uv, Eigen::Vector3f &ujac, Eigen::Vector3f &vjac) const
-	{
-		assert(uv[0] >= 0 && uv[0] < mProjectFromWorldJacobianLUT.cols() && uv[1] >= 0 && uv[1] < mProjectFromWorldJacobianLUT.rows());
-		const Eigen::Matrix<float,3,2> &lut = mProjectFromWorldJacobianLUT(uv[1], uv[0]);
-		ujac = lut.col(0);
-		vjac = lut.col(1);
-	}
 
 	//////////////////////////////////////
 	// Unproject (assuming z=1)
-	// Note that often no analytical formula is present, therefore we have no templated version for ceres
-	// Also, use integer pixel positions so that we can use a LUT for undistortion
-	Eigen::Vector3f unprojectToWorld(const Eigen::Vector2f &uv) const
+	Eigen::Vector3f unprojectToWorld(const Eigen::Vector2f &p) const
 	{
-		Eigen::Vector3f pn = mDistortionModel.applyInv(uv - mPrincipalPoint);
-		pn[0] /= mFocalLengths[0];
-		pn[1] /= mFocalLengths[1];
-		return pn.homogeneous();
+		Eigen::Vector2f xd;
+		xd[0] = p[0] - mPrincipalPoint[0];
+		xd[1] = p[1] - mPrincipalPoint[1];
+
+		Eigen::Vector2f xn;
+		xn = mDistortionModel.applyInv(xd);
+
+		xn[0] /= mFocalLengths[0];
+		xn[1] /= mFocalLengths[1];
+		return xn.homogeneous();
 	}
-	Eigen::Vector3f unprojectToWorldLUT(const Eigen::Vector2i &uv) const
+
+	template <class TPMat, class TXMat>
+	void unprojectToWorld(const Eigen::MatrixBase<TPMat> &p, Eigen::MatrixBase<TXMat> &x) const
 	{
-		//if (!(uv.x >= 0 && uv.x < mUnprojectLUT.cols && uv.y >= 0 && uv.y < mUnprojectLUT.rows))
-		//{
-			//DTSLAM_LOG << "Here!!!!!!!!!!!!!!!!!!!!!!!!!\n";
-			assert(uv[0] >= 0 && uv[0] < mUnprojectLUT.cols() && uv[1] >= 0 && uv[1] < mUnprojectLUT.rows());
-		//}
-		return mUnprojectLUT(uv[1], uv[0]);
+		static_assert(TXMat::SizeAtCompileTime == 3, "Param x must be of size 3");
+		static_assert(TPMat::SizeAtCompileTime == 2, "Param p must be of size 2");
+
+		typedef typename TPMat::Scalar TScalar;
+
+		Eigen::Matrix<TScalar, 2, 1> xd;
+		xd[0] = p[0] - TScalar(mPrincipalPoint[0]);
+		xd[1] = p[1] - TScalar(mPrincipalPoint[1]);
+		
+		Eigen::Matrix<TScalar, 2, 1> xn;
+		mDistortionModel.applyInv(xd, xn);
+
+		xn[0] /= TScalar(mFocalLengths[0]);
+		xn[1] /= TScalar(mFocalLengths[1]);
+		x = xn.homogeneous();
+	}
+
+	template <class TPPMat, class TFocalMat, class TDistortionParams, class TXMat, class TPMat>
+	static void UnprojectToWorld(const Eigen::MatrixBase<TPPMat> &pp, const Eigen::MatrixBase<TDistortionParams> &distortionParams, const Eigen::MatrixBase<TFocalMat> &focal, const Eigen::MatrixBase<TXMat> &x, Eigen::MatrixBase<TPMat> &p)
+	{
+		static_assert(TPPMat::SizeAtCompileTime == 2, "Param pp must be of size 2");
+		static_assert(TDistortionParams::SizeAtCompileTime == TDistortionModel::TParamVector::SizeAtCompileTime, "Param distortion wrong size");
+		static_assert(TFocalMat::SizeAtCompileTime == 2, "Param focal must be of size 2");
+		static_assert(TXMat::SizeAtCompileTime == 3, "Param x must be of size 3");
+		static_assert(TPMat::SizeAtCompileTime == 2, "Param p must be of size 2");
+
+		typedef typename TXMat::Scalar TScalar;
+
+		Eigen::Matrix<TScalar, 2, 1> xd;
+		xd[0] = p[0] - pp[0];
+		xd[1] = p[1] - pp[1];
+
+		Eigen::Matrix<TScalar, 2, 1> xn;
+		TDistortionModel::ApplyInv(distortionParams, xd, xn);
+
+		xn[0] /= focal[0];
+		xn[1] /= focal[1];
+		x = xn.homogeneous();
 	}
 
 protected:
@@ -139,37 +182,11 @@ protected:
 
 	//Distortion model
 	TDistortionModel mDistortionModel;
-
-	Eigen::Matrix<Eigen::Vector3f,Eigen::Dynamic,Eigen::Dynamic> mUnprojectLUT; //Unproject doesn't need an analytical formula. If it is slow we can cache it in a LUT.
-	Eigen::Matrix<Eigen::Matrix<float,3,2>, Eigen::Dynamic, Eigen::Dynamic> mProjectFromWorldJacobianLUT; //Can be cached if the pixel value is known
 };
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 // Template implementations
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-template<class TDistortionModel>
-void CameraModel_<TDistortionModel>::initLUT()
-{
-	MYAPP_LOG << "Building LUTs for image of size " << mImageSize.transpose() << "...";
-	mUnprojectLUT.resize(mImageSize[1], mImageSize[0]);
-	mProjectFromWorldJacobianLUT.resize(mImageSize[1], mImageSize[0]);
-	for(int v=0; v<mImageSize[1]; v++)
-	{
-		for (int u = 0; u<mImageSize[0]; u++)
-		{
-			Eigen::Vector3f &itemUnprojectLUT = mUnprojectLUT(v,u);
-			Eigen::Matrix<float,3,2> &itemProjectLUT = mProjectFromWorldJacobianLUT(v,u);
-
-			itemUnprojectLUT = unprojectToWorld(Eigen::Vector2f(u, v));
-
-			Eigen::Vector3f ujac, vjac;
-			projectFromWorldJacobian(itemUnprojectLUT, ujac, vjac);
-			itemProjectLUT << ujac, vjac;
-		}
-	}
-	MYAPP_LOG << "done\n";
-}
 
 }
 

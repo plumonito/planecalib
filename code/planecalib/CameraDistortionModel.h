@@ -5,9 +5,45 @@
 #include "eutils.h"
 #include "cvutils.h"
 #include "CeresUtils.h"
+#include <ceres/ceres.h>
 
 namespace planecalib
 {
+
+//////////////////////////////////////////////////////////////////////////////////////////////////////
+// ForwardDistortionFunction & InverseDistortionFunction
+
+template <class TDistortionModel>
+class ForwardDistortionFunction : public ceres::SizedCostFunction<2, TDistortionModel::TParamVector::SizeAtCompileTime, 2>
+{
+public:
+	typedef ceres::CostFunctionToFunctor<2, TDistortionModel::TParamVector::SizeAtCompileTime, 2> TCostFunctor;
+
+	bool Evaluate(double const * const * parameters, double *output, double**jacobians) const
+	{
+		Eigen::Map<TDistortionModel::TParamVector> params(const_cast<double*>(parameters[0]));
+		Eigen::Map<Eigen::Vector2d> x(const_cast<double*>(parameters[1]));
+		Eigen::Map<Eigen::Vector2d> xd(output);
+
+		return TDistortionModel::EvaluateCeres(params, x, xd, jacobians);
+	}
+};
+
+template <class TDistortionModel>
+class InverseDistortionFunction : public ceres::SizedCostFunction<2, TDistortionModel::TParamVector::SizeAtCompileTime, 2>
+{
+public:
+	typedef ceres::CostFunctionToFunctor<2, TDistortionModel::TParamVector::RowsAtCompileTime, 2> TCostFunctor;
+
+	bool Evaluate(double const * const * parameters, double *output, double**jacobians) const
+	{
+		Eigen::Map<TDistortionModel::TParamVector> params(const_cast<double*>(parameters[0]));
+		Eigen::Map<Eigen::Vector2d> xd(const_cast<double*>(parameters[1]));
+		Eigen::Map<Eigen::Vector2d> x(output);
+
+		return TDistortionModel::EvaluateInvCeres(params, x, xd, jacobians);
+	}
+};
 
 /*
 class NullCameraDistortionModel
@@ -136,7 +172,12 @@ protected:
 class DivisionDistortionModel
 {
 public:
-	DivisionDistortionModel() {}
+	friend class ForwardDistortionFunction < DivisionDistortionModel > ;
+	friend class InverseDistortionFunction < DivisionDistortionModel >;
+
+	DivisionDistortionModel()
+	{
+	}
 
 	void init(const float lambda=0)
 	{
@@ -153,183 +194,294 @@ public:
 
 	///////////////////////////
 	// Apply 
+	inline Eigen::Vector2f apply(const Eigen::Vector2f &x) const;
+
+	template <class TXMat, class TXdMat>
+	void apply(const Eigen::MatrixBase<TXMat> &x, Eigen::MatrixBase<TXdMat> &xd) const;
 
 	template <class TParamsMat, class TXMat, class TXdMat>
-	static void EvaluateCeres(const Eigen::MatrixBase<TParamsMat> &params, const Eigen::MatrixBase<TXMat> &x, Eigen::MatrixBase<TXdMat> &xd, double **jacobians)
-	{
-		static_assert(TParamsMat::SizeAtCompileTime == TParamVector::SizeAtCompileTime, "Params vector is wrong size");
-		const auto &lambda = params[0];
-
-		EvaluateCeres2(lambda, x, xd, jacobians);
-	}
-
-	template <class TLambda, class TXMat, class TXdMat>
-	static void EvaluateCeres2(const TLambda &lambda, const Eigen::MatrixBase<TXMat> &x, Eigen::MatrixBase<TXdMat> &xd, double **jacobians)
-	{
-		static_assert(TXMat::SizeAtCompileTime == 2, "Param x must be of size 2");
-		static_assert(TXdMat::SizeAtCompileTime == 2, "Param xd must be of size 2");
-
-		typedef typename TXMat::Scalar TScalar;
-
-		const TScalar r2 = x.squaredNorm();
-		const TScalar factor = TScalar(1) + TScalar(lambda)*r2;
-
-		xd[0] = x[0] / factor;
-		xd[1] = x[1] / factor;
-
-		//Jacobian
-		if (jacobians)
-		{
-			EvaluateCeresJacobians(lambda, x, r2, factor, jacobians);
-		}
-	}
-
-	Eigen::Vector2f apply(const Eigen::Vector2f &x) const
-	{
-		Eigen::Vector2f res;
-		EvaluateCeres2(mLambda, x, res, NULL);
-		return res;
-	}
+	static void Apply(const Eigen::MatrixBase<TParamsMat> &params, const Eigen::MatrixBase<TXMat> &x, Eigen::MatrixBase<TXdMat> &xd);
 
 	///////////////////////////
 	// Apply Inverse
+	inline Eigen::Vector2f applyInv(const Eigen::Vector2f &xd) const;
+
+	template <class TXMat, class TXdMat>
+	void applyInv(const Eigen::MatrixBase<TXdMat> &xd, Eigen::MatrixBase<TXMat> &x) const;
+
 	template <class TParamsMat, class TXMat, class TXdMat>
-	static void EvaluateInvCeres(const Eigen::MatrixBase<TParamsMat> &params, const Eigen::MatrixBase<TXdMat> &xd, Eigen::MatrixBase<TXMat> &x, double **jacobians)
-	{
-		static_assert(TParamsMat::SizeAtCompileTime == TParamVector::SizeAtCompileTime, "Params vector is wrong size");
-		const auto &lambda = params[0];
-
-		EvaluateInvCeres2(lambda, xd, x, jacobians);
-	}
-	template <class TLambda, class TXMat, class TXdMat>
-	static void EvaluateInvCeres2(const TLambda &lambda, const Eigen::MatrixBase<TXdMat> &xd, Eigen::MatrixBase<TXMat> &x, double **jacobians)
-	{
-		static_assert(TXMat::SizeAtCompileTime == 2, "Param x must be of size 2");
-		static_assert(TXdMat::SizeAtCompileTime == 2, "Param xd must be of size 2");
-
-		typedef typename TXMat::Scalar TScalar;
-
-		//Iterative
-		TScalar r2, factorInv;
-		const int kMaxIters = 11;
-		Eigen::Matrix<TScalar,2,1> pn = xd;
-		for (int j = 0; j < kMaxIters; j++)
-		{
-			r2 = pn.squaredNorm();
-			factorInv = TScalar(1) + r2*lambda;
-			pn = factorInv*xd;
-		}
-
-		x = pn;
-
-		//Jacobian
-		if (jacobians)
-		{
-			EvaluateInvCeresJacobians(lambda, x, r2, 1/factorInv, jacobians);
-		}
-	}
-
-	Eigen::Vector2f applyInv(const Eigen::Vector2f &xd) const
-	{
-		Eigen::Vector2f res;
-		EvaluateInvCeres2(mLambda, xd, res, NULL);
-		return res;
-	}
+	static void ApplyInv(const Eigen::MatrixBase<TParamsMat> &params, const Eigen::MatrixBase<TXdMat> &xd, Eigen::MatrixBase<TXMat> &x);
 
 protected:
+	static const ceres::CostFunctionToFunctor<2, 1, 2> gApplyFunctor;
+	static const ceres::CostFunctionToFunctor<2, 1, 2> gApplyInvFunctor;
+
 	float mLambda;
 	float mMaxRadiusSq; //Do not apply distortion after this radius. Keeps the distortion within the image limits where it was calibrated.
+
+	///////////////////////////////////////////////////////////////////////////////////////
+	// Apply (internal)
+	template <class TParamsMat, class TXMat, class TXdMat>
+	static bool EvaluateCeres(const Eigen::MatrixBase<TParamsMat> &params, const Eigen::MatrixBase<TXMat> &x, Eigen::MatrixBase<TXdMat> &xd, double **jacobians);
+
+	template <class TLambda, class TXMat, class TXdMat>
+	static bool EvaluateCeres2(const TLambda &lambda, const Eigen::MatrixBase<TXMat> &x, Eigen::MatrixBase<TXdMat> &xd, double **jacobians);
+
 
 	//Calcualtes the jacobians in ceres format
 	//jacobians[0][0:1] = [dxd/dlambda, dyd/dlambda]
 	//jacobians[1][0:1] = [dxd/dx, dyd/dx]
 	//jacobians[1][2:3] = [dxd/dy, dyd/dy]
 	template <class TXMat>
-	static void EvaluateCeresJacobians(double lambda, const Eigen::MatrixBase<TXMat> &x, double r2, double factor, double **jacobians)
-	{
-		const double factor2 = factor*factor;
-		if (jacobians[0])
-		{
-			//dxd/dlambda
-			jacobians[0][0] = -x[0] * r2*factor2;
-			//dyd/dlambda
-			jacobians[0][1] = -x[1] * r2*factor2;
-		}
-		if (jacobians[1])
-		{
-			//dxd/dx
-			jacobians[1][0] = (1 + lambda*(x[1] * x[1] - x[0] * x[0]))*factor2;
-			//dxd/dy
-			jacobians[1][1] = -2 * lambda*x[0] * x[1] * factor2;
+	static void EvaluateCeresJacobians(double lambda, const Eigen::MatrixBase<TXMat> &x, double r2, double factor, double **jacobians);
 
-			//dyd/dx
-			jacobians[1][2] = -2 * lambda*x[0] * x[1] * factor2;
-			//dyd/dy
-			jacobians[1][3] = (1 + lambda*(x[0] * x[0] - x[1] * x[1]))*factor2;
-		}
-	}
+	///////////////////////////////////////////////////////////////////////////////////////
+	// ApplyInv (internal)
+
+	template <class TParamsMat, class TXMat, class TXdMat>
+	static bool EvaluateInvCeres(const Eigen::MatrixBase<TParamsMat> &params, const Eigen::MatrixBase<TXdMat> &xd, Eigen::MatrixBase<TXMat> &x, double **jacobians);
+
+	template <class TLambda, class TXMat, class TXdMat>
+	static bool EvaluateInvCeres2(const TLambda &lambda, const Eigen::MatrixBase<TXdMat> &xd, Eigen::MatrixBase<TXMat> &x, double **jacobians);
 
 	//jacobians[0][0:1] = [dx/dlambda, dy/dlambda]
 	//jacobians[1][0:1] = [dx/dxd, dy/dxd]
 	//jacobians[1][2:3] = [dx/dyd, dy/dyd]
 	template <class TXMat>
-	static void EvaluateInvCeresJacobians(double lambda, const Eigen::MatrixBase<TXMat> &x, double r2, double factor, double **jacobians)
-	{
-		static_assert(TXMat::SizeAtCompileTime == 2, "X must be of size 2");
-		assert(jacobians != NULL);
-
-		//Compute forward
-		double dxd_dLambda[2];
-		double dxd_dx[4];
-		double *jacPtr[2] = { dxd_dLambda, dxd_dx };
-
-		EvaluateCeresJacobians(lambda, x, r2, factor, jacPtr);
-
-		//Build square jacobian
-		//Results = {lambda, xd, yd}, Params = {lambda, x, y}
-		//jacForward(i,j) = dResult[i] / dParams[j]
-		//jacForward(2,0) = dyd / dlambda
-		//jacForward(2,1) = dyd / dx
-		Eigen::Matrix3dr jacForward;
-		jacForward(0, 0) = 1;
-		jacForward(0, 1) = 0;
-		jacForward(0, 2) = 0;
-
-		jacForward(1, 0) = dxd_dLambda[0]; //dxd/dlambda
-		jacForward(1, 1) = dxd_dx[0]; //dxd/dx
-		jacForward(1, 2) = dxd_dx[1]; //dxd/dy
-
-		jacForward(2, 0) = dxd_dLambda[1]; //dyd/dlambda
-		jacForward(2, 1) = dxd_dx[2]; //dyd/dx
-		jacForward(2, 2) = dxd_dx[3]; //dyd/dy
-
-		//Invert
-		//jacInv(i,j) = dParams[i] / dResult[j]
-		Eigen::Matrix3dr jacInv;
-		jacInv = jacForward.inverse();
-
-		//Fill output
-		if (jacobians[0])
-		{
-			//dx/dlambda
-			jacobians[0][0] = jacInv(1, 0);
-			//dy/dlambda
-			jacobians[0][1] = jacInv(2, 0);
-		}
-		if (jacobians[1])
-		{
-			//dx/dxd
-			jacobians[1][0] = jacInv(1, 1);
-			//dx/dyd
-			jacobians[1][1] = jacInv(1, 2);
-
-			//dy/dxd
-			jacobians[1][2] = jacInv(2, 1);
-			//dy/dyd
-			jacobians[1][3] = jacInv(2, 2);
-		}
-	}
+	static void EvaluateInvCeresJacobians(double lambda, const Eigen::MatrixBase<TXMat> &x, double r2, double factor, double **jacobians);
 };
+
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// Template implementations
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+template class ForwardDistortionFunction<DivisionDistortionModel>;
+template class InverseDistortionFunction<DivisionDistortionModel>;
+
+Eigen::Vector2f DivisionDistortionModel::apply(const Eigen::Vector2f &x) const
+{
+	Eigen::Vector2f res;
+	EvaluateCeres2(mLambda, x, res, NULL);
+	return res;
+}
+
+template <class TXMat, class TXdMat>
+void DivisionDistortionModel::apply(const Eigen::MatrixBase<TXMat> &x, Eigen::MatrixBase<TXdMat> &xd) const
+{
+	static_assert(TXMat::SizeAtCompileTime == 2, "Param x must be of size 2");
+	static_assert(TXdMat::SizeAtCompileTime == 2, "Param xd must be of size 2");
+
+	typedef typename TXMat::Scalar TScalar;
+	const Eigen::Matrix<TScalar,1,1> params = getParams().cast<TScalar>();
+	gApplyFunctor(params.data(), &x[0], &xd[0]);
+}
+
+template <class TParamsMat, class TXMat, class TXdMat>
+static void DivisionDistortionModel::Apply(const Eigen::MatrixBase<TParamsMat> &params, const Eigen::MatrixBase<TXMat> &x, Eigen::MatrixBase<TXdMat> &xd)
+{
+	static_assert(TParamsMat::SizeAtCompileTime == TParamVector::SizeAtCompileTime, "Params vector is wrong size");
+	static_assert(TXMat::SizeAtCompileTime == 2, "Param x must be of size 2");
+	static_assert(TXdMat::SizeAtCompileTime == 2, "Param xd must be of size 2");
+
+	gApplyFunctor(&params[0], &x[0], &xd[0]);
+}
+
+///////////////////////////
+// Apply Inverse
+Eigen::Vector2f DivisionDistortionModel::applyInv(const Eigen::Vector2f &xd) const
+{
+	Eigen::Vector2f res;
+	EvaluateInvCeres2(mLambda, xd, res, NULL);
+	return res;
+}
+
+template <class TXMat, class TXdMat>
+void DivisionDistortionModel::applyInv(const Eigen::MatrixBase<TXdMat> &xd, Eigen::MatrixBase<TXMat> &x) const
+{
+	static_assert(TXMat::SizeAtCompileTime == 2, "Param x must be of size 2");
+	static_assert(TXdMat::SizeAtCompileTime == 2, "Param xd must be of size 2");
+
+	typedef typename TXMat::Scalar TScalar;
+	const Eigen::Matrix<TScalar, 1, 1> params = getParams().cast<TScalar>();
+	gApplyInvFunctor(params.data(), &xd[0], &x[0]);
+}
+
+template <class TParamsMat, class TXMat, class TXdMat>
+static void DivisionDistortionModel::ApplyInv(const Eigen::MatrixBase<TParamsMat> &params, const Eigen::MatrixBase<TXdMat> &xd, Eigen::MatrixBase<TXMat> &x)
+{
+	static_assert(TParamsMat::SizeAtCompileTime == TParamVector::SizeAtCompileTime, "Params vector is wrong size");
+	static_assert(TXMat::SizeAtCompileTime == 2, "Param x must be of size 2");
+	static_assert(TXdMat::SizeAtCompileTime == 2, "Param xd must be of size 2");
+
+	gApplyInvFunctor(&params[0], &xd[0], &x[0]);
+}
+
+///////////////////////////////////////////////////////////////////////////////////////
+// Apply (internal)
+template <class TParamsMat, class TXMat, class TXdMat>
+static bool DivisionDistortionModel::EvaluateCeres(const Eigen::MatrixBase<TParamsMat> &params, const Eigen::MatrixBase<TXMat> &x, Eigen::MatrixBase<TXdMat> &xd, double **jacobians)
+{
+	static_assert(TParamsMat::SizeAtCompileTime == TParamVector::SizeAtCompileTime, "Params vector is wrong size");
+	const auto &lambda = params[0];
+
+	return EvaluateCeres2(lambda, x, xd, jacobians);
+}
+
+template <class TLambda, class TXMat, class TXdMat>
+static bool DivisionDistortionModel::EvaluateCeres2(const TLambda &lambda, const Eigen::MatrixBase<TXMat> &x, Eigen::MatrixBase<TXdMat> &xd, double **jacobians)
+{
+	static_assert(TXMat::SizeAtCompileTime == 2, "Param x must be of size 2");
+	static_assert(TXdMat::SizeAtCompileTime == 2, "Param xd must be of size 2");
+
+	typedef typename TXMat::Scalar TScalar;
+
+	const TScalar r2 = x.squaredNorm();
+	const TScalar factor = TScalar(1) + TScalar(lambda)*r2;
+
+	xd[0] = x[0] / factor;
+	xd[1] = x[1] / factor;
+
+	//Jacobian
+	if (jacobians)
+	{
+		EvaluateCeresJacobians(lambda, x, r2, factor, jacobians);
+	}
+
+	return true;
+}
+
+
+//Calcualtes the jacobians in ceres format
+//jacobians[0][0:1] = [dxd/dlambda, dyd/dlambda]
+//jacobians[1][0:1] = [dxd/dx, dyd/dx]
+//jacobians[1][2:3] = [dxd/dy, dyd/dy]
+template <class TXMat>
+static void DivisionDistortionModel::EvaluateCeresJacobians(double lambda, const Eigen::MatrixBase<TXMat> &x, double r2, double factor, double **jacobians)
+{
+	const double factor2 = factor*factor;
+	if (jacobians[0])
+	{
+		//dxd/dlambda
+		jacobians[0][0] = -x[0] * r2*factor2;
+		//dyd/dlambda
+		jacobians[0][1] = -x[1] * r2*factor2;
+	}
+	if (jacobians[1])
+	{
+		//dxd/dx
+		jacobians[1][0] = (1 + lambda*(x[1] * x[1] - x[0] * x[0]))*factor2;
+		//dxd/dy
+		jacobians[1][1] = -2 * lambda*x[0] * x[1] * factor2;
+
+		//dyd/dx
+		jacobians[1][2] = -2 * lambda*x[0] * x[1] * factor2;
+		//dyd/dy
+		jacobians[1][3] = (1 + lambda*(x[0] * x[0] - x[1] * x[1]))*factor2;
+	}
+}
+
+///////////////////////////////////////////////////////////////////////////////////////
+// ApplyInv (internal)
+
+template <class TParamsMat, class TXMat, class TXdMat>
+static bool DivisionDistortionModel::EvaluateInvCeres(const Eigen::MatrixBase<TParamsMat> &params, const Eigen::MatrixBase<TXdMat> &xd, Eigen::MatrixBase<TXMat> &x, double **jacobians)
+{
+	static_assert(TParamsMat::SizeAtCompileTime == TParamVector::SizeAtCompileTime, "Params vector is wrong size");
+	const auto &lambda = params[0];
+
+	return EvaluateInvCeres2(lambda, xd, x, jacobians);
+}
+template <class TLambda, class TXMat, class TXdMat>
+static bool DivisionDistortionModel::EvaluateInvCeres2(const TLambda &lambda, const Eigen::MatrixBase<TXdMat> &xd, Eigen::MatrixBase<TXMat> &x, double **jacobians)
+{
+	static_assert(TXMat::SizeAtCompileTime == 2, "Param x must be of size 2");
+	static_assert(TXdMat::SizeAtCompileTime == 2, "Param xd must be of size 2");
+
+	typedef typename TXMat::Scalar TScalar;
+
+	//Iterative
+	TScalar r2, factorInv;
+	const int kMaxIters = 11;
+	Eigen::Matrix<TScalar, 2, 1> pn = xd;
+	for (int j = 0; j < kMaxIters; j++)
+	{
+		r2 = pn.squaredNorm();
+		factorInv = TScalar(1) + r2*lambda;
+		pn = factorInv*xd;
+	}
+
+	x = pn;
+
+	//Jacobian
+	if (jacobians)
+	{
+		EvaluateInvCeresJacobians(lambda, x, r2, 1 / factorInv, jacobians);
+	}
+
+	return true;
+}
+
+
+//jacobians[0][0:1] = [dx/dlambda, dy/dlambda]
+//jacobians[1][0:1] = [dx/dxd, dy/dxd]
+//jacobians[1][2:3] = [dx/dyd, dy/dyd]
+template <class TXMat>
+static void DivisionDistortionModel::EvaluateInvCeresJacobians(double lambda, const Eigen::MatrixBase<TXMat> &x, double r2, double factor, double **jacobians)
+{
+	static_assert(TXMat::SizeAtCompileTime == 2, "X must be of size 2");
+	assert(jacobians != NULL);
+
+	//Compute forward
+	double dxd_dLambda[2];
+	double dxd_dx[4];
+	double *jacPtr[2] = { dxd_dLambda, dxd_dx };
+
+	EvaluateCeresJacobians(lambda, x, r2, factor, jacPtr);
+
+	//Build square jacobian
+	//Results = {lambda, xd, yd}, Params = {lambda, x, y}
+	//jacForward(i,j) = dResult[i] / dParams[j]
+	//jacForward(2,0) = dyd / dlambda
+	//jacForward(2,1) = dyd / dx
+	Eigen::Matrix3dr jacForward;
+	jacForward(0, 0) = 1;
+	jacForward(0, 1) = 0;
+	jacForward(0, 2) = 0;
+
+	jacForward(1, 0) = dxd_dLambda[0]; //dxd/dlambda
+	jacForward(1, 1) = dxd_dx[0]; //dxd/dx
+	jacForward(1, 2) = dxd_dx[1]; //dxd/dy
+
+	jacForward(2, 0) = dxd_dLambda[1]; //dyd/dlambda
+	jacForward(2, 1) = dxd_dx[2]; //dyd/dx
+	jacForward(2, 2) = dxd_dx[3]; //dyd/dy
+
+	//Invert
+	//jacInv(i,j) = dParams[i] / dResult[j]
+	Eigen::Matrix3dr jacInv;
+	jacInv = jacForward.inverse();
+
+	//Fill output
+	if (jacobians[0])
+	{
+		//dx/dlambda
+		jacobians[0][0] = jacInv(1, 0);
+		//dy/dlambda
+		jacobians[0][1] = jacInv(2, 0);
+	}
+	if (jacobians[1])
+	{
+		//dx/dxd
+		jacobians[1][0] = jacInv(1, 1);
+		//dx/dyd
+		jacobians[1][1] = jacInv(1, 2);
+
+		//dy/dxd
+		jacobians[1][2] = jacInv(2, 1);
+		//dy/dyd
+		jacobians[1][3] = jacInv(2, 2);
+	}
+}
 
 }
 

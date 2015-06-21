@@ -41,14 +41,12 @@ public:
 	void setOnlyDistortion(bool value) { mOnlyDistortion = value; }
 
 	void setMap(Map *map) { mMap = map; }
+	void setCamera(CameraModel *camera);
 
 	void addFrameToAdjust(Keyframe &newFrame);
 	const std::unordered_set<Keyframe *> getFramesToAdjust() const { return mFramesToAdjust; }
 	const std::unordered_set<Feature *> getFeaturesToAdjust() const {return mFeaturesToAdjust;}
 
-	void initFromCamera(const CameraModel &mCamera);
-	void updateCamera(CameraModel &mCamera) const;
-	
 	bool bundleAdjust();
 
 protected:
@@ -62,6 +60,8 @@ protected:
 	std::unordered_set<Feature *> mFeaturesToAdjust;
 
 	Eigen::Vector2i mImageSize;
+
+	CameraModel *mCamera;
 
 	Eigen::Vector2d mParamsPrincipalPoint;
 	TDistortionParamVector mParamsDistortion;

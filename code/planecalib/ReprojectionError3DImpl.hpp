@@ -7,11 +7,12 @@ namespace planecalib
 {
 
 template<class T>
-void ReprojectionError3D::computeXc(const T * const _cameraParams, const T * const _distortionParams, const T * const _xc, T *residuals) const
+void ReprojectionError3D::computeXc(const T * const _pp, const T * const _distortionParams, const T * const _focals, const T * const _xc, T *residuals) const
 {
 	Eigen::Map<Eigen::Matrix<T, 3, 1>> xc((T*)_xc);
-	Eigen::Map<Eigen::Matrix<T, CameraModel::kParamCount, 1>> cameraParams((T*)_cameraParams);
-	Eigen::Map<Eigen::Matrix<T, CameraModel::TDistortionModel::kParamCount, 1>> distortionParams((T*)_distortionParams);
+	Eigen::Map<Eigen::Matrix<T, 2, 1>> pp((T*)_pp);
+	Eigen::Map<Eigen::Matrix<T, TDistortionParamVector::RowsAtCompileTime, 1>> distortionParams((T*)_distortionParams);
+	Eigen::Map<Eigen::Matrix<T, 2, 1>> focals((T*)_focals);
 
 	if (CeresUtils::ToDouble(xc[2]) <= 0)
 	{
@@ -23,7 +24,7 @@ void ReprojectionError3D::computeXc(const T * const _cameraParams, const T * con
 	{
 		//Point in front of camera, proceed
 		Eigen::Matrix<T,2,1> p;
-		CameraModel::ProjectFromWorld(cameraParams, distortionParams,xc,p);
+		CameraModel::ProjectFromWorld(pp, distortionParams, focals, xc, p);
 
 		residuals[0] = (p[0] - T(mImgPoint[0])) / T(mScale);
 		residuals[1] = (p[1] - T(mImgPoint[1])) / T(mScale);
@@ -31,7 +32,7 @@ void ReprojectionError3D::computeXc(const T * const _cameraParams, const T * con
 }
 
 template<class T>
-void ReprojectionError3D::computeRparams(const T * const cameraParams, const T * const distortionParams, const T * const rparams, const T * const t, const T * const x, T *residuals) const
+void ReprojectionError3D::evaluateWithRparams(const T * const pp, const T * const distortionParams, const T * const focals, const T * const rparams, const T * const t, const T * const x, T *residuals) const
 {
 	T xr[3];
 	ceres::AngleAxisRotatePoint(rparams, x, xr);
@@ -41,11 +42,11 @@ void ReprojectionError3D::computeRparams(const T * const cameraParams, const T *
 	xc[1] = xr[1]+t[1];
 	xc[2] = xr[2]+t[2];
 
-	computeXc(cameraParams,distortionParams,xc,residuals);
+	computeXc(pp,distortionParams,focals,xc,residuals);
 }
 
 template<class T>
-void ReprojectionError3D::computeRmat(const T * const cameraParams, const T * const distortionParams, const T * const R, const T * const t, const T * const x, T *residuals) const
+void ReprojectionError3D::evaluateWithRmat(const T * const pp, const T * const distortionParams, const T * const focals, const T * const R, const T * const t, const T * const x, T *residuals) const
 {
 	auto xwmat = CeresUtils::FixedRowMajorAdapter3x1(x);
 
@@ -59,24 +60,25 @@ void ReprojectionError3D::computeRmat(const T * const cameraParams, const T * co
 	xc[1] = xr[1]+t[1];
 	xc[2] = xr[2]+t[2];
 
-	computeXc(cameraParams,distortionParams,xc,residuals);
+	computeXc(pp, distortionParams, focals, xc, residuals);
 }
 
 template<class T>
 bool PoseReprojectionError3D::operator()(const T * const rparams, const T * const t, T *residuals) const
 {
-	Eigen::Matrix<T, CameraModel::kParamCount, 1> cameraParams = mCameraParams.cast<T>();
-	Eigen::Matrix<T, CameraModel::TDistortionModel::kParamCount, 1> distortionParams = mDistortionParams.cast<T>();
-	Eigen::Matrix<T,3,1> x = mFeaturePosition.cast<T>();
+	const auto pp = mPP.cast<T>().eval();
+	const auto distortion = mDistortionParams.cast<T>().eval();
+	const auto focals = mFocals.cast<T>().eval();
+	const auto x = mFeaturePosition.cast<T>().eval();
 
-	computeRparams(cameraParams.data(), distortionParams.data(), rparams, t, x.data(), residuals);
+	evaluateWithRparams(pp.data(), distortion.data(), focals.data(), rparams, t, x.data(), residuals);
 	return true;
 }
 
 template<class T>
-bool BAReprojectionError3D::operator()(const T * const cameraParams, const T * const distortionParams, const T * const rparams, const T * const t, const T * const x, T *residuals) const
+bool BAReprojectionError3D::operator()(const T * const pp, const T * const distortionParams, const T * const focals, const T * const rparams, const T * const t, const T * const x, T *residuals) const
 {
-	computeRparams(cameraParams,distortionParams,rparams, t, x, residuals);
+	evaluateWithRparams(pp, distortionParams, focals, rparams, t, x, residuals);
 	return true;
 }
 

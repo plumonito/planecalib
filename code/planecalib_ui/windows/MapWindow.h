@@ -4,6 +4,7 @@
 #include <future>
 #include <vector>
 #include <array>
+#include "planecalib/CameraModel.h"
 #include "planecalib/CameraDistortionModel.h"
 #include "planecalib/eutils.h"
 #include "BaseWindow.h"
@@ -74,11 +75,9 @@ protected:
 
     float mPointSize;
 
-	Eigen::Matrix3fr mSystemCameraK;
-	Eigen::Matrix3fr mSystemCameraKinv;
-	RadialCameraDistortionModel mSystemCameraDistortion;
+	CameraModel mSystemCamera;
 
-    Eigen::Matrix3fr mViewerCameraK;
+	Eigen::Matrix3fr mViewerCameraK;
 	Eigen::Matrix3fr mViewerCameraKinv;
 	Eigen::Matrix3fr mViewerCameraR;
 	Eigen::Vector3f mViewerCameraT;

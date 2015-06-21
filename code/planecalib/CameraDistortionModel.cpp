@@ -88,4 +88,7 @@ namespace planecalib {
 //	return invModel;
 //}
 
+const ceres::CostFunctionToFunctor<2, 1, 2> DivisionDistortionModel::gApplyFunctor(new ForwardDistortionFunction<DivisionDistortionModel>());
+const ceres::CostFunctionToFunctor<2, 1, 2> DivisionDistortionModel::gApplyInvFunctor(new InverseDistortionFunction<DivisionDistortionModel>());
+
 }

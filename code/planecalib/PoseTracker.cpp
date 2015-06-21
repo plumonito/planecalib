@@ -384,13 +384,16 @@ bool PoseTracker::trackFrame3D()
 		//Convert to homography
 		//Ref data could be computed just once
 		Keyframe &refFrame = *mMap->getKeyframes()[0];
+		Eigen::Matrix3fr K;
+		K << mMap->mCamera->getFocalLength()[0], 0, 0, 0, mMap->mCamera->getFocalLength()[1], 0, 0, 0, 1;
+
 		Eigen::Matrix3fr refR = refFrame.mPose3DR;
 		Eigen::Vector3f refT = refFrame.mPose3DT - refR*Eigen::Vector3f::UnitZ();
-		Eigen::Matrix3fr worldToRefH = mMap->mCamera->getK() * (refR + refT*Eigen::Vector3f::UnitZ().transpose());
+		Eigen::Matrix3fr worldToRefH = K * (refR + refT*Eigen::Vector3f::UnitZ().transpose());
 
 		Eigen::Matrix3fr &imgR = mPose3D.R;
 		Eigen::Vector3f imgT = mPose3D.t - imgR*Eigen::Vector3f::UnitZ();
-		Eigen::Matrix3fr worldToImgH = mMap->mCamera->getK() * (imgR + imgT*Eigen::Vector3f::UnitZ().transpose());
+		Eigen::Matrix3fr worldToImgH = K * (imgR + imgT*Eigen::Vector3f::UnitZ().transpose());
 
 		mPose2D = worldToImgH*worldToRefH.inverse();
 

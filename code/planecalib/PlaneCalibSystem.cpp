@@ -313,11 +313,8 @@ void PlaneCalibSystem::doHomographyBA()
 	}
 
 	ba.setOnlyDistortion(false);
-	ba.initFromCamera(mCamera);
+	ba.setCamera(&mCamera);
 	ba.bundleAdjust();
-
-
-	ba.updateCamera(mCamera);
 
 	//Calib
 	//doHomographyCalib();

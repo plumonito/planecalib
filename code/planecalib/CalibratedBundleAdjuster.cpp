@@ -31,7 +31,7 @@ public:
 	}
 
 	CalibratedReprojectionError(const int octave, const Eigen::Vector2f &imgPoint) :
-		mScale(1 << octave), mImgPoint(imgPoint), mForwardDistortion(new ForwardDistortionFunction<CameraModel::TDistortionModel>())
+		mScale(1 << octave), mImgPoint(imgPoint)
 	{
 	}
 
@@ -43,14 +43,13 @@ public:
 protected:
 	const int mScale;
 	const Eigen::Vector2f mImgPoint;
-	const ceres::CostFunctionToFunctor<2, TDistortionParamVector::SizeAtCompileTime, 2> mForwardDistortion;
 };
 
 template<class T>
 bool CalibratedReprojectionError::operator () (const T * const _pp, const T * const _distortion, const T * const _focalLengths, const T * const rparams, const T * const _tparams, const T * const x, T *residuals) const
 {
 	Eigen::Map<Eigen::Matrix<T, 2, 1>> pp((T*)_pp);
-	Eigen::Map<Eigen::Matrix<T, 2, 1>> distortion((T*)_distortion);
+	Eigen::Map<Eigen::Matrix<T, TDistortionParamVector::RowsAtCompileTime, 1>> distortion((T*)_distortion);
 	Eigen::Map<Eigen::Matrix<T, 2, 1>> focalLengths((T*)_focalLengths);
 	Eigen::Map<Eigen::Matrix<T, 3, 1>> tparams((T*)_tparams);
 
@@ -65,23 +64,13 @@ bool CalibratedReprojectionError::operator () (const T * const _pp, const T * co
 
 	xc += tparams;
 
-	//Normalize
-	Eigen::Matrix<T, 2, 1> xn = xc.hnormalized();
-
-	//Focal lengths
-	xn[0] *= focalLengths[0];
-	xn[1] *= focalLengths[1];
-
-	//Distort
-	Eigen::Matrix<T, 2, 1> xd;
-	mForwardDistortion(_distortion, xn.data(), xd.data());
-
-	//Principal point
-	xd += pp;
+	//Camera model
+	Eigen::Matrix<T, 2, 1> p;
+	CameraModel::ProjectFromWorld(pp, distortion, focalLengths, xc, p);
 
 	//Residuals
-	residuals[0] = (T(mImgPoint.x()) - xd[0]) / T(mScale);
-	residuals[1] = (T(mImgPoint.y()) - xd[1]) / T(mScale);
+	residuals[0] = (T(mImgPoint.x()) - p[0]) / T(mScale);
+	residuals[1] = (T(mImgPoint.y()) - p[1]) / T(mScale);
 	return true;
 }
 

@@ -70,9 +70,9 @@ protected:
 
 	CameraModel *mCamera; //Will be updated at the end of the BA
 
-	Eigen::Vector4d mPrincipalPoint;
+	Eigen::Vector2d mPrincipalPoint;
 	TDistortionParamsVector mParamsDistortion;
-	Eigen::Vector4d mFocalLengths;
+	Eigen::Vector2d mFocalLengths;
 
 	std::unordered_map<Keyframe *, Eigen::Matrix<double, 1, 6>, std::hash<Keyframe*>, std::equal_to<Keyframe*>, Eigen::aligned_allocator<std::pair<Keyframe*,Eigen::Matrix<double,1,6>>>> mParamsPoses;
 	std::unordered_map<Feature *, Eigen::Vector2d, std::hash<Feature*>, std::equal_to<Feature*>, Eigen::aligned_allocator<std::pair<Feature*, Eigen::Vector2d>>> mParamsFeatures;

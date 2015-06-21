@@ -42,4 +42,8 @@ find_package(matio REQUIRED)
 #Ceres
 #include_directories("${Ceres_DIR}/../include")
 	
+if(WIN32)
+	add_definitions( "/wd4251" )
+endif()
+
 add_subdirectory(code)

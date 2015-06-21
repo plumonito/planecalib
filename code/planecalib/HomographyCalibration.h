@@ -14,6 +14,8 @@ public:
 	{
 	}
 
+	EIGEN_MAKE_ALIGNED_OPERATOR_NEW
+
 	bool getUseNormalizedConstraints()  const { return mUseNormalizedConstraints; }
 	void setUseNormalizedConstraints(bool value)  { mUseNormalizedConstraints = value; }
 

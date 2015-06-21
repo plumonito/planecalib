@@ -14,7 +14,9 @@ namespace planecalib
 class ReprojectionError3D
 {
 public:
-	ReprojectionError3D(const FeatureMeasurement &m):
+	typedef CameraModel::TDistortionModel::TParamVector TDistortionParamVector;
+
+	ReprojectionError3D(const FeatureMeasurement &m) :
 		ReprojectionError3D(m.getPosition().cast<double>(), 1 << m.getOctave())
 	{
 	}
@@ -29,20 +31,28 @@ public:
 	EIGEN_MAKE_ALIGNED_OPERATOR_NEW
 
 	template<class T>
-    void computeRparams(const T * const cameraParams, const T * const distortionParams, const T * const rparams, const T * const t, const T * const x, T *residuals) const;
+	void evaluateWithRparams(const T * const pp, const T * const distortionParams, const T * const focals, const T * const rparams, const T * const t, const T * const x, T *residuals) const;
+
+	void evaluateWithRparams(const Eigen::Vector2d &pp, const TDistortionParamVector &distortion, const Eigen::Vector2d &focals, const Eigen::Vector3d &rparams, const Eigen::Vector3d &t, const Eigen::Vector3d &x, Eigen::Vector2d &residuals) const
+	{
+		evaluateWithRparams(pp.data(), distortion.data(), focals.data(), rparams.data(), t.data(), x.data(), residuals.data());
+	}
+
 
 	template<class T>
-	void computeRmat(const T * const cameraParams, const T * const distortionParams, const T * const R, const T * const t, const T * const x, T *residuals) const;
+	void evaluateWithRmat(const T * const pp, const T * const distortionParams, const T * const focals, const T * const R, const T * const t, const T * const x, T *residuals) const;
 
-	double evalToDistanceSq(const Eigen::VectorXd &cameraParams, const Eigen::VectorXd &distortionParams, const Eigen::Matrix3dr &R, const Eigen::Vector3d &t, const Eigen::Vector3d &x) const;
-	double evalToDistanceSq(const Eigen::VectorXd &cameraParams, const Eigen::VectorXd &distortionParams, const Eigen::Vector3d &Rparams, const Eigen::Vector3d &t, const Eigen::Vector3d &x) const;
+	void evaluateWithRmat(const Eigen::Vector2d &pp, const TDistortionParamVector &distortion, const Eigen::Vector2d &focals, const Eigen::Matrix3dr &R, const Eigen::Vector3d &t, const Eigen::Vector3d &x, Eigen::Vector2d &residuals) const
+	{
+		evaluateWithRmat(pp.data(), distortion.data(), focals.data(), R.data(), t.data(), x.data(), residuals.data());
+	}
 
 protected:
 	const double mScale;
 	const Eigen::Vector2d mImgPoint;
 
 	template<class T>
-	void computeXc(const T * const cameraParams, const T * const distortionParams, const T * const xc, T *residuals) const;
+	void computeXc(const T * const pp, const T * const distortionParams, const T * const focals, const T * const xc, T *residuals) const;
 };
 
 class PoseReprojectionError3D: public ReprojectionError3D
@@ -54,7 +64,7 @@ public:
 	}
 
 	PoseReprojectionError3D(const CameraModel * const camera, const Eigen::Vector3d &featurePosition, const Eigen::Vector2d &imgPoint, const double scale) :
-		ReprojectionError3D(imgPoint, scale), mCameraParams(camera->getParams()), mDistortionParams(camera->getDistortionModel().getParams()), mFeaturePosition(featurePosition)
+		ReprojectionError3D(imgPoint, scale), mPP(camera->getPrincipalPoint().cast<double>()), mDistortionParams(camera->getDistortionModel().getParams()), mFocals(camera->getFocalLength().cast<double>()), mFeaturePosition(featurePosition)
 	{
 	}
 
@@ -65,19 +75,20 @@ public:
 	template<class T>
     bool operator()(const T * const rparams, const T * const t, T *residuals) const;
 
-	double evalToDistanceSq(const Eigen::Matrix3dr &R, const Eigen::Vector3d &t) const
+	bool operator()(const Eigen::Vector3d &rparams, const Eigen::Vector3d &t, Eigen::Vector2d &residuals) const
 	{
-		return ReprojectionError3D::evalToDistanceSq(mCameraParams, mDistortionParams, R,t,mFeaturePosition);
+		return (*this)(rparams.data(), t.data(), residuals.data());
 	}
 
-	double evalToDistanceSq(const Eigen::Vector3d &Rparams, const Eigen::Vector3d &t) const
+	void evaluateWithRmat(const Eigen::Matrix3dr &R, const Eigen::Vector3d &t, Eigen::Vector2d &residuals) const
 	{
-		return ReprojectionError3D::evalToDistanceSq(mCameraParams, mDistortionParams, Rparams, t, mFeaturePosition);
+		ReprojectionError3D::evaluateWithRmat(mPP, mDistortionParams, mFocals, R, t, mFeaturePosition, residuals);
 	}
 
 protected:
-	const Eigen::VectorXd mCameraParams;
-	const Eigen::VectorXd mDistortionParams;
+	const Eigen::Vector2d mPP;
+	const TDistortionParamVector mDistortionParams;
+	const Eigen::Vector2d mFocals;
 	const Eigen::Vector3d mFeaturePosition;
 };
 
@@ -97,7 +108,7 @@ public:
 	EIGEN_MAKE_ALIGNED_OPERATOR_NEW
 
 	template<class T>
-	bool operator()(const T * const cameraParams, const T * const distortionParams, const T * const rparams, const T * const t, const T * const x, T *residuals) const;
+	bool operator()(const T * const pp, const T * const distortionParams, const T * const focals, const T * const rparams, const T * const t, const T * const x, T *residuals) const;
 
 protected:
 };

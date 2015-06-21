@@ -88,9 +88,7 @@ void MapWindow::updateState()
 	mMap = &mApp->getSystem().getMap();
 	mTracker = &mApp->getSystem().getTracker();
 
-	mSystemCameraK = mApp->getSystem().getCamera().getK();
-	mSystemCameraKinv = mSystemCameraK.inverse();
-	mSystemCameraDistortion = mApp->getSystem().getCamera().getDistortionModel();
+	mSystemCamera = mApp->getSystem().getCamera();
 
 	shared_lock<shared_mutex> lockRead(mMap->getMutex());
 
@@ -470,8 +468,8 @@ MapWindow::DrawFrustumData MapWindow::prepareFrameFrustum(const Eigen::Matrix3fr
 	};
 	for (int i = 0; i < (int)cornersImg.size(); i++)
 	{
-		Eigen::Vector2f xn = mSystemCameraDistortion.undistortPoint((mSystemCameraKinv*cornersImg[i].homogeneous()).eval().hnormalized());
-		Eigen::Vector3f xc = R.transpose()*xn.homogeneous()*kFrustumDepth + center;
+		Eigen::Vector3f xn = mSystemCamera.unprojectToWorld(cornersImg[i]);
+		Eigen::Vector3f xc = R.transpose()*xn*kFrustumDepth + center;
 		data.corners[i] = xc.homogeneous();
 	}
 
@@ -497,8 +495,8 @@ MapWindow::DrawFrustumData MapWindow::prepareFrameFrustum(const Eigen::Matrix3fr
 	}
 	for (int i = 0; i < (int)imgPoints.size(); i++)
 	{
-		Eigen::Vector2f xn = mSystemCameraDistortion.undistortPoint((mSystemCameraKinv*imgPoints[i].homogeneous()).eval().hnormalized());
-		Eigen::Vector3f xc = R.transpose()*xn.homogeneous()*kFrustumDepth + center;
+		Eigen::Vector3f xn = mSystemCamera.unprojectToWorld(imgPoints[i]);
+		Eigen::Vector3f xc = R.transpose()*xn*kFrustumDepth + center;
 		data.borderVertices.push_back( xc.homogeneous() );
 	}
 

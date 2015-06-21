@@ -70,7 +70,7 @@ public:
 	}
 
 	ReprojectionError(const int octave, const Eigen::Vector2f &imgPoint) :
-		mScale(1 << octave), mImgPoint(imgPoint), mForwardDistortion(new ForwardDistortionFunction<CameraModel::TDistortionModel>())
+		mScale(1 << octave), mImgPoint(imgPoint)
 	{
 	}
 
@@ -85,7 +85,6 @@ public:
 	}
 
 protected:
-	const ceres::CostFunctionToFunctor<2, TDistortionParamVector::SizeAtCompileTime, 2> mForwardDistortion;
 	const int mScale;
 	const Eigen::Vector2f mImgPoint;
 };
@@ -93,7 +92,7 @@ protected:
 template<class T>
 bool ReprojectionError::operator () (const T * const _p0, const T * const _distortion, const T * const _homography, const T * const _x, T *residuals) const
 {
-	Eigen::Map<Eigen::Matrix<T, 2, 1>> distortion((T*)_distortion);
+	Eigen::Map<Eigen::Matrix<T, TDistortionParamVector::RowsAtCompileTime, 1>> distortion((T*)_distortion);
 	Eigen::Map<Eigen::Matrix<T, 3, 3, Eigen::RowMajor>> homography((T*)_homography);
 	Eigen::Map<Eigen::Matrix<T, 2, 1>> x((T*)_x);
 	Eigen::Map<Eigen::Matrix<T, 2, 1>> p0((T*)_p0);
@@ -101,31 +100,33 @@ bool ReprojectionError::operator () (const T * const _p0, const T * const _disto
 
 	//Homography
 	//const Eigen::Matrix<T, 3, 1> p = homography*x.homogeneous();
-	Eigen::Matrix<T, 3, 1> p;
-	p[0] = homography(0, 0) * x[0] + homography(0, 1) * x[1] + homography(0, 2);
-	p[1] = homography(1, 0) * x[0] + homography(1, 1) * x[1] + homography(1, 2);
-	p[2] = homography(2, 0) * x[0] + homography(2, 1) * x[1] + homography(2, 2);
+	Eigen::Matrix<T, 3, 1> xh;
+	xh[0] = homography(0, 0) * x[0] + homography(0, 1) * x[1] + homography(0, 2);
+	xh[1] = homography(1, 0) * x[0] + homography(1, 1) * x[1] + homography(1, 2);
+	xh[2] = homography(2, 0) * x[0] + homography(2, 1) * x[1] + homography(2, 2);
 
-	//Normalize
-	//Eigen::Matrix<T, 2, 1> pn = p.hnormalized();
-	Eigen::Matrix<T, 2, 1> pn(p[0] / p[2], p[1] / p[2]);
-
-	//Distort
-	Eigen::Matrix<T, 2, 1> pd;
-	mForwardDistortion(_distortion, pn.data(), pd.data());
-
-	//Principal point
-	pd = pd + p0;
-
+	//Camera model
+	const Eigen::Matrix<T, 2, 1> focal(T(1), T(1));
+	Eigen::Matrix<T, 2, 1> p;
+	CameraModel::ProjectFromWorld(p0, distortion, focal, xh, p);
+	
 	//Residuals
-	residuals[0] = (T(mImgPoint.x()) - pd[0]) / T(mScale);
-	residuals[1] = (T(mImgPoint.y()) - pd[1]) / T(mScale);
+	residuals[0] = (T(mImgPoint.x()) - p[0]) / T(mScale);
+	residuals[1] = (T(mImgPoint.y()) - p[1]) / T(mScale);
 	return true;
 }
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 // BundleAdjusterclass
+
+void BundleAdjuster::setCamera(CameraModel *camera)
+{
+	mCamera = camera;
+
+	mParamsPrincipalPoint = mCamera->getPrincipalPoint().cast<double>();
+	mParamsDistortion = mCamera->getDistortionModel().getParams();
+}
 
 void BundleAdjuster::addFrameToAdjust(Keyframe &newFrame)
 {
@@ -359,6 +360,10 @@ bool BundleAdjuster::bundleAdjust()
 
 	getInliers(inlierCount, outliers);
 	MYAPP_LOG << "BA inlier count after: " << inlierCount << " / " << mMeasurementsInProblem.size() << "\n";
+
+	//Update camera
+	mCamera->getPrincipalPoint() = mParamsPrincipalPoint.cast<float>();
+	mCamera->getDistortionModel().setParams(mParamsDistortion);
 
 	//Update pose
 	for (auto &framep : mFramesToAdjust)

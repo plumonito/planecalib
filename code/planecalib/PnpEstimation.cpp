@@ -121,7 +121,9 @@ void PnPRansac::getInliers(const std::pair<Eigen::Matrix3dr, Eigen::Vector3d> &m
 		auto &errorFunctor = *mErrorFunctors[i];
 		auto &errors = data.reprojectionErrors[i];
 
-		errors.reprojectionErrorsSq = (float)errorFunctor.evalToDistanceSq(model.first, model.second);
+		Eigen::Vector2d residuals;
+		errorFunctor.evaluateWithRmat(model.first, model.second, residuals);
+		errors.reprojectionErrorsSq = (float)residuals.squaredNorm();
 		errors.isInlier = (errors.reprojectionErrorsSq < mOutlierErrorThresholdSq);
 			
 
@@ -155,7 +157,11 @@ void PnPRefiner::getInliers(const std::vector<Eigen::Vector3f> &refPoints,
 		auto &error = errors[i];
 
 		PoseReprojectionError3D err(mCamera, refPoints[i].cast<double>(), imgPoints[i].cast<double>(), scales[i]);
-		error.reprojectionErrorsSq = (float)err.evalToDistanceSq(R, translation);
+
+		Eigen::Vector2d residuals;
+		err.evaluateWithRmat(R, translation, residuals);
+		error.reprojectionErrorsSq = (float)residuals.squaredNorm();
+
 		error.isInlier = error.reprojectionErrorsSq < mOutlierPixelThresholdSq;
 
 		if(error.isInlier)

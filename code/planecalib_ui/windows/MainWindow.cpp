@@ -275,11 +275,11 @@ void MainWindow::draw()
 		ts << " Normal=[" << mSystem->getNormal().transpose() << "]\n";
 
 		ts << std::fixed << std::setprecision(2) << std::setw(6);
-		ts << " F  = [" << mSystem->getCamera().getFx() << "," << mSystem->getCamera().getFy() << "]\n";
-		ts << " P0 = [" << mSystem->getCamera().getU0() << "," << mSystem->getCamera().getV0() << "]\n";
+		ts << " F  = " << mSystem->getCamera().getFocalLength().transpose() << "\n";
+		ts << " PP  = " << mSystem->getCamera().getPrincipalPoint().transpose() << "\n";
 
 		ts << std::fixed << std::setprecision(3) << std::setw(4);
-		ts << " Distortion = [" << mSystem->getCamera().getDistortionModel().getCoefficients().transpose() << "]";
+		ts << " Distortion = [" << mSystem->getCamera().getDistortionModel().getParams().transpose() << "]";
 	}
 }
 
@@ -308,7 +308,7 @@ void MainWindow::loadValidationData()
 	std::cin >> answer;
 	if (answer.size() == 1 && answer[0] == 'y')
 	{
-		float fx, fy, u0, v0, width, height, d0, d1;
+		float fx, fy, u0, v0, width, height, lambda;
 		std::cout << "fx=";
 		std::cin >> fx;
 		std::cout << "fy=";
@@ -317,18 +317,16 @@ void MainWindow::loadValidationData()
 		std::cin >> u0;
 		std::cout << "v0=";
 		std::cin >> v0;
-		std::cout << "d0=";
-		std::cin >> d0;
-		std::cout << "d1=";
-		std::cin >> d1;
+		std::cout << "lambda=";
+		std::cin >> lambda;
 		std::cout << "width=";
 		std::cin >> width;
 		std::cout << "height=";
 		std::cin >> height;
 
 		CameraModel camera;
-		camera.init(fx, fy, u0, v0, width, height);
-		camera.getDistortionModel().init(Eigen::Vector2f(d0, d1), camera.getMaxRadiusSq());
+		camera.init(Eigen::Vector2f(u0,v0), Eigen::Vector2f(fx, fy), Eigen::Vector2i(width, height));
+		camera.getDistortionModel().init(lambda);
 		mSystem->setCamera(camera);
 	}
 
@@ -365,23 +363,21 @@ class CalibrationError
 public:
 	void compute(const CameraModel &ref, const CameraModel &exp)
 	{
-		errorFocal = Eigen::Vector2f(exp.getFx() - ref.getFx(), exp.getFy() - ref.getFy()).norm();
-		errorP0 = Eigen::Vector2f(exp.getU0() - ref.getU0(), exp.getV0() - ref.getV0()).norm();
-		errorDist0 = exp.getDistortionModel().getCoefficients()[0] - ref.getDistortionModel().getCoefficients()[0];
-		errorDist1 = exp.getDistortionModel().getCoefficients()[1] - ref.getDistortionModel().getCoefficients()[1];
+		errorFocal = (exp.getFocalLength() - ref.getFocalLength()).norm();
+		errorP0 = (exp.getPrincipalPoint() - ref.getPrincipalPoint()).norm();
+		errorDist0 = exp.getDistortionModel().getLambda() - ref.getDistortionModel().getLambda();
 	}
 
 	float errorFocal;
 	float errorP0;
 	float errorDist0;
-	float errorDist1;
 };
 
 void MainWindow::synthTest()
 {
 	CameraModel camera;
-	camera.init(600, 600, 320, 240, 640, 480);
-	camera.getDistortionModel().init(Eigen::Vector2f(0.1, -0.01), camera.getMaxRadiusSq());
+	camera.init(Eigen::Vector2f(320, 240), Eigen::Vector2f(600, 600), Eigen::Vector2i(640, 480));
+	camera.getDistortionModel().init(0.1);
 
 	float noiseStd = 3 / 3;
 
@@ -421,7 +417,6 @@ void MainWindow::synthTest()
 			MatlabDataLog::AddValue("errorFocal", error.errorFocal);
 			MatlabDataLog::AddValue("errorP0", error.errorP0);
 			MatlabDataLog::AddValue("errorDist0", error.errorDist0);
-			MatlabDataLog::AddValue("errorDist1", error.errorDist1);
 
 			//Only BA
 			mSystem->setUse3DGroundTruth(true);
@@ -433,7 +428,6 @@ void MainWindow::synthTest()
 			MatlabDataLog::AddValue("errorFocalBA", error.errorFocal);
 			MatlabDataLog::AddValue("errorP0BA", error.errorP0);
 			MatlabDataLog::AddValue("errorDist0BA", error.errorDist0);
-			MatlabDataLog::AddValue("errorDist1BA", error.errorDist1);
 
 			//Only BA fixed
 			mSystem->setUse3DGroundTruth(true);
@@ -445,7 +439,6 @@ void MainWindow::synthTest()
 			MatlabDataLog::AddValue("errorFocalBAFixed", error.errorFocal);
 			MatlabDataLog::AddValue("errorP0BAFixed", error.errorP0);
 			MatlabDataLog::AddValue("errorDist0BAFixed", error.errorDist0);
-			MatlabDataLog::AddValue("errorDist1BAFixed", error.errorDist1);
 
 			MatlabDataLog::Stream().flush();
 		}
@@ -458,9 +451,8 @@ void MainWindow::synthTest()
 void MainWindow::synthTestNormalAngle()
 {
 	CameraModel camera;
-	camera.init(600, 600, 320, 240, 640, 480);
-	camera.getDistortionModel().init(Eigen::Vector2f(0.1, -0.01), camera.getMaxRadiusSq());
-	//camera.getDistortionModel().init(Eigen::Vector2f(0.0, 0.0), camera.getMaxRadiusSq());
+	camera.init(Eigen::Vector2f(320, 240), Eigen::Vector2f(600, 600), Eigen::Vector2i(640, 480));
+	camera.getDistortionModel().init(0.1);
 
 	float noiseStd = 3 / 3;
 
@@ -498,7 +490,6 @@ void MainWindow::synthTestNormalAngle()
 			MatlabDataLog::AddValue("errorFocal", error.errorFocal);
 			MatlabDataLog::AddValue("errorP0", error.errorP0);
 			MatlabDataLog::AddValue("errorDist0", error.errorDist0);
-			MatlabDataLog::AddValue("errorDist1", error.errorDist1);
 
 			MatlabDataLog::Stream().flush();
 		}
@@ -511,9 +502,8 @@ void MainWindow::synthTestNormalAngle()
 void MainWindow::synthTestNormalizationWithNoise()
 {
 	CameraModel camera;
-	camera.init(600, 600, 320, 240, 640, 480);
-	camera.getDistortionModel().init(Eigen::Vector2f(0.1, -0.01), camera.getMaxRadiusSq());
-	//camera.getDistortionModel().init(Eigen::Vector2f(0.0, 0.0), camera.getMaxRadiusSq());
+	camera.init(Eigen::Vector2f(320, 240), Eigen::Vector2f(600, 600), Eigen::Vector2i(640, 480));
+	camera.getDistortionModel().init(0.1);
 
 	float noiseStd = 3 / 3;
 
@@ -556,7 +546,6 @@ void MainWindow::synthTestNormalizationWithNoise()
 			MatlabDataLog::AddValue("errorFocalNoNorm", error.errorFocal);
 			MatlabDataLog::AddValue("errorP0NoNorm", error.errorP0);
 			MatlabDataLog::AddValue("errorDist0NoNorm", error.errorDist0);
-			MatlabDataLog::AddValue("errorDist1NoNorm", error.errorDist1);
 
 			//Calib
 			mSystem->setUseNormalizedConstraints(true);
@@ -568,7 +557,6 @@ void MainWindow::synthTestNormalizationWithNoise()
 			MatlabDataLog::AddValue("errorFocal", error.errorFocal);
 			MatlabDataLog::AddValue("errorP0", error.errorP0);
 			MatlabDataLog::AddValue("errorDist0", error.errorDist0);
-			MatlabDataLog::AddValue("errorDist1", error.errorDist1);
 
 			MatlabDataLog::Stream().flush();
 		}
@@ -581,9 +569,8 @@ void MainWindow::synthTestNormalizationWithNoise()
 void MainWindow::synthTestNormalizationWithFrames()
 {
 	CameraModel camera;
-	camera.init(600, 600, 320, 240, 640, 480);
-	camera.getDistortionModel().init(Eigen::Vector2f(0.1, -0.01), camera.getMaxRadiusSq());
-	//camera.getDistortionModel().init(Eigen::Vector2f(0.0, 0.0), camera.getMaxRadiusSq());
+	camera.init(Eigen::Vector2f(320, 240), Eigen::Vector2f(600, 600), Eigen::Vector2i(640, 480));
+	camera.getDistortionModel().init(0.1);
 
 	float noiseStd = 3 / 3;
 
@@ -623,7 +610,6 @@ void MainWindow::synthTestNormalizationWithFrames()
 			MatlabDataLog::AddValue("errorFocalNoNorm", error.errorFocal);
 			MatlabDataLog::AddValue("errorP0NoNorm", error.errorP0);
 			MatlabDataLog::AddValue("errorDist0NoNorm", error.errorDist0);
-			MatlabDataLog::AddValue("errorDist1NoNorm", error.errorDist1);
 
 			//Calib
 			mSystem->setUseNormalizedConstraints(true);
@@ -634,7 +620,6 @@ void MainWindow::synthTestNormalizationWithFrames()
 			MatlabDataLog::AddValue("errorFocal", error.errorFocal);
 			MatlabDataLog::AddValue("errorP0", error.errorP0);
 			MatlabDataLog::AddValue("errorDist0", error.errorDist0);
-			MatlabDataLog::AddValue("errorDist1", error.errorDist1);
 
 
 			MatlabDataLog::Stream().flush();
@@ -653,8 +638,8 @@ void MainWindow::storeSceneToMat(const Map &map)
 void MainWindow::synthTestCompareUsingGroundTruth()
 {
 	CameraModel camera;
-	camera.init(600, 600, 320, 240, 640, 480);
-	camera.getDistortionModel().init(Eigen::Vector2f(0.1, -0.01), camera.getMaxRadiusSq());
+	camera.init(Eigen::Vector2f(320, 240), Eigen::Vector2f(600, 600), Eigen::Vector2i(640, 480));
+	camera.getDistortionModel().init(0.1);
 
 	float noiseStd = 3 / 3;
 
@@ -694,7 +679,6 @@ void MainWindow::synthTestCompareUsingGroundTruth()
 			MatlabDataLog::AddValue("errorFocal", error.errorFocal);
 			MatlabDataLog::AddValue("errorP0", error.errorP0);
 			MatlabDataLog::AddValue("errorDist0", error.errorDist0);
-			MatlabDataLog::AddValue("errorDist1", error.errorDist1);
 
 			//Only BA
 			mSystem->setUse3DGroundTruth(true);
@@ -706,7 +690,6 @@ void MainWindow::synthTestCompareUsingGroundTruth()
 			MatlabDataLog::AddValue("errorFocalBA", error.errorFocal);
 			MatlabDataLog::AddValue("errorP0BA", error.errorP0);
 			MatlabDataLog::AddValue("errorDist0BA", error.errorDist0);
-			MatlabDataLog::AddValue("errorDist1BA", error.errorDist1);
 
 			//Only BA fixed
 			mSystem->setUse3DGroundTruth(true);
@@ -718,7 +701,6 @@ void MainWindow::synthTestCompareUsingGroundTruth()
 			MatlabDataLog::AddValue("errorFocalBAFixed", error.errorFocal);
 			MatlabDataLog::AddValue("errorP0BAFixed", error.errorP0);
 			MatlabDataLog::AddValue("errorDist0BAFixed", error.errorDist0);
-			MatlabDataLog::AddValue("errorDist1BAFixed", error.errorDist1);
 
 			MatlabDataLog::Stream().flush();
 		}
@@ -731,8 +713,8 @@ void MainWindow::synthTestCompareUsingGroundTruth()
 void MainWindow::synthTest2()
 {
 	CameraModel camera;
-	camera.init(600, 600, 320, 240, 640, 480);
-	camera.getDistortionModel().init(Eigen::Vector2f(0.1, -0.01), camera.getMaxRadiusSq());
+	camera.init(Eigen::Vector2f(320, 240), Eigen::Vector2f(600, 600), Eigen::Vector2i(640, 480));
+	camera.getDistortionModel().init(0.1);
 	float noiseStd = 3 / 3;
 
 	SceneGenerator generator;
@@ -816,7 +798,6 @@ void MainWindow::synthTest2()
 			errorFocal.push_back(error.errorFocal);
 			errorP0.push_back(error.errorP0);
 			errorDist0.push_back(error.errorDist0);
-			errorDist1.push_back(error.errorDist1);
 		}
 	}
 	//varDims[0] = varScenes.size(); varDims[1] = 1;

@@ -169,8 +169,9 @@ std::unique_ptr<Map> BouguetInterface::loadCalib(const std::string &filename)
 	}
 
 	std::unique_ptr<CameraModel> camera( new CameraModel());
-	camera->init(fc[0], fc[1], cc[0], cc[1], imageSize[0], imageSize[1]);
-	camera->getDistortionModel().init(kc, camera->getMaxRadiusSq());
+	//camera->init(fc[0], fc[1], cc[0], cc[1], imageSize[0], imageSize[1]);
+	//camera->getDistortionModel().init(kc, camera->getMaxRadiusSq());
+	throw std::logic_error("Not implemented");
 
 	map->mCamera = std::move(camera);
 	return std::move(map);
