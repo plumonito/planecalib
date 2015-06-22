@@ -87,9 +87,8 @@ void TrackingFrame::createKeypoints(const Eigen::Matrix3fr &warpOpticalHomograph
 	//	}
 	//}
 
-	Eigen::Matrix3fr T, Ti;
-	T << 1, 0, -camera.getPrincipalPoint()[0], 0, 1, -camera.getPrincipalPoint()[1], 0, 0, 1;
-	Ti << 1, 0, +camera.getPrincipalPoint()[0], 0, 1, +camera.getPrincipalPoint()[1], 0, 0, 1;
+	const Eigen::Matrix3fr T = eutils::GetTranslateHomography(-camera.getPrincipalPoint());
+	const Eigen::Matrix3fr Ti = eutils::GetTranslateHomography(camera.getPrincipalPoint());
 
 	mWarpHomography = Ti*warpPose*T;
 	//Warp

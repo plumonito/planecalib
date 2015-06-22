@@ -148,7 +148,7 @@ bool PlaneCalibApp::init(void)
 
     glEnable(GL_POINT_SMOOTH);
     glEnable(GL_LINE_SMOOTH);
-
+	
 	mFPS = 0;
 	mLastFPSCheck = std::chrono::high_resolution_clock::now();
 	mFPSUpdateDuration = std::chrono::duration_cast<std::chrono::high_resolution_clock::duration>(std::chrono::seconds(1));

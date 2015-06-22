@@ -200,7 +200,7 @@ void PlaneCalibSystem::processImage(double timestamp, cv::Mat3b &imgColor, cv::M
 			corners.emplace_back(p, eutils::HomographyPoint(poseInv, p));
 
 		bool add = true;
-		if (mSuccesfulTrackCount > 20 && mTracker->getMatchInlierCount() > 100)
+		if (mSuccesfulTrackCount > 20 && mTracker->getMatchInlierCountByOctave()[0] > 200)
 		{
 			for (auto &frame_ : mMap->getKeyframes())
 			{

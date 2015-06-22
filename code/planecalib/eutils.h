@@ -156,6 +156,12 @@ public:
 		//basis2.normalize();
 	}
 
+	static Eigen::Matrix3fr GetTranslateHomography(const Eigen::Vector2f &disp)
+	{
+		Eigen::Matrix3fr T;
+		T << 1, 0, disp[0], 0, 1, disp[1], 0, 0, 1;
+		return T;
+	}
 };
 
 }

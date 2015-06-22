@@ -49,6 +49,7 @@ public:
 	//const cv::Matx23f &getLastToFrameSimilarity() const { return mSimilarity; }
 
 	int getMatchInlierCount() const { return mMatchInlierCount; }
+	const std::vector<int> &getMatchInlierCountByOctave() const { return mMatchInlierCountByOctave; }
 
 	bool mForceRansac;
 	
@@ -92,6 +93,7 @@ protected:
 	std::vector<std::vector<FeatureProjectionInfo>> mFeaturesInView; //Outer vector is of octaves, inner of projections
 
 	int mMatchInlierCount;
+	std::vector<int> mMatchInlierCountByOctave;
 
 	/////////////////////////////////////////////////////
 	// Protected methods

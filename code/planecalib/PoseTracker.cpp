@@ -91,8 +91,13 @@ bool PoseTracker::trackFrame(double timestamp, const cv::Mat3b &imageColor, cons
 	mFeaturesInView.clear();
 	mFeaturesInView.resize(mOctaveCount);
 
+	Eigen::Matrix3fr poseGuess;
+	if (mIsLost || !mLastFrame)
+		poseGuess = Eigen::Matrix3fr::Identity();
+	else
+		poseGuess = mLastPose2D;
+
 	//Optical alignment
-	Eigen::Matrix3fr poseGuess = mLastPose2D;
 	Eigen::Matrix3fr opticalHomography; //p_now = opticalHomography*p_last
 	if (mLastFrame)
 	{
@@ -189,7 +194,7 @@ void PoseTracker::findMatches(const Eigen::Matrix3fr &opticalHomography, const E
 				{
 					//auto diff = projection.getPosition() - eutils::FromCV(imgKeypoints[j].pt);
 					auto diff = m.getPosition() - eutils::FromCV(imgKeypoints[j].pt);
-					if (diff.squaredNorm() < kDistanceThresholdSq || mIsLost)
+					if (mIsLost || diff.squaredNorm() < kDistanceThresholdSq)
 					{
 						const uchar *imgDesc_j = &imgDesc(j, 0);
 						int score = distFunc(refDesc_i.data(), imgDesc_j, 32);
@@ -287,10 +292,14 @@ bool PoseTracker::trackFrameHomography(const Eigen::Matrix3fr &poseGuess)
 		//std::vector<FeatureMatch> goodMatches;
 		//int inlierCountBefore = mask.sum();
 		mMatchInlierCount = 0;
+		mMatchInlierCountByOctave.resize(mOctaveCount);
 		for (int i = 0; i<(int)matchCount; i++)
 		{
 			if (inliersVec[i])
+			{
 				mMatchInlierCount++;
+				mMatchInlierCountByOctave[mFrame->getMatches()[i].getOctave()]++;
+			}
 				//goodMatches.push_back(mMatches[i]);
 		}
 		//inlierCountAfter = goodMatches.size();

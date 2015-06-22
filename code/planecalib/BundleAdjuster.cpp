@@ -261,7 +261,7 @@ bool BundleAdjuster::bundleAdjust()
 			problem.AddParameterBlock(params.data(), 2);
 			if (mOnlyDistortion)
 				problem.SetParameterBlockConstant(params.data());
-			options.linear_solver_ordering->AddElementToGroup(params.data(), 1);
+			options.linear_solver_ordering->AddElementToGroup(params.data(), 0);
 		}
 
 		//Distortion params

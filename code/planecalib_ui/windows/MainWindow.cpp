@@ -45,8 +45,8 @@ bool MainWindow::init(PlaneCalibApp *app, const Eigen::Vector2i &imageSize)
 	mKeyBindings.addBinding(false, 'i', static_cast<KeyBindingHandler<BaseWindow>::SimpleBindingFunc>(&MainWindow::synthTestNormalizationWithNoise), "Synthetic test for sensitivity to normalization.");
 	mKeyBindings.addBinding(false, 'I', static_cast<KeyBindingHandler<BaseWindow>::SimpleBindingFunc>(&MainWindow::synthTestNormalizationWithFrames), "Synthetic test for sensitivity to normalization.");
 
-	mRefTexture.create(GL_RGB, eutils::ToSize(imageSize));
-	mRefTexture.update(mSystem->getMap().getKeyframes()[0]->getColorImage());
+	mRefTexture.create(GL_LUMINANCE, eutils::ToSize(imageSize));
+	mRefTexture.update(mSystem->getMap().getKeyframes()[0]->getImage(0));
 	mDisplayTexture.create(GL_LUMINANCE, eutils::ToSize(imageSize));
 
 	return true;
@@ -79,9 +79,8 @@ void MainWindow::updateState()
 
 	//Tracker pose
 	mIsLost = mTracker->isLost();
-	Eigen::Matrix3fr T, Ti;
-	T << 1, 0, -mTracker->getCamera().getPrincipalPoint()[0], 0, 1, -mTracker->getCamera().getPrincipalPoint()[1], 0, 0, 1;
-	Ti << 1, 0, +mTracker->getCamera().getPrincipalPoint()[0], 0, 1, +mTracker->getCamera().getPrincipalPoint()[1], 0, 0, 1;
+	const Eigen::Matrix3fr T = eutils::GetTranslateHomography(-mTracker->getCamera().getPrincipalPoint());
+	const Eigen::Matrix3fr Ti = eutils::GetTranslateHomography(mTracker->getCamera().getPrincipalPoint());
 	mTrackerPose = Ti*mTracker->getCurrentPose2D()*T;
 
 	//Display points for small thumbnail
@@ -147,10 +146,12 @@ void MainWindow::updateState()
 			color = StaticColors::Blue();
 			Eigen::Vector2f pos = eutils::HomographyPoint(mTracker->getCurrentPose2D(), match->getPosition());
 			//Add line
-			mImageLines.push_back(feature.getPosition());
-			mImageLines.push_back(pos);
-			mImageLineColors.push_back(StaticColors::Yellow());
-			mImageLineColors.push_back(StaticColors::Blue());
+			//mImageLines.push_back(feature.getPosition());
+			//mImageLines.push_back(pos);
+			//mImageLineColors.push_back(StaticColors::Yellow());
+			//mImageLineColors.push_back(StaticColors::Blue());
+			mImagePoints.push_back(feature.getPosition());
+			mImagePointColors.push_back(StaticColors::Green(0.7f));
 		}
 		else
 			color = StaticColors::Green(0.7f);
@@ -177,12 +178,17 @@ void MainWindow::updateState()
 		else
 			color = StaticColors::Gray();
 
-		mFrameHomographies.push_back(frame.getPose().inverse());
+		const Eigen::Matrix3fr T = eutils::GetTranslateHomography(-mSystem->getCamera().getPrincipalPoint());
+		const Eigen::Matrix3fr Ti = eutils::GetTranslateHomography(mSystem->getCamera().getPrincipalPoint());
+
+		auto H = (Ti*frame.getPose()*T).inverse().eval();
+
+		mFrameHomographies.push_back(H);
 		mFrameColors.push_back(color);
 	}
 
 	Eigen::Vector4f color;
-	mFrameHomographies.push_back(mSystem->getTracker().getCurrentPose2D().inverse());
+	mFrameHomographies.push_back(mTrackerPose.inverse());
 	if (mSystem->getTracker().isLost())
 		color = StaticColors::Red();
 	else if (mSystem->mKeyframeAdded)
@@ -237,7 +243,7 @@ void MainWindow::draw()
 	mShaders->getTexture().renderTexture(mRefTexture.getTarget(), mRefTexture.getId(), mImageSize, 1.0f);
 	if (!mIsLost)
 		mShaders->getTextureWarp().renderTextureFixedAlpha(mCurrentImageTextureTarget, mCurrentImageTextureId, mTrackerPose, 0.5f, mImageSize);
-
+	
 	std::vector<Eigen::Vector2f> pointsSrc;
 	pointsSrc.push_back(Eigen::Vector2f(0, 0));
 	pointsSrc.push_back(Eigen::Vector2f(mImageSize[0], 0));

@@ -11,10 +11,12 @@
 #include "cvutils.h"
 #include "CeresUtils.h"
 #include "CeresParametrization.h"
+#include "Profiler.h"
 
 namespace planecalib {
 
-//////////////////////////////////////////////////////////////////
+	//////////////////////////////////////////////////////////////////
+// HomographyCalibrationError
 
 class HomographyCalibrationError
 {
@@ -70,7 +72,6 @@ public:
 		//basis2.normalize();
 	}
 
-	//Homography is in row-major order
 	template<typename T>
 	bool operator()(const T * const alpha_, const T * const pp, const T * const normal, T *residuals) const
 	{
@@ -131,10 +132,76 @@ public:
 
 	}
 
+	bool operator()(const double alpha, const Eigen::Vector2d &pp, const Eigen::Vector3d &normal, Eigen::Vector2d &residuals) const
+	{
+		return (*this)(&alpha, pp.data(), normal.data(), residuals.data());
+	}
+
 private:
 	const bool mUseNormalized;
 	const Eigen::Matrix3d &mH;
 };
+
+/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// HomographyCalibrationRansac
+/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+void HomographyCalibrationRansac::setData(const std::vector<Eigen::Matrix3d> *homographies)
+{
+	assert(homographies);
+
+	mHomographies = homographies;
+	this->mConstraintCount = mHomographies->size();
+}
+
+std::vector<double> HomographyCalibrationRansac::modelFromMinimalSet(const std::vector<int> &constraintIndices)
+{
+	Eigen::Matrix<double, 2, 1> A;
+	Eigen::Matrix<double, 2, 1> b;
+
+	//Hti must be column-major!!!
+	auto &Hti = mHomographies->at(constraintIndices[0]);
+
+	A[0] = -Hti(2)*Hti(5);
+	b[0] = Hti(0)*Hti(3) + Hti(1)*Hti(4);
+	A[1] = Hti(5)*Hti(5) - Hti(2)*Hti(2);
+	b[1] = -(Hti(3)*Hti(3) - Hti(0)*Hti(0) + Hti(4)*Hti(4) - Hti(1)*Hti(1));
+	
+	std::vector<double> res;
+	res.push_back(sqrt(A.dot(b) / (A.dot(A)))); //alpha = (pinv(A)*b)^0.5;
+	return std::move(res);
+}
+
+void HomographyCalibrationRansac::getInliers(const double &model, int &inlierCount, float &errorSumSq, HomographyCalibrationIterationData &data)
+{
+	ceres::CauchyLoss robustLoss(mOutlierErrorThreshold);
+	
+	inlierCount = 0;
+	errorSumSq = 0;
+
+	for (int i = 0; i < mConstraintCount; i++)
+	{
+		auto &Hti = mHomographies->at(i);
+
+		HomographyCalibrationError err(Hti, true);
+		Eigen::Vector2d residuals;
+		err(model, Eigen::Vector2d(0, 0), Eigen::Vector3d(0, 0, 1), residuals);
+
+		double errorSq = residuals.squaredNorm();
+
+		if (errorSq < mOutlierErrorThresholdSq)
+		{
+			inlierCount++;
+		}
+
+		//Apply robust function
+		double robustError[3];
+		robustLoss.Evaluate(errorSq, robustError);
+		errorSumSq += (float)robustError[0];
+	}
+}
+
+
+/////////////////////////////////////////////////////////////////////////////////////////////
 
 void HomographyCalibration::initFromCamera(const CameraModel &camera)
 {
@@ -150,47 +217,55 @@ void HomographyCalibration::updateCamera(CameraModel &camera) const
 	camera.getFocalLength() = mFocalLengths.cast<float>();
 }
 
-void HomographyCalibration::calibrate(const std::vector<Eigen::Matrix3fr> &H)
+void HomographyCalibration::calibrateLinear(const std::vector<Eigen::Matrix3d> &H)
 {
+	ProfileSection s("linear");
+
 	int hcount = H.size();
 
-	//Adjust for principal point
-	//Eigen::Matrix3fr T, Ti;
-	//T << 1, 0, -p0[0], 0, 1, -p0[1], 0, 0, 1;
-	//Ti << 1, 0, +p0[0], 0, 1, +p0[1], 0, 0, 1;
+	HomographyCalibrationRansac ransac;
+	ransac.setParams(0.1, std::min(10, hcount), hcount, hcount);
+	ransac.setData(&H);
+	ransac.doRansac();
+	mInitialAlpha = ransac.getBestModel();
 
-	std::vector<Eigen::Matrix3d> Ht(hcount);
-	for (int i = 0; i < hcount; i++)
+	if (mVerbose)
 	{
-		Ht[i] = H[i].cast<double>();
-		//Ht[i] = (T * H[i] * Ti).cast<double>();
-		//Ht[i] /= Ht[i].determinant();
+		MYAPP_LOG << "HomographyCalibrateRansac, inliers=" << ransac.getBestInlierCount() << "/" << hcount << "\n";
 	}
 
-	//Assume normal is [0,0,1] and find focal length
-	Eigen::VectorXd A(2 * hcount), b(2 * hcount);
-	for (int i = 0; i < hcount; i++)
-	{
-		auto &Hti = Ht[i];
+	////Assume normal is [0,0,1] and find focal length
+	//Eigen::VectorXd A(2 * hcount), b(2 * hcount);
+	//for (int i = 0; i < hcount; i++)
+	//{
+	//	auto &Hti = H[i];
 
-		//Note: Hti must be column-major!
-		A[2 * i] = -Hti(2)*Hti(5);
-		b[2 * i] = Hti(0)*Hti(3) + Hti(1)*Hti(4);
-		A[2 * i + 1] = Hti(5)*Hti(5) - Hti(2)*Hti(2);
-		b[2 * i + 1] = -(Hti(3)*Hti(3) - Hti(0)*Hti(0) + Hti(4)*Hti(4) - Hti(1)*Hti(1));
-	}
+	//	//Note: Hti must be column-major!
+	//	A[2 * i] = -Hti(2)*Hti(5);
+	//	b[2 * i] = Hti(0)*Hti(3) + Hti(1)*Hti(4);
+	//	A[2 * i + 1] = Hti(5)*Hti(5) - Hti(2)*Hti(2);
+	//	b[2 * i + 1] = -(Hti(3)*Hti(3) - Hti(0)*Hti(0) + Hti(4)*Hti(4) - Hti(1)*Hti(1));
+	//}
 
-	double alpha = sqrt(A.dot(b) / (A.dot(A))); //alpha = (pinv(A)*b)^0.5;
-	mInitialAlpha = alpha;
+	//double alpha = sqrt(A.dot(b) / (A.dot(A))); //alpha = (pinv(A)*b)^0.5;
+	//mInitialAlpha = alpha;
+}
+
+void HomographyCalibration::calibrateNonLinear(const std::vector<Eigen::Matrix3d> &H)
+{
+	ProfileSection s("nonlinear");
+
+	int hcount = H.size();
 
 	//Non-linear minimization
 	ceres::Problem problem;
 	ceres::LossFunction *lossFunc = NULL;
 	//lossFunc = new ceres::CauchyLoss(3.0);
 
-	Eigen::Vector2d pp(0,0); //Homographies have been normalized so principal point is at the origin
+	Eigen::Vector2d pp(0, 0); //Homographies have been normalized so principal point is at the origin
 	mNormal << 0, 0, 1; //Assume reference camera is perependicular to plane.
 
+	double alpha = mInitialAlpha;
 	problem.AddParameterBlock(&alpha, 1);
 	problem.AddParameterBlock(pp.data(), 2);
 	if (mFixPrincipalPoint)
@@ -201,35 +276,56 @@ void HomographyCalibration::calibrate(const std::vector<Eigen::Matrix3fr> &H)
 	{
 		problem.AddResidualBlock(
 			new ceres::AutoDiffCostFunction<HomographyCalibrationError, HomographyCalibrationError::kResidualCount, 1, 2, 3>(
-			new HomographyCalibrationError(Ht[i], mUseNormalizedConstraints)),
-			lossFunc, &alpha,pp.data(),mNormal.data());
+			new HomographyCalibrationError(H[i], mUseNormalizedConstraints)),
+			lossFunc, &alpha, pp.data(), mNormal.data());
 	}
 
 	ceres::Solver::Options options;
-	options.max_num_iterations = 200;
-	options.gradient_tolerance = 1e-25;
-	options.parameter_tolerance = 1e-25;
-	options.function_tolerance = 1e-25;
+	//options.max_num_iterations = 200;
+	//options.gradient_tolerance = 1e-25;
+	//options.parameter_tolerance = 1e-25;
+	//options.function_tolerance = 1e-25;
 	options.linear_solver_type = ceres::DENSE_QR;
 	options.minimizer_progress_to_stdout = false;
 
 	ceres::Solver::Summary summary;
-
+	{
+	ProfileSection s("solve");
 	ceres::Solve(options, &problem, &summary);
-
+	}
 	//Update
 	mPrincipalPoint += pp;
 	mFocalLengths[0] = mFocalLengths[1] = alpha;
 
 	//Show
-	MYAPP_LOG << "Homography calib results\n";
-	MYAPP_LOG << "Use normalized constraints: " << mUseNormalizedConstraints << "\n";
-	MYAPP_LOG << summary.FullReport();
+	if (mVerbose)
+	{
+		MYAPP_LOG << "Homography calib results\n";
+		MYAPP_LOG << "Use normalized constraints: " << mUseNormalizedConstraints << "\n";
+		MYAPP_LOG << summary.FullReport();
 
-	MYAPP_LOG << "Initial alpha=" << mInitialAlpha << ", final=" << alpha << "\n";
+		MYAPP_LOG << "Initial alpha=" << mInitialAlpha << ", final=" << alpha << "\n";
 
-	MYAPP_LOG << "PP=" << mPrincipalPoint.transpose() << "\n";
-	MYAPP_LOG << "Normal=" << mNormal.transpose() << "\n";
+		MYAPP_LOG << "PP=" << mPrincipalPoint.transpose() << "\n";
+		MYAPP_LOG << "Normal=" << mNormal.transpose() << "\n";
+	}
+}
+
+void HomographyCalibration::calibrate(const std::vector<Eigen::Matrix3fr> &H)
+{
+	ProfileSection s("HomographyCalibrate");
+
+	int hcount = H.size();
+	std::vector<Eigen::Matrix3d> Ht(hcount);
+	for (int i = 0; i < hcount; i++)
+	{
+		Ht[i] = H[i].cast<double>();
+		//Ht[i] = (T * H[i] * Ti).cast<double>();
+		//Ht[i] /= Ht[i].determinant();
+	}
+
+	calibrateLinear(Ht);
+	calibrateNonLinear(Ht);
 }
 
 } 

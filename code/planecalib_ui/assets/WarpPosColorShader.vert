@@ -7,6 +7,8 @@ varying vec4 vColor;
 
 void main(void)
 {
-  	gl_Position = uMVPMatrix * vec4(uHomography*vec3(aPosCoord.x, aPosCoord.y, 1.0), 1.0);
+	vec3 pos3 = uHomography*vec3(aPosCoord.x, aPosCoord.y, 1.0);
+	gl_Position = uMVPMatrix * vec4(pos3, pos3.z);
+
 	vColor = aColor;
 }
