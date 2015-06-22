@@ -30,7 +30,7 @@ void main(void)
 	vec2 xd = factor*xn;
 	
 	//PP
-	xn += pp;
+	xn += uPP;
 	
 	//Add depth again
 	vec3 uvz = xc.z * vec3(xn,1);

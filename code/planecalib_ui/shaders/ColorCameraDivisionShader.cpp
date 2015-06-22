@@ -15,7 +15,7 @@ bool ColorCameraDivisionShader::init()
 	const char *attribs[] =	{ "aPosCoord", "aColor" };
 	int *attribIds[] = {&mAttribPosCoord, &mAttribColor };
 	const int attribsCount = sizeof(attribs) / sizeof(attribs[0]);
-
+	
 	res &= mProgram.load("assets/colorCameraDivision_render.vert", "assets/colorCameraDivision_render.frag", uniforms, uniformIds, uniformsCount,
 							 attribs, attribIds, attribsCount);
     return res;

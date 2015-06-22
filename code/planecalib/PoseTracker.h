@@ -35,6 +35,9 @@ public:
 
 	bool isLost() const { return mIsLost; }
 
+	const CameraModel &getCamera() const { return mCamera; }
+	void setCamera(const CameraModel &value) { mCamera=value; }
+
 	const Eigen::Matrix3fr &getCurrentPose2D() const;
 
 	const Eigen::Vector2i getImageSize() const {return mImageSize;}
@@ -63,6 +66,7 @@ protected:
 
 	bool mIsLost;
 
+	CameraModel mCamera;
 	Map *mMap;
 
 	Eigen::Vector2i mImageSize;
@@ -93,7 +97,7 @@ protected:
 	// Protected methods
 
 	bool estimateSimilarityFromLastFrame(const TrackingFrame &frame, Eigen::Matrix3fr &similarity);
-	void findMatches(const Eigen::Matrix3fr &poseGuess);
+	void findMatches(const Eigen::Matrix3fr &opticalHomography, const Eigen::Matrix3fr &poseGuess);
 	bool trackFrameHomography(const Eigen::Matrix3fr &poseGuess);
 	bool trackFrame3D();
 };

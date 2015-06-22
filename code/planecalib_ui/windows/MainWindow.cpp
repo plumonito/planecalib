@@ -77,8 +77,12 @@ void MainWindow::updateState()
 	mFrameHomographies.clear();
 	mFrameColors.clear();
 
-	mTrackerPose = mTracker->getCurrentPose2D();
+	//Tracker pose
 	mIsLost = mTracker->isLost();
+	Eigen::Matrix3fr T, Ti;
+	T << 1, 0, -mTracker->getCamera().getPrincipalPoint()[0], 0, 1, -mTracker->getCamera().getPrincipalPoint()[1], 0, 0, 1;
+	Ti << 1, 0, +mTracker->getCamera().getPrincipalPoint()[0], 0, 1, +mTracker->getCamera().getPrincipalPoint()[1], 0, 0, 1;
+	mTrackerPose = Ti*mTracker->getCurrentPose2D()*T;
 
 	//Display points for small thumbnail
 	const Keyframe *displayFrame;
@@ -94,10 +98,9 @@ void MainWindow::updateState()
 		if (trackingFrame && trackingFrame->getWarpedPyramid().getOctaveCount())
 		{
 			mDisplayTexture.update(trackingFrame->getWarpedPyramid()[0]);
-			Eigen::Matrix3fr H = trackingFrame->getWarpHomography().inverse();
 			for (auto &m : trackingFrame->getMatches())
 			{
-				mDisplayPoints.push_back(eutils::HomographyPoint(H, m.getPosition()));
+				mDisplayPoints.push_back(eutils::FromCV(m.getKeypoint().pt));
 				mDisplayColors.push_back(colors[m.getOctave()]);
 			}
 		}

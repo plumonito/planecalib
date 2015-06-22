@@ -156,7 +156,7 @@ bool BundleAdjuster::isInlier(const FeatureMeasurement &measurement)
 	ReprojectionError err(measurement);
 	err(mParamsPrincipalPoint, mParamsDistortion, measurement.getKeyframe().mParamsPose, measurement.getFeature().mParams, residuals);
 	
-	return residuals.squaredNorm() > mOutlierPixelThresholdSq;
+	return residuals.squaredNorm() <= mOutlierPixelThresholdSq;
 }
 
 void BundleAdjuster::getInliers(int &inlierCount, std::vector<FeatureMeasurement *> &outliers)
@@ -255,13 +255,13 @@ bool BundleAdjuster::bundleAdjust()
 			auto &params = feature.mParams;
 
 			//Is new, create
-			params = feature.getPosition().cast<double>();
+			params = feature.getPosition().cast<double>() - mParamsPrincipalPoint;
 
 			//Add feature as parameter block
 			problem.AddParameterBlock(params.data(), 2);
 			if (mOnlyDistortion)
 				problem.SetParameterBlockConstant(params.data());
-			options.linear_solver_ordering->AddElementToGroup(params.data(), 0);
+			options.linear_solver_ordering->AddElementToGroup(params.data(), 1);
 		}
 
 		//Distortion params
@@ -270,7 +270,7 @@ bool BundleAdjuster::bundleAdjust()
 		if (mOnlyDistortion)
 			problem.SetParameterBlockConstant(mParamsPrincipalPoint.data());
 
-		problem.AddParameterBlock(mParamsDistortion.data(), mParamsDistortion.size());
+		problem.AddParameterBlock(mParamsDistortion.data(), TDistortionParamVector::SizeAtCompileTime);
 		//problem.SetParameterBlockConstant(mParamsDistortion.data());
 		options.linear_solver_ordering->AddElementToGroup(mParamsDistortion.data(), 0);
 
@@ -316,7 +316,7 @@ bool BundleAdjuster::bundleAdjust()
 			lossFunc_i = new ceres::CauchyLoss(mOutlierPixelThreshold);
 
 			problem.AddResidualBlock(
-				new ceres::AutoDiffCostFunction<ReprojectionError, ReprojectionError::kResidualCount, 2, 2, 9, 2>(
+				new ceres::AutoDiffCostFunction<ReprojectionError, ReprojectionError::kResidualCount, 2, TDistortionParamVector::SizeAtCompileTime, 9, 2>(
 				new ReprojectionError(m)),
 				lossFunc_i, mParamsPrincipalPoint.data(), mParamsDistortion.data(), poseParams.data(), featureParams.data());
 		}

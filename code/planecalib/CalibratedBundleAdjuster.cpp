@@ -324,7 +324,7 @@ bool CalibratedBundleAdjuster::bundleAdjust()
 			lossFunc_i = new ceres::CauchyLoss(mOutlierPixelThreshold);
 
 			problem.AddResidualBlock(
-				new ceres::AutoDiffCostFunction<CalibratedReprojectionError, CalibratedReprojectionError::kResidualCount, 2, 2, 2, 3, 3, 2>(
+				new ceres::AutoDiffCostFunction<CalibratedReprojectionError, CalibratedReprojectionError::kResidualCount, 2, TDistortionParamsVector::SizeAtCompileTime, 2, 3, 3, 2>(
 				new CalibratedReprojectionError(m)),
 				lossFunc_i, mPrincipalPoint.data(), mParamsDistortion.data(), mFocalLengths.data(), poseParams.data(), poseParams.data() + 3, featureParams.data());
 		}

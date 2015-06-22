@@ -18,7 +18,7 @@ namespace planecalib {
 // Map
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-void Map::getFeaturesInView(const Eigen::Matrix3fr &pose_, const Eigen::Vector2i &imageSize, int octaveCount, std::unordered_set<const Feature*> &featuresToIgnore, std::vector<std::vector<FeatureProjectionInfo>> &featuresInView)
+void Map::getFeaturesInView(const Eigen::Matrix3fr &opticalHomography, const CameraModel &camera, const Eigen::Matrix3fr &pose_, int octaveCount, std::unordered_set<const Feature*> &featuresToIgnore, std::vector<std::vector<FeatureProjectionInfo>> &featuresInView)
 {
 	ProfileSection s("getFeaturesInView");
 	
@@ -26,7 +26,7 @@ void Map::getFeaturesInView(const Eigen::Matrix3fr &pose_, const Eigen::Vector2i
 	//pose = Eigen::Matrix3fr::Identity();
 
 	//Find closest keyframe
-	HomographyDistance hdist(imageSize);
+	HomographyDistance hdist(camera.getImageSize());
 	Eigen::Matrix3f hinv = pose.inverse();
 
 	float minDistance = std::numeric_limits<float>::infinity();
@@ -57,7 +57,7 @@ void Map::getFeaturesInView(const Eigen::Matrix3fr &pose_, const Eigen::Vector2i
 		//Is the feature inside our image?
 		//Eigen::Vector2f pos = eutils::HomographyPoint(pose, feature.getPosition());
 		Eigen::Vector2f pos = feature.getPosition();
-		if (!eutils::IsInside(imageSize, pos))
+		if (!eutils::IsInside(camera.getImageSize(), pos))
 			continue;
 
 		//Scale

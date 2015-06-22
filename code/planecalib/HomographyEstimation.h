@@ -101,6 +101,7 @@ public:
     /**
      * @brief Estimates a similarity transform that minimizes the SSD between the aligned images.
      * This is the same method as used in PTAM.
+	 * imgp = transform*refp
      */
     bool estimateSimilarityDirect(const cv::Mat1b &imgRef, const cv::Mat1b &imgNew, cv::Matx23f &transform);
     bool estimateSimilarityDirect(const cv::Mat1b &imgRef, const cv::Mat1s &imgRefDx, const cv::Mat1s &imgRefDy, const cv::Mat1b &imgNew, cv::Matx23f &transform);

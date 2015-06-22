@@ -14,6 +14,7 @@
 #include "eutils.h"
 #include "ImagePyramid.h"
 #include "PoseEstimationCommon.h"
+#include "CameraModel.h"
 
 namespace planecalib {
 
@@ -73,7 +74,9 @@ public:
 	EIGEN_MAKE_ALIGNED_OPERATOR_NEW
 
 	void initImageData(const cv::Mat3b &imageColor, const cv::Mat1b &imageGray);
-	void createKeypoints(const Eigen::Matrix3fr &warpHomography);
+
+	//lastx = warpPose*keyx
+	void createKeypoints(const Eigen::Matrix3fr &warpOpticalHomography, const CameraModel &camera, const Eigen::Matrix3fr &warpPose);
 
 	const cv::Mat3b &getColorImage() const { return mColorImage; }
 	const ImagePyramid1b &getOriginalPyramid() const { return mOriginalPyramid; }
@@ -85,7 +88,11 @@ public:
 	const cv::Mat1s &getSBIdx() const { return mSBIdx; }
 	const cv::Mat1s &getSBIdy() const { return mSBIdy; }
 
-	const Eigen::Matrix3fr &getWarpHomography() const { return mWarpHomography; }
+	const Eigen::Matrix3fr &getWarpHomography() const { return mWarpOpticalHomography; }
+	const CameraModel &getWarpCamera() const { return mWarpCamera; }
+	const Eigen::Matrix3fr &getWarpPose() const { return mWarpPose; }
+
+	Eigen::Vector2f warpKey2Img(const Eigen::Vector2f &keyp);
 
 	const ImagePyramid1b &getWarpedPyramid() const { return mWarpedPyramid; }
 
@@ -114,7 +121,11 @@ protected:
 	cv::Mat1s mSBIdx;
 	cv::Mat1s mSBIdy;
 
+	Eigen::Matrix3fr mWarpOpticalHomography;
+	CameraModel mWarpCamera;
+	Eigen::Matrix3fr mWarpPose;
 	Eigen::Matrix3fr mWarpHomography;
+
 	ImagePyramid1b mWarpedPyramid;
 
 	std::vector<std::vector<cv::KeyPoint>> mWarpedKeypoints;

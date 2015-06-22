@@ -39,7 +39,7 @@ public:
 
 	void addKeyframe(std::unique_ptr<Keyframe> newKeyframe);
 
-	void getFeaturesInView(const Eigen::Matrix3fr &pose, const Eigen::Vector2i &imageSize, int octaveCount, std::unordered_set<const Feature*> &featuresToIgnore, std::vector<std::vector<FeatureProjectionInfo>> &featuresInView);
+	void getFeaturesInView(const Eigen::Matrix3fr &opticalHomography, const CameraModel &camera, const Eigen::Matrix3fr &pose, int octaveCount, std::unordered_set<const Feature*> &featuresToIgnore, std::vector<std::vector<FeatureProjectionInfo>> &featuresInView);
 	FeatureProjectionInfo projectFeature(const Eigen::Matrix3fr &pose, Feature &feature);
 
 	Feature *createFeature(Keyframe &keyframe, const Eigen::Matrix3fr &poseInv, const Eigen::Vector2f &position, int octave, const uchar *descriptor);

@@ -91,41 +91,20 @@ bool PoseTracker::trackFrame(double timestamp, const cv::Mat3b &imageColor, cons
 	mFeaturesInView.clear();
 	mFeaturesInView.resize(mOctaveCount);
 
-	////Find closest keyframe
-	//auto &keyframes = mMap->getKeyframes();
-	//HomographyDistance hdist(mImageSize);
-	//Eigen::Matrix3f hinv = mCurrentPose.inverse();
-	//
-	//float minDistance = std::numeric_limits<float>::infinity();
-	//Keyframe *refFrame = NULL;
-	//for (auto &framePtr : mMap->getKeyframes())
-	//{
-	//	float dist = hdist.calculateSq(hinv, framePtr->getPose());
-	//	if (dist < minDistance)
-	//	{
-	//		minDistance = dist;
-	//		refFrame = framePtr.get();
-	//	}
-	//}
-
-	//MYAPP_LOG << "Closest keyframe: " << (minIt - distances.begin()) << "\n";
-
 	//Optical alignment
-	Eigen::Matrix3fr poseGuess;
+	Eigen::Matrix3fr poseGuess = mLastPose2D;
+	Eigen::Matrix3fr opticalHomography; //p_now = opticalHomography*p_last
 	if (mLastFrame)
 	{
-		Eigen::Matrix3fr similarity;
-		estimateSimilarityFromLastFrame(*mFrame, similarity);
-
-		poseGuess = mLastPose2D*similarity;
+		estimateSimilarityFromLastFrame(*mFrame, opticalHomography);
 	}
 	else
 	{
-		poseGuess = Eigen::Matrix3fr::Identity();
+		opticalHomography = Eigen::Matrix3fr::Identity();
 	}
 
 	//Matches
-	findMatches(poseGuess);
+	findMatches(opticalHomography, poseGuess);
 
 	//Estimate pose
 	if (mMap->getIs3DValid())
@@ -155,7 +134,7 @@ bool PoseTracker::estimateSimilarityFromLastFrame(const TrackingFrame &frame, Ei
 	return res;
 }
 
-void PoseTracker::findMatches(const Eigen::Matrix3fr &poseGuess)
+void PoseTracker::findMatches(const Eigen::Matrix3fr &opticalHomography, const Eigen::Matrix3fr &poseGuess)
 {
 	const int kDistanceThresholdSq0 = 40 * 40;
 	const float kRatioThreshold = 0.8f;
@@ -166,7 +145,7 @@ void PoseTracker::findMatches(const Eigen::Matrix3fr &poseGuess)
 	std::unordered_set<const Feature*> featuresToIgnore;
 
 	//Get features in view
-	mMap->getFeaturesInView(poseGuess, mImageSize, mOctaveCount, featuresToIgnore, mFeaturesInView);
+	mMap->getFeaturesInView(opticalHomography, mCamera, poseGuess, mOctaveCount, featuresToIgnore, mFeaturesInView);
 	if (mFeaturesInView.empty() || mFeaturesInView[0].empty())
 		return;
 
@@ -174,7 +153,7 @@ void PoseTracker::findMatches(const Eigen::Matrix3fr &poseGuess)
 	Keyframe *refFrame = &mFeaturesInView[0][0].getSourceMeasurement()->getKeyframe();
 	Eigen::Matrix3fr warpHomography = poseGuess * refFrame->getPose().inverse();
 
-	mFrame->createKeypoints(warpHomography);
+	mFrame->createKeypoints(opticalHomography, mCamera, warpHomography);
 
 	Eigen::Matrix3fr warpHomographyInv = warpHomography.inverse();
 
@@ -243,7 +222,8 @@ void PoseTracker::findMatches(const Eigen::Matrix3fr &poseGuess)
 					mTotalMatchSuccess++;
 
 					//Unwarp position
-					Eigen::Vector2f realPosition = eutils::HomographyPoint(warpHomography, eutils::FromCV(bestPosition.pt));
+					//Eigen::Vector2f realPosition = eutils::HomographyPoint(warpHomography, eutils::FromCV(bestPosition.pt));
+					Eigen::Vector2f realPosition = mFrame->warpKey2Img(eutils::FromCV(bestPosition.pt));
 
 					mFrame->getMatches().push_back(FeatureMatch(&m, octave, bestPosition, realPosition, 0));
 				}
@@ -274,8 +254,8 @@ bool PoseTracker::trackFrameHomography(const Eigen::Matrix3fr &poseGuess)
 		std::vector<float> scales;
 		for (auto &match : mFrame->getMatches())
 		{
-			refPoints.push_back(match.getFeature().getPosition());
-			imgPoints.push_back(match.getPosition());
+			refPoints.push_back(match.getFeature().getPosition() - mCamera.getPrincipalPoint());
+			imgPoints.push_back(match.getPosition() - mCamera.getPrincipalPoint());
 			scales.push_back((float)(1<<match.getOctave()));
 		}
 

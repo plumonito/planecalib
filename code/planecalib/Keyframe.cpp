@@ -52,14 +52,50 @@ void TrackingFrame::initImageData(const cv::Mat3b &imageColor, const cv::Mat1b &
 	cvutils::CalculateDerivatives(mSBI, mSBIdx, mSBIdy);
 }
 
-void TrackingFrame::createKeypoints(const Eigen::Matrix3fr &warpHomography)
+Eigen::Vector2f TrackingFrame::warpKey2Img(const Eigen::Vector2f &keyp)
 {
+	//const Eigen::Vector3f keyx = mWarpCamera.unprojectToWorld(keyp);
+	//const Eigen::Vector3f lastx = mWarpPose*keyx;
+	//const Eigen::Vector2f lastp = mWarpCamera.projectFromWorld(lastx);
+	//return eutils::HomographyPoint(mWarpOpticalHomography, lastp);
+	return eutils::HomographyPoint(mWarpHomography, keyp);
+}
+
+void TrackingFrame::createKeypoints(const Eigen::Matrix3fr &warpOpticalHomography, const CameraModel &camera, const Eigen::Matrix3fr &warpPose)
+{
+	ProfileSection s("createWarpKeypoints");
 	cv::Mat1b warpedImage;
+	mWarpOpticalHomography = warpOpticalHomography;
+	mWarpCamera = camera;
+	mWarpPose = warpPose;
 
-	mWarpHomography = warpHomography;
+	//Create map
+	//cv::Mat2f map(mOriginalPyramid[0].rows, mOriginalPyramid[0].cols);
+	//for (int v = 0; v < map.rows; v++)
+	//{
+	//	for (int u = 0; u < map.cols; u++)
+	//	{
+	//		const Eigen::Vector2f keyp = Eigen::Vector2f(u, v);
+	//		//const Eigen::Vector3f keyx = camera.unprojectToWorld(keyp);
+	//		//const Eigen::Vector3f lastx = warpPose*keyx;
+	//		//const Eigen::Vector2f lastp = camera.projectFromWorld(keyp); 
+	//		//const Eigen::Vector2f imgp = eutils::HomographyPoint(warpOpticalHomography, lastp);
+	//		const Eigen::Vector2f imgp = warpKey2Img(keyp);
 
+	//		map(v, u)[0] = imgp[0];
+	//		map(v, u)[1] = imgp[1];
+	//	}
+	//}
+
+	Eigen::Matrix3fr T, Ti;
+	T << 1, 0, -camera.getPrincipalPoint()[0], 0, 1, -camera.getPrincipalPoint()[1], 0, 0, 1;
+	Ti << 1, 0, +camera.getPrincipalPoint()[0], 0, 1, +camera.getPrincipalPoint()[1], 0, 0, 1;
+
+	mWarpHomography = Ti*warpPose*T;
+	//Warp
 	warpedImage.create(mOriginalPyramid[0].size());
-	cv::warpPerspective(mOriginalPyramid[0], warpedImage, eutils::ToCV(warpHomography), mOriginalPyramid[0].size(), cv::WARP_INVERSE_MAP, cv::BORDER_CONSTANT, 0);
+	//cv::remap(mOriginalPyramid[0], warpedImage, map, cv::noArray(), cv::INTER_LINEAR, cv::BORDER_CONSTANT, 0);
+	cv::warpPerspective(mOriginalPyramid[0], warpedImage, eutils::ToCV(mWarpHomography), mOriginalPyramid[0].size(), cv::WARP_INVERSE_MAP, cv::BORDER_CONSTANT, 0);
 
 	mWarpedPyramid.create(warpedImage, FLAGS_PyramidMaxTopLevelWidth);
 

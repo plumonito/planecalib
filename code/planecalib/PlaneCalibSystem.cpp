@@ -64,6 +64,7 @@ bool PlaneCalibSystem::init(double timestamp, cv::Mat3b &imgColor, cv::Mat1b &im
 	//Reset tracker
 	mTracker.reset(new PoseTracker());
 	mTracker->init(mImageSize, keyframe->getOctaveCount());
+	mTracker->setCamera(mCamera);
 
 	//Prepare map expander
 	//mMapExpander.reset(new SlamMapExpander());
