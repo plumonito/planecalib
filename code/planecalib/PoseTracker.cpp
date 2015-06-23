@@ -151,11 +151,20 @@ void PoseTracker::findMatches(const Eigen::Matrix3fr &opticalHomography, const E
 
 	//Get features in view
 	mMap->getFeaturesInView(opticalHomography, mCamera, poseGuess, mOctaveCount, featuresToIgnore, mFeaturesInView);
-	if (mFeaturesInView.empty() || mFeaturesInView[0].empty())
+	if (mFeaturesInView.empty())
+		return;
+
+	//Find refFrame
+	Keyframe *refFrame = NULL;
+	for (int octave = 0; !refFrame && octave < (int)mFeaturesInView.size(); octave++)
+	{
+		if (!mFeaturesInView[octave].empty())
+			refFrame = &mFeaturesInView[octave][0].getSourceMeasurement()->getKeyframe();
+	}
+	if (!refFrame)
 		return;
 
 	//Warp
-	Keyframe *refFrame = &mFeaturesInView[0][0].getSourceMeasurement()->getKeyframe();
 	Eigen::Matrix3fr warpHomography = poseGuess * refFrame->getPose().inverse();
 
 	mFrame->createKeypoints(opticalHomography, mCamera, warpHomography);
@@ -259,8 +268,8 @@ bool PoseTracker::trackFrameHomography(const Eigen::Matrix3fr &poseGuess)
 		std::vector<float> scales;
 		for (auto &match : mFrame->getMatches())
 		{
-			refPoints.push_back(match.getFeature().getPosition() - mCamera.getPrincipalPoint());
-			imgPoints.push_back(match.getPosition() - mCamera.getPrincipalPoint());
+			refPoints.push_back(match.getFeature().getPosition());
+			imgPoints.push_back(mCamera.unprojectToScaleSpace(match.getPosition()));
 			scales.push_back((float)(1<<match.getOctave()));
 		}
 

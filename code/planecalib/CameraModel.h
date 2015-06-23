@@ -75,10 +75,16 @@ public:
 	Eigen::Vector2f projectFromWorld(const Eigen::Vector3f &xc) const
 	{
 		const Eigen::Vector2f xn = xc.hnormalized();
-		Eigen::Vector2f uv(xn[0] * mFocalLengths[0], xn[1] * mFocalLengths[1]);
-		return mDistortionModel.apply(uv) + mPrincipalPoint;
+		Eigen::Vector2f pn(xn[0] * mFocalLengths[0], xn[1] * mFocalLengths[1]);
+		return projectFromScaleSpace(pn);
 	}
-	
+
+	//Projects the point assuming focal lengths have already been applied
+	Eigen::Vector2f projectFromScaleSpace(const Eigen::Vector2f &pn) const
+	{
+		return mDistortionModel.apply(pn) + mPrincipalPoint;
+	}
+
 	template <class TXMat, class TPMat>
 	void projectFromWorld(const Eigen::MatrixBase<TXMat> &x, Eigen::MatrixBase<TPMat> &p) const
 	{
@@ -119,16 +125,20 @@ public:
 	// Unproject (assuming z=1)
 	Eigen::Vector3f unprojectToWorld(const Eigen::Vector2f &p) const
 	{
-		Eigen::Vector2f xd;
-		xd[0] = p[0] - mPrincipalPoint[0];
-		xd[1] = p[1] - mPrincipalPoint[1];
-
-		Eigen::Vector2f xn;
-		xn = mDistortionModel.applyInv(xd);
+		Eigen::Vector2f xn = unprojectToScaleSpace(p);
 
 		xn[0] /= mFocalLengths[0];
 		xn[1] /= mFocalLengths[1];
 		return xn.homogeneous();
+	}
+
+	Eigen::Vector2f unprojectToScaleSpace(const Eigen::Vector2f &p) const
+	{
+		Eigen::Vector2f xd;
+		xd[0] = p[0] - mPrincipalPoint[0];
+		xd[1] = p[1] - mPrincipalPoint[1];
+
+		return mDistortionModel.applyInv(xd);
 	}
 
 	template <class TPMat, class TXMat>

@@ -89,18 +89,33 @@ void MainWindow::updateState()
 	if (mDisplayFrameIdx == -1)
 	{
 		displayFrame = NULL;
-		//mDisplayTextureTarget = mCurrentImageTextureTarget;
-		//mDisplayTextureId = mCurrentImageTextureId;
-		mDisplayTextureTarget = mDisplayTexture.getTarget();
-		mDisplayTextureId = mDisplayTexture.getId();
+		//Use this to show matches with warped image
+		//mDisplayTextureTarget = mDisplayTexture.getTarget();
+		//mDisplayTextureId = mDisplayTexture.getId();
 
+		//if (trackingFrame && trackingFrame->getWarpedPyramid().getOctaveCount())
+		//{
+		//	mDisplayTexture.update(trackingFrame->getWarpedPyramid()[0]);
+		//	for (auto &m : trackingFrame->getMatches())
+		//	{
+		//		mDisplayPoints.push_back(eutils::FromCV(m.getKeypoint().pt));
+		//		mDisplayColors.push_back(colors[m.getOctave()]);
+		//	}
+		//}
+
+		// Use this to show keypoints on original image
+		mDisplayTextureTarget = mCurrentImageTextureTarget;
+		mDisplayTextureId = mCurrentImageTextureId;
 		if (trackingFrame && trackingFrame->getWarpedPyramid().getOctaveCount())
 		{
-			mDisplayTexture.update(trackingFrame->getWarpedPyramid()[0]);
-			for (auto &m : trackingFrame->getMatches())
+			int maxOctave = std::min(3, mTracker->getFrame()->getWarpedPyramid().getOctaveCount());
+			for (int octave = 0; octave < maxOctave; octave++)
 			{
-				mDisplayPoints.push_back(eutils::FromCV(m.getKeypoint().pt));
-				mDisplayColors.push_back(colors[m.getOctave()]);
+				for (auto &kp : mTracker->getFrame()->getWarpedKeypoints(octave))
+				{
+					mDisplayPoints.push_back(eutils::FromCV(kp.pt));
+					mDisplayColors.push_back(colors[octave]);
+				}
 			}
 		}
 
@@ -120,17 +135,6 @@ void MainWindow::updateState()
 		}
 	}
 
-	// Use this to show keypoints
-	//int maxOctave = std::min(3, mTracker->getFrame()->getOctaveCount());
-	//for (int octave = 0; octave < maxOctave; octave++)
-	//{
-	//	for (auto &kp : mTracker->getFrame()->getKeypoints(octave))
-	//	{
-	//		mDisplayPoints.push_back(eutils::FromCV(kp.pt));
-	//		mDisplayColors.push_back(colors[octave]);
-	//	}
-	//}
-
 	//Add features
 	//mTrackerPose = &mTracker->getCurrentPose();
 	for (auto &p : mMap->getFeatures())
@@ -144,13 +148,16 @@ void MainWindow::updateState()
 		if (match)
 		{
 			color = StaticColors::Blue();
-			Eigen::Vector2f pos = eutils::HomographyPoint(mTracker->getCurrentPose2D(), match->getPosition());
+			//Eigen::Vector3f xn = eutils::HomographyPoint(mTracker->getCurrentPose2D(), match->getPosition()).homogeneous();
+			//Eigen::Vector2f pos = mSystem->getCamera().projectFromWorld(xn);
 			//Add line
 			//mImageLines.push_back(feature.getPosition());
 			//mImageLines.push_back(pos);
 			//mImageLineColors.push_back(StaticColors::Yellow());
 			//mImageLineColors.push_back(StaticColors::Blue());
-			mImagePoints.push_back(feature.getPosition());
+
+			Eigen::Vector2f posRef = mSystem->getCamera().projectFromScaleSpace(feature.getPosition());
+			mImagePoints.push_back(posRef);
 			mImagePointColors.push_back(StaticColors::Green(0.7f));
 		}
 		else

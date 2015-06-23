@@ -255,7 +255,7 @@ bool BundleAdjuster::bundleAdjust()
 			auto &params = feature.mParams;
 
 			//Is new, create
-			params = feature.getPosition().cast<double>() - mParamsPrincipalPoint;
+			params = feature.getPosition().cast<double>();
 
 			//Add feature as parameter block
 			problem.AddParameterBlock(params.data(), 2);

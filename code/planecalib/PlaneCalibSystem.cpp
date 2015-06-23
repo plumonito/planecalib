@@ -102,7 +102,9 @@ bool PlaneCalibSystem::init(double timestamp, cv::Mat3b &imgColor, cv::Mat1b &im
 
 		for (auto &kp : indexer)
 		{
-			mMap->createFeature(*pkeyframe, poseInv, Eigen::Vector2f(kp.keypoint->pt.x, kp.keypoint->pt.y), octave, (uchar*)kp.descriptor);
+			Eigen::Vector2f pos(kp.keypoint->pt.x, kp.keypoint->pt.y);
+			auto *pfeature = mMap->createFeature(*pkeyframe, poseInv, pos, octave, (uchar*)kp.descriptor);
+			pfeature->setPosition(pos - mCamera.getPrincipalPoint());
 		}
 
 		MYAPP_LOG << "Created " << keypoints.size() << " features in octave " << octave << "\n";
@@ -186,7 +188,7 @@ void PlaneCalibSystem::processImage(double timestamp, cv::Mat3b &imgColor, cv::M
 		mExpanderCheckPending = true;
 
 		//Check distance
-		const float kThreshold = 60;
+		const float kThreshold = 100;
 		const float kThresholdSq = kThreshold*kThreshold;
 		std::vector<Eigen::Vector2f> cornersOriginal;
 		cornersOriginal.push_back(Eigen::Vector2f(0, 0));

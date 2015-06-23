@@ -56,55 +56,35 @@ void Map::getFeaturesInView(const Eigen::Matrix3fr &opticalHomography, const Cam
 
 		//Is the feature inside our image?
 		//Eigen::Vector2f pos = eutils::HomographyPoint(pose, feature.getPosition());
-		Eigen::Vector2f pos = feature.getPosition();
+		Eigen::Vector2f pos = camera.projectFromScaleSpace(feature.getPosition());
 		if (!eutils::IsInside(camera.getImageSize(), pos))
 			continue;
 
 		//Scale
 		//Eigen::Vector2f posPlusOne = eutils::HomographyPoint(pose, feature.getPositionPlusOne());
-		Eigen::Vector2f posPlusOne = feature.getPositionPlusOne();
-		Eigen::Vector2f d = pos - posPlusOne;
-		float distSq = std::roundf(d.squaredNorm());
-		
-		//Scale too small?
-		if (distSq < 0.8f)
-			continue;
+		//Eigen::Vector2f posPlusOne = feature.getPositionPlusOne();
+		//Eigen::Vector2f d = pos - posPlusOne;
+		//float distSq = std::roundf(d.squaredNorm());
+		//
+		////Scale too small?
+		//if (distSq < 0.8f)
+		//	continue;
 
-		int octave = 0;
-		while (distSq > 1.5f)
-		{
-			distSq /= 4;
-			octave++;
-		}
+		//int octave = 0;
+		//while (distSq > 1.5f)
+		//{
+		//	distSq /= 4;
+		//	octave++;
+		//}
 
-		//Scale too big?
-		if (octave > octaveCount - 1 + 0.2f)
-			continue;
+		////Scale too big?
+		//if (octave > octaveCount - 1 + 0.2f)
+		//	continue;
 
-		int octavei = (int)std::roundf(octave);
+		//int octavei = (int)std::roundf(octave);
+		int octavei = mPtr->getOctave();
 		featuresInView[octavei].push_back(FeatureProjectionInfo(&feature, mPtr, octavei, pos));
 	}
-}
-
-FeatureProjectionInfo Map::projectFeature(const Eigen::Matrix3fr &pose, Feature &feature)
-{
-	Eigen::Vector2f pos = eutils::HomographyPoint(pose, feature.getPosition());
-	Eigen::Vector2f posPlusOne = eutils::HomographyPoint(pose, feature.getPositionPlusOne());
-	
-	Eigen::Vector2f d = pos - posPlusOne;
-	int distSq = (int)std::roundf(d.squaredNorm());
-
-	if (distSq < 1)
-		return FeatureProjectionInfo();
-
-	int octave = 0;
-	while (distSq > 1)
-	{
-		distSq /= 4;
-		octave++;
-	}
-
-	return FeatureProjectionInfo(&feature, feature.getMeasurements().back().get(), octave, pos);
 }
 
 void Map::addKeyframe(std::unique_ptr<Keyframe> newKeyframe)
