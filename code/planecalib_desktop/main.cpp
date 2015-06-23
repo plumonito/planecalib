@@ -21,16 +21,15 @@ DEFINE_int32(FeatureDetectorThreshold, 10, "Threshold for the keypoint detector"
 DEFINE_int32(MatcherPixelSearchDistance, 8, "The search distance for matching features (distance from point projection or from epiplar line). Units in pixels of the highest pyramid level.");
 
 
-DEFINE_int32(DriverCameraId, 0, "Id of the camera to open (OpenCV).");
-DEFINE_string(DriverDataPath, "c:/code/dslam/datasets", "Path to all data files (videos, camera calibrations, etc.)");
-DEFINE_string(DriverVideoFile, "", "Name of the video file to use (e.g. rotation3.mp4). If both VideoFile and SequenceFormat are empty, the camera is used.");
-DEFINE_string(DriverSequenceFormat, "", "sprintf format for the sequence (e.g. \"/cityOfSights/CS_BirdsView_L0/Frame_%.5d.jpg\". This is appended to the data path. If both VideoFile and SequenceFormat are empty, the camera is used.");
-DEFINE_int32(DriverSequenceStartIdx, 0, "Start index for the image sequence.");
-DEFINE_int32(DriverDropFrames, 0, "The system will ignore this many frames per iteration, effectively lowering the frame rate or skipping frames in a video.");
-DEFINE_int32(DriverMaxImageWidth, 960, "Maximum width of input image. Input will be downsampled to be under this width.");
-DEFINE_bool(DriverSingleThreaded, false, "Use a single thread for easier debugging.");
-DEFINE_string(DriverRecordPath, "record/", "Path where the frames will be stored in case of recording.");
-DEFINE_string(DriverRecordVideoFile, "video.avi", "Output video file for recording.");
+DEFINE_int32(CameraId, 0, "Id of the camera to open (OpenCV).");
+DEFINE_string(VideoFile, "", "Name of the video file to use (e.g. rotation3.mp4). If both VideoFile and SequenceFormat are empty, the camera is used.");
+DEFINE_string(ImageSequenceFormat, "", "sprintf format for the sequence (e.g. \"/cityOfSights/CS_BirdsView_L0/Frame_%.5d.jpg\". This is appended to the data path. If both VideoFile and SequenceFormat are empty, the camera is used.");
+DEFINE_int32(ImageSequenceStartIdx, 0, "Start index for the image sequence.");
+DEFINE_int32(DropFrames, 0, "The system will ignore this many frames per iteration, effectively lowering the frame rate or skipping frames in a video.");
+DEFINE_int32(InputMaxImageWidth, 960, "Maximum width of input image. Input will be downsampled to be under this width.");
+DEFINE_bool(SingleThreaded, false, "Use a single thread for easier debugging.");
+DEFINE_string(RecordPath, "record/", "Path where the frames will be stored in case of recording.");
+DEFINE_string(RecordVideoFile, "video.avi", "Output video file for recording.");
 
 ///////////////////////////////////////////////////////
 

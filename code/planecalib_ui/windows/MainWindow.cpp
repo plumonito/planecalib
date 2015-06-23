@@ -90,8 +90,8 @@ void MainWindow::updateState()
 	{
 		displayFrame = NULL;
 		//Use this to show matches with warped image
-		//mDisplayTextureTarget = mDisplayTexture.getTarget();
-		//mDisplayTextureId = mDisplayTexture.getId();
+		mDisplayTextureTarget = mDisplayTexture.getTarget();
+		mDisplayTextureId = mDisplayTexture.getId();
 
 		//if (trackingFrame && trackingFrame->getWarpedPyramid().getOctaveCount())
 		//{
@@ -104,10 +104,12 @@ void MainWindow::updateState()
 		//}
 
 		// Use this to show keypoints on original image
-		mDisplayTextureTarget = mCurrentImageTextureTarget;
-		mDisplayTextureId = mCurrentImageTextureId;
+		//mDisplayTextureTarget = mCurrentImageTextureTarget;
+		//mDisplayTextureId = mCurrentImageTextureId;
 		if (trackingFrame && trackingFrame->getWarpedPyramid().getOctaveCount())
 		{
+			mDisplayTexture.update(trackingFrame->getWarpedPyramid()[0]);
+
 			int maxOctave = std::min(3, mTracker->getFrame()->getWarpedPyramid().getOctaveCount());
 			for (int octave = 0; octave < maxOctave; octave++)
 			{
@@ -248,7 +250,7 @@ void MainWindow::draw()
 
 	//Draw textures
 	mShaders->getTexture().renderTexture(mRefTexture.getTarget(), mRefTexture.getId(), mImageSize, 1.0f);
-	if (!mIsLost)
+	//if (!mIsLost)
 		mShaders->getTextureWarp().renderTextureFixedAlpha(mCurrentImageTextureTarget, mCurrentImageTextureId, mTrackerPose, 0.5f, mImageSize);
 	
 	std::vector<Eigen::Vector2f> pointsSrc;

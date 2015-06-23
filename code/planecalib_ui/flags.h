@@ -14,16 +14,15 @@
 
 namespace planecalib
 {
-	DECLARE_int32(DriverCameraId);
-	DECLARE_string(DriverDataPath);
-	DECLARE_string(DriverVideoFile);
-	DECLARE_string(DriverSequenceFormat);
-	DECLARE_int32(DriverSequenceStartIdx);
-	DECLARE_int32(DriverDropFrames);
-	DECLARE_int32(DriverMaxImageWidth);
-	DECLARE_bool(DriverSingleThreaded);
-	DECLARE_string(DriverRecordPath);
-	DECLARE_string(DriverRecordVideoFile);
+	DECLARE_int32(CameraId);
+	DECLARE_string(VideoFile);
+	DECLARE_string(ImageSequenceFormat);
+	DECLARE_int32(ImageSequenceStartIdx);
+	DECLARE_int32(DropFrames);
+	DECLARE_int32(InputMaxImageWidth);
+	DECLARE_bool(SingleThreaded);
+	DECLARE_string(RecordPath);
+	DECLARE_string(RecordVideoFile);
 	//
 	//DECLARE_double(MapDrawScale);
 }

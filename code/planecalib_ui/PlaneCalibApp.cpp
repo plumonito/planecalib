@@ -94,7 +94,7 @@ bool PlaneCalibApp::init(void)
 	//Determine downscale at input
 	int width = mImageSrc->getSourceSize().width;
 	mDownsampleInputCount = 0;
-	while(width > FLAGS_DriverMaxImageWidth)
+	while(width > FLAGS_InputMaxImageWidth)
 	{
 		width = (width+1)/2;
 		mDownsampleInputCount++;
@@ -117,7 +117,7 @@ bool PlaneCalibApp::init(void)
 	cv::Mat3b imageColor = mImageSrc->getImgColor();
 	mSystem.reset( new PlaneCalibSystem() );
 	mSystem->init(mImageSrc->getCaptureTime(), imageColor, imageGray);
-	mSystem->setSingleThreaded(FLAGS_DriverSingleThreaded);
+	mSystem->setSingleThreaded(FLAGS_SingleThreaded);
 
 	//Add windows
 	mWindows.push_back(std::unique_ptr<BaseWindow>(new MainWindow()));
@@ -157,7 +157,7 @@ bool PlaneCalibApp::init(void)
 
 	//Record vars
 	mRecordId = 0;
-	mRecordFileFormat = FLAGS_DriverRecordPath + "frame%.4d.jpg";
+	mRecordFileFormat = FLAGS_RecordPath + "frame%.4d.jpg";
 
 	mInitialized = true;
     return true;
@@ -190,7 +190,7 @@ void PlaneCalibApp::toggleRecording()
 	{
 		//resetSystem();
 		mRecordVideo = true;
-		mRecordVideoWriter.open(FLAGS_DriverRecordVideoFile, -1, 30, eutils::ToSize(UserInterfaceInfo::Instance().getScreenSize()), true);
+		mRecordVideoWriter.open(FLAGS_RecordVideoFile, -1, 30, eutils::ToSize(UserInterfaceInfo::Instance().getScreenSize()), true);
 	}
 }
 
@@ -248,10 +248,10 @@ void PlaneCalibApp::resize()
 bool PlaneCalibApp::initImageSrc()
 {
 	mUsingCamera = false;
-	if(!FLAGS_DriverVideoFile.empty())
+	if(!FLAGS_VideoFile.empty())
 	{
 		//Use video file
-	    std::string videoFilename = FLAGS_DriverDataPath + "/" + FLAGS_DriverVideoFile;
+	    std::string videoFilename = FLAGS_VideoFile;
 
 		MYAPP_LOG << "Video file: " << videoFilename << "\n";
 		OpenCVDataSource *source = new OpenCVDataSource();
@@ -264,15 +264,15 @@ bool PlaneCalibApp::initImageSrc()
 
 		MYAPP_LOG << "Opened video file succesfully\n";
 	}
-	else if(!FLAGS_DriverSequenceFormat.empty())
+	else if(!FLAGS_ImageSequenceFormat.empty())
 	{
 		//Use image sequence
-	    std::string sequence = FLAGS_DriverDataPath + "/" + FLAGS_DriverSequenceFormat;
+		std::string sequence = FLAGS_ImageSequenceFormat;
 
 		MYAPP_LOG << "Image sequence: " << sequence << "\n";
 		SequenceDataSource *source = new SequenceDataSource();
 	    mImageSrc.reset(source);
-	    if(!source->open(sequence, FLAGS_DriverSequenceStartIdx))
+	    if(!source->open(sequence, FLAGS_ImageSequenceStartIdx))
 	    {
 			MYAPP_LOG << "Error opening sequence.\n";
 	        return NULL;
@@ -285,7 +285,7 @@ bool PlaneCalibApp::initImageSrc()
 		//Use camera
 		OpenCVDataSource *source = new OpenCVDataSource();
 	    mImageSrc.reset(source);
-	    if(!source->open(FLAGS_DriverCameraId))
+	    if(!source->open(FLAGS_CameraId))
 	    {
 			MYAPP_LOG << "Error opening camera.\n";
 	        return false;
@@ -368,7 +368,7 @@ void PlaneCalibApp::draw(void)
         	ProfileSection section("updateFrame");
 
         	//Drop frames
-        	mImageSrc->dropFrames(FLAGS_DriverDropFrames);
+        	mImageSrc->dropFrames(FLAGS_DropFrames);
 
 			isFrameAvailable = mImageSrc->update();
         }

@@ -100,8 +100,8 @@ protected:
 
 	bool estimateSimilarityFromLastFrame(const TrackingFrame &frame, Eigen::Matrix3fr &similarity);
 	void findMatches(const Eigen::Matrix3fr &opticalHomography, const Eigen::Matrix3fr &poseGuess);
-	bool trackFrameHomography(const Eigen::Matrix3fr &poseGuess);
-	bool trackFrame3D();
+	bool trackFrameHomography(const Eigen::Matrix3fr &opticalHomography, const Eigen::Matrix3fr &poseGuess);
+	bool trackFrame3D(const Eigen::Matrix3fr &opticalHomography, const Eigen::Matrix3fr &poseGuess);
 };
 
 } /* namespace dtslam */

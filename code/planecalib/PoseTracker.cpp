@@ -113,9 +113,9 @@ bool PoseTracker::trackFrame(double timestamp, const cv::Mat3b &imageColor, cons
 
 	//Estimate pose
 	if (mMap->getIs3DValid())
-		trackFrame3D();
+		trackFrame3D(opticalHomography, poseGuess);
 	else
-		trackFrameHomography(poseGuess);
+		trackFrameHomography(opticalHomography, poseGuess);
 
 	//Build match map
 	mFrame->createMatchMap();
@@ -248,7 +248,7 @@ void PoseTracker::findMatches(const Eigen::Matrix3fr &opticalHomography, const E
 	//MYAPP_LOG << "Matches=" << refPoints.size() << "\n";
 }
 
-bool PoseTracker::trackFrameHomography(const Eigen::Matrix3fr &poseGuess)
+bool PoseTracker::trackFrameHomography(const Eigen::Matrix3fr &opticalHomography, const Eigen::Matrix3fr &poseGuess)
 {
 	const int kMinInlierCount = 20;
 	ProfileSection s("trackFrameHomography");
@@ -333,10 +333,17 @@ bool PoseTracker::trackFrameHomography(const Eigen::Matrix3fr &poseGuess)
 		match.getReprojectionErrors().isInlier = true;
 	}
 
+	//Use only optical if lost
+	if (mIsLost)
+	{
+		Eigen::Matrix3fr opticalScaleSpace = eutils::GetTranslateHomography(mCamera.getPrincipalPoint()) * opticalHomography * eutils::GetTranslateHomography(-mCamera.getPrincipalPoint());
+		mPose2D = poseGuess * opticalScaleSpace.inverse();
+	}
+
 	return !mIsLost;
 }
 
-bool PoseTracker::trackFrame3D()
+bool PoseTracker::trackFrame3D(const Eigen::Matrix3fr &opticalHomography, const Eigen::Matrix3fr &poseGuess)
 {
 	const int kMinInlierCount = 20;
 	ProfileSection s("trackFrame3D");
