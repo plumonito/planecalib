@@ -276,8 +276,10 @@ void PlaneCalibSystem::createKeyframe()
 		keypointsByOctave[match.getOctave()].push_back(kp);
 	}
 	//Create descriptors
-	cv::Ptr<cv::ORB> orb = cv::ORB::create(2000, 2, 1);
-	orb->setEdgeThreshold(0);
+    //Different opencv version:
+	//cv::Ptr<cv::ORB> orb = cv::ORB::create(2000, 2, 1);
+	//orb->setEdgeThreshold(0);
+    cv::ORB orb(2000, 2, 1, 0);
 	for (int octave = 0; octave < (int)matchesByOctave.size(); octave++)
 	{
 		if (keypointsByOctave.empty())
@@ -285,7 +287,10 @@ void PlaneCalibSystem::createKeyframe()
 
 		//ORB features
 		cv::Mat1b descriptorBuffer;
-		orb->detectAndCompute(frame->getImage(octave), cv::noArray(), keypointsByOctave[octave], descriptorBuffer, true);
+        //Different opencv version:
+		//orb->detectAndCompute(frame->getImage(octave), cv::noArray(), keypointsByOctave[octave], descriptorBuffer, true);
+        orb.detect(frame->getImage(octave), keypointsByOctave[octave]);
+        orb.compute(frame->getImage(octave), keypointsByOctave[octave], descriptorBuffer);
 
 		//Create measurement
 		for (int i = 0; i < (int)matchesByOctave[octave].size(); i++)

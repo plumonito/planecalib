@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.0)
 
 project(planecalib CXX C)
 
-#add_subdirectory(3rdparty)
+add_subdirectory(3rdparty)
 
 if(MSVC)
     set(CMAKE_MAP_IMPORTED_CONFIG_RELWITHDEBINFO Release)
@@ -31,13 +31,18 @@ find_package(Ceres REQUIRED QUIET PATHS "${EP_PREFIX}")
 add_definitions(-DGLOG_NO_ABBREVIATED_SEVERITIES=1)
 
 #Eigen
-add_library(eigen INTERFACE)
+#add_library(eigen INTERFACE)
 #set(EIGEN_INCLUDE_DIR ${EP_PREFIX}/include/eigen3)
-target_include_directories(eigen INTERFACE ${EIGEN_INCLUDE_DIR})
+#target_include_directories(eigen INTERFACE ${EIGEN_INCLUDE_DIR})
 
-find_package(matio REQUIRED)
-#list(APPEND RELEASE_DLL_GLOB_PATTERNS ${MATIO_DLL})
-#list(APPEND DEBUG_DLL_GLOB_PATTERNS ${MATIO_DLL})
+find_package(matio PATHS "3rdparty_new/matio_cmake")
+if(matio_FOUND)
+    list(APPEND RELEASE_DLL_GLOB_PATTERNS ${MATIO_DLL})
+    list(APPEND DEBUG_DLL_GLOB_PATTERNS ${MATIO_DLL})
+    add_definitions(-DHAS_MATIO)
+else()
+    message(STATUS "matio not found. Disabling matlab interaction.")
+endif()
 
 #Ceres
 #include_directories("${Ceres_DIR}/../include")

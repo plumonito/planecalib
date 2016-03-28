@@ -5,13 +5,17 @@
 #include <opencv2/calib3d.hpp>
 #include "planecalib/HomographyCalibration.h"
 #include "planecalib/PnpEstimation.h"
+
+#ifdef HAS_MATIO
 #include "matio.h"
+#endif
 
 namespace planecalib
 {
 
 std::unique_ptr<Map> BouguetInterface::loadCalib(const std::string &filename)
 {
+#ifdef HAS_MATIO
 	//Vars to read
 	int imageCount;
 	Eigen::Vector2f fc, cc, kc;
@@ -175,10 +179,14 @@ std::unique_ptr<Map> BouguetInterface::loadCalib(const std::string &filename)
 
 	map->mCamera = std::move(camera);
 	return std::move(map);
+#else
+    throw std::runtime_error("matio not available");
+#endif
 }
 
 std::unique_ptr<Map> BouguetInterface::loadValidation(const CameraModel &camera, const std::string &filename)
 {
+#ifdef HAS_MATIO
 	//Vars to read
 	int imageCount;
 	std::vector<Eigen::Matrix2Xf> imagePoints;
@@ -325,6 +333,9 @@ std::unique_ptr<Map> BouguetInterface::loadValidation(const CameraModel &camera,
 	}
 
 	return std::move(map);
+#else
+    throw std::runtime_error("matio not available");
+#endif
 }
 
 }
