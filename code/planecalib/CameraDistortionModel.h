@@ -1,3 +1,14 @@
+/*
+ * CameraDistortionModel.h
+ *
+ * Copyright(C) 2014, University of Oulu, all rights reserved.
+ * Copyright(C) 2014, NVIDIA Corporation, all rights reserved.
+ * Third party copyrights are property of their respective owners.
+ * Contact: Daniel Herrera C. (dherrera@ee.oulu.fi),
+ *          Kihwan Kim(kihwank@nvidia.com)
+ * Author : Daniel Herrera C.
+ */
+
 #ifndef CAMERADISTORTIONMODEL_H_
 #define CAMERADISTORTIONMODEL_H_
 
@@ -21,7 +32,7 @@ public:
 
 	bool Evaluate(double const * const * parameters, double *output, double**jacobians) const
 	{
-		Eigen::Map<TDistortionModel::TParamVector> params(const_cast<double*>(parameters[0]));
+		Eigen::Map<typename TDistortionModel::TParamVector> params(const_cast<double*>(parameters[0]));
 		Eigen::Map<Eigen::Vector2d> x(const_cast<double*>(parameters[1]));
 		Eigen::Map<Eigen::Vector2d> xd(output);
 
@@ -37,7 +48,7 @@ public:
 
 	bool Evaluate(double const * const * parameters, double *output, double**jacobians) const
 	{
-		Eigen::Map<TDistortionModel::TParamVector> params(const_cast<double*>(parameters[0]));
+		Eigen::Map<typename TDistortionModel::TParamVector> params(const_cast<double*>(parameters[0]));
 		Eigen::Map<Eigen::Vector2d> xd(const_cast<double*>(parameters[1]));
 		Eigen::Map<Eigen::Vector2d> x(output);
 
@@ -277,7 +288,7 @@ void DivisionDistortionModel::apply(const Eigen::MatrixBase<TXMat> &x, Eigen::Ma
 }
 
 template <class TParamsMat, class TXMat, class TXdMat>
-static void DivisionDistortionModel::Apply(const Eigen::MatrixBase<TParamsMat> &params, const Eigen::MatrixBase<TXMat> &x, Eigen::MatrixBase<TXdMat> &xd)
+void DivisionDistortionModel::Apply(const Eigen::MatrixBase<TParamsMat> &params, const Eigen::MatrixBase<TXMat> &x, Eigen::MatrixBase<TXdMat> &xd)
 {
 	static_assert(TParamsMat::SizeAtCompileTime == TParamVector::SizeAtCompileTime, "Params vector is wrong size");
 	static_assert(TXMat::SizeAtCompileTime == 2, "Param x must be of size 2");
@@ -306,8 +317,9 @@ void DivisionDistortionModel::applyInv(const Eigen::MatrixBase<TXdMat> &xd, Eige
 	gApplyInvFunctor(params.data(), &xd[0], &x[0]);
 }
 
+
 template <class TParamsMat, class TXMat, class TXdMat>
-static void DivisionDistortionModel::ApplyInv(const Eigen::MatrixBase<TParamsMat> &params, const Eigen::MatrixBase<TXdMat> &xd, Eigen::MatrixBase<TXMat> &x)
+void DivisionDistortionModel::ApplyInv(const Eigen::MatrixBase<TParamsMat> &params, const Eigen::MatrixBase<TXdMat> &xd, Eigen::MatrixBase<TXMat> &x)
 {
 	static_assert(TParamsMat::SizeAtCompileTime == TParamVector::SizeAtCompileTime, "Params vector is wrong size");
 	static_assert(TXMat::SizeAtCompileTime == 2, "Param x must be of size 2");
@@ -319,7 +331,7 @@ static void DivisionDistortionModel::ApplyInv(const Eigen::MatrixBase<TParamsMat
 ///////////////////////////////////////////////////////////////////////////////////////
 // Apply (internal)
 template <class TParamsMat, class TXMat, class TXdMat>
-static bool DivisionDistortionModel::EvaluateCeres(const Eigen::MatrixBase<TParamsMat> &params, const Eigen::MatrixBase<TXMat> &x, Eigen::MatrixBase<TXdMat> &xd, double **jacobians)
+bool DivisionDistortionModel::EvaluateCeres(const Eigen::MatrixBase<TParamsMat> &params, const Eigen::MatrixBase<TXMat> &x, Eigen::MatrixBase<TXdMat> &xd, double **jacobians)
 {
 	static_assert(TParamsMat::SizeAtCompileTime == TParamVector::SizeAtCompileTime, "Params vector is wrong size");
 	const auto &lambda = params[0];
@@ -328,7 +340,7 @@ static bool DivisionDistortionModel::EvaluateCeres(const Eigen::MatrixBase<TPara
 }
 
 template <class TLambda, class TXMat, class TXdMat>
-static bool DivisionDistortionModel::EvaluateCeres2(const TLambda &lambda, const Eigen::MatrixBase<TXMat> &x, Eigen::MatrixBase<TXdMat> &xd, double **jacobians)
+bool DivisionDistortionModel::EvaluateCeres2(const TLambda &lambda, const Eigen::MatrixBase<TXMat> &x, Eigen::MatrixBase<TXdMat> &xd, double **jacobians)
 {
 	static_assert(TXMat::SizeAtCompileTime == 2, "Param x must be of size 2");
 	static_assert(TXdMat::SizeAtCompileTime == 2, "Param xd must be of size 2");
@@ -356,7 +368,7 @@ static bool DivisionDistortionModel::EvaluateCeres2(const TLambda &lambda, const
 //jacobians[1][0:1] = [dxd/dx, dyd/dx]
 //jacobians[1][2:3] = [dxd/dy, dyd/dy]
 template <class TXMat>
-static void DivisionDistortionModel::EvaluateCeresJacobians(double lambda, const Eigen::MatrixBase<TXMat> &x, double r2, double factor, double **jacobians)
+void DivisionDistortionModel::EvaluateCeresJacobians(double lambda, const Eigen::MatrixBase<TXMat> &x, double r2, double factor, double **jacobians)
 {
 	const double factor2 = factor*factor;
 	if (jacobians[0])
@@ -384,7 +396,7 @@ static void DivisionDistortionModel::EvaluateCeresJacobians(double lambda, const
 // ApplyInv (internal)
 
 template <class TParamsMat, class TXMat, class TXdMat>
-static bool DivisionDistortionModel::EvaluateInvCeres(const Eigen::MatrixBase<TParamsMat> &params, const Eigen::MatrixBase<TXdMat> &xd, Eigen::MatrixBase<TXMat> &x, double **jacobians)
+bool DivisionDistortionModel::EvaluateInvCeres(const Eigen::MatrixBase<TParamsMat> &params, const Eigen::MatrixBase<TXdMat> &xd, Eigen::MatrixBase<TXMat> &x, double **jacobians)
 {
 	static_assert(TParamsMat::SizeAtCompileTime == TParamVector::SizeAtCompileTime, "Params vector is wrong size");
 	const auto &lambda = params[0];
@@ -392,7 +404,7 @@ static bool DivisionDistortionModel::EvaluateInvCeres(const Eigen::MatrixBase<TP
 	return EvaluateInvCeres2(lambda, xd, x, jacobians);
 }
 template <class TLambda, class TXMat, class TXdMat>
-static bool DivisionDistortionModel::EvaluateInvCeres2(const TLambda &lambda, const Eigen::MatrixBase<TXdMat> &xd, Eigen::MatrixBase<TXMat> &x, double **jacobians)
+bool DivisionDistortionModel::EvaluateInvCeres2(const TLambda &lambda, const Eigen::MatrixBase<TXdMat> &xd, Eigen::MatrixBase<TXMat> &x, double **jacobians)
 {
 	static_assert(TXMat::SizeAtCompileTime == 2, "Param x must be of size 2");
 	static_assert(TXdMat::SizeAtCompileTime == 2, "Param xd must be of size 2");
@@ -426,7 +438,7 @@ static bool DivisionDistortionModel::EvaluateInvCeres2(const TLambda &lambda, co
 //jacobians[1][0:1] = [dx/dxd, dy/dxd]
 //jacobians[1][2:3] = [dx/dyd, dy/dyd]
 template <class TXMat>
-static void DivisionDistortionModel::EvaluateInvCeresJacobians(double lambda, const Eigen::MatrixBase<TXMat> &x, double r2, double factor, double **jacobians)
+void DivisionDistortionModel::EvaluateInvCeresJacobians(double lambda, const Eigen::MatrixBase<TXMat> &x, double r2, double factor, double **jacobians)
 {
 	static_assert(TXMat::SizeAtCompileTime == 2, "X must be of size 2");
 	assert(jacobians != NULL);

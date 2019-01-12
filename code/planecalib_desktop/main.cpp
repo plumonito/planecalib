@@ -102,13 +102,13 @@ void mouseMoveEvent(int x, int y)
 	gApp->touchMove(x, y);
 }
 
-void __declspec(dllexport) dummy()
-{
-	//ceres::Solver::Options options;
-	//ceres::Solver::Summary s;
-	//ceres::Problem p;
-	//ceres::Solve(options, &p, &s);
-}
+// void __declspec(dllexport) dummy()
+// {
+// 	//ceres::Solver::Options options;
+// 	//ceres::Solver::Summary s;
+// 	//ceres::Problem p;
+// 	//ceres::Solve(options, &p, &s);
+// }
 
 int main(int argc, char**argv)
 {

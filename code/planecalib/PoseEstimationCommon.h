@@ -16,7 +16,7 @@
 #include <vector>
 #include "flags.h"
 
-namespace dtslam {
+namespace planecalib {
 
 struct MatchReprojectionErrors
 {

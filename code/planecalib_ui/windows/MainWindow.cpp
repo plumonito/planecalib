@@ -343,7 +343,15 @@ void MainWindow::loadValidationData()
 		std::cin >> height;
 
 		CameraModel camera;
-		camera.init(Eigen::Vector2f(u0,v0), Eigen::Vector2f(fx, fy), Eigen::Vector2i(width, height));
+		Eigen::Vector2f principalPoint(u0,v0);
+		Eigen::Vector2f focalLengths(fx, fy);
+		Eigen::Vector2i imageSize(width, height);
+
+		camera.init(
+			principalPoint
+			, focalLengths
+			, imageSize
+		);
 		camera.getDistortionModel().init(lambda);
 		mSystem->setCamera(camera);
 	}
@@ -394,7 +402,11 @@ public:
 void MainWindow::synthTest()
 {
 	CameraModel camera;
-	camera.init(Eigen::Vector2f(320, 240), Eigen::Vector2f(600, 600), Eigen::Vector2i(640, 480));
+	Eigen::Vector2f principalPoint(320, 240);
+	Eigen::Vector2f focalLengths(600, 600);
+	Eigen::Vector2i imageSize(640, 480);
+
+	camera.init(principalPoint, focalLengths, imageSize);
 	camera.getDistortionModel().init(0.1);
 
 	float noiseStd = 3 / 3;
@@ -469,7 +481,12 @@ void MainWindow::synthTest()
 void MainWindow::synthTestNormalAngle()
 {
 	CameraModel camera;
-	camera.init(Eigen::Vector2f(320, 240), Eigen::Vector2f(600, 600), Eigen::Vector2i(640, 480));
+
+	Eigen::Vector2f principalPoint(320, 240);
+	Eigen::Vector2f focalLengths(600, 600);
+	Eigen::Vector2i imageSize(640, 480);
+
+	camera.init(principalPoint, focalLengths, imageSize);
 	camera.getDistortionModel().init(0.1);
 
 	float noiseStd = 3 / 3;
@@ -520,7 +537,11 @@ void MainWindow::synthTestNormalAngle()
 void MainWindow::synthTestNormalizationWithNoise()
 {
 	CameraModel camera;
-	camera.init(Eigen::Vector2f(320, 240), Eigen::Vector2f(600, 600), Eigen::Vector2i(640, 480));
+	Eigen::Vector2f principalPoint(320, 240);
+	Eigen::Vector2f focalLengths(600, 600);
+	Eigen::Vector2i imageSize(640, 480);
+
+	camera.init(principalPoint, focalLengths, imageSize);
 	camera.getDistortionModel().init(0.1);
 
 	float noiseStd = 3 / 3;
@@ -587,7 +608,11 @@ void MainWindow::synthTestNormalizationWithNoise()
 void MainWindow::synthTestNormalizationWithFrames()
 {
 	CameraModel camera;
-	camera.init(Eigen::Vector2f(320, 240), Eigen::Vector2f(600, 600), Eigen::Vector2i(640, 480));
+	Eigen::Vector2f principalPoint(320, 240);
+	Eigen::Vector2f focalLengths(600, 600);
+	Eigen::Vector2i imageSize(640, 480);
+
+	camera.init(principalPoint, focalLengths, imageSize);
 	camera.getDistortionModel().init(0.1);
 
 	float noiseStd = 3 / 3;
@@ -656,7 +681,11 @@ void MainWindow::storeSceneToMat(const Map &map)
 void MainWindow::synthTestCompareUsingGroundTruth()
 {
 	CameraModel camera;
-	camera.init(Eigen::Vector2f(320, 240), Eigen::Vector2f(600, 600), Eigen::Vector2i(640, 480));
+	Eigen::Vector2f principalPoint(320, 240);
+	Eigen::Vector2f focalLengths(600, 600);
+	Eigen::Vector2i imageSize(640, 480);
+
+	camera.init(principalPoint, focalLengths, imageSize);
 	camera.getDistortionModel().init(0.1);
 
 	float noiseStd = 3 / 3;
@@ -731,7 +760,11 @@ void MainWindow::synthTestCompareUsingGroundTruth()
 void MainWindow::synthTest2()
 {
 	CameraModel camera;
-	camera.init(Eigen::Vector2f(320, 240), Eigen::Vector2f(600, 600), Eigen::Vector2i(640, 480));
+	Eigen::Vector2f principalPoint(320, 240);
+	Eigen::Vector2f focalLengths(600, 600);
+	Eigen::Vector2i imageSize(640, 480);
+
+	camera.init(principalPoint, focalLengths, imageSize);
 	camera.getDistortionModel().init(0.1);
 	float noiseStd = 3 / 3;
 

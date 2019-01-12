@@ -130,7 +130,7 @@ void CalibratedBundleAdjuster::getInliers()
 Eigen::Matrix<double, 1, 6> &CalibratedBundleAdjuster::getPoseParams(Keyframe *framep)
 {
 	auto &frame = *framep;
-	auto itNew = mParamsPoses.emplace(&frame, Eigen::Matrix<double,1,6>());
+	auto itNew = mParamsPoses.emplace(&frame, Eigen::Matrix<double, 1, 6> ());
 	auto &params = itNew.first->second;
 	if (itNew.second)
 	{

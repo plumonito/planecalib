@@ -151,15 +151,15 @@ void HomographyRansac::getInliers(const Eigen::Matrix3dr &model, int &inlierCoun
 		auto &errorFunctor = *mErrorFunctors[i];
 		auto &errors = data.reprojectionErrors[i];
 
-		errors.reprojectionErrorsSq = (float)errorFunctor.evalToDistanceSq(model);
-		errors.isInlier = (errors.reprojectionErrorsSq < mOutlierErrorThresholdSq);
+		errors.bestReprojectionErrorSq = (float)errorFunctor.evalToDistanceSq(model);
+		errors.isInlier = (errors.bestReprojectionErrorSq < mOutlierErrorThresholdSq);
 
 
 		if (errors.isInlier)
 			inlierCount++;
 
 		double robustError[3];
-		robustLoss.Evaluate(errors.reprojectionErrorsSq, robustError);
+		robustLoss.Evaluate(errors.bestReprojectionErrorSq, robustError);
 		errorSumSq += (float)robustError[0];
 	}
 }
