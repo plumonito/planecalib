@@ -30,8 +30,11 @@ public:
 
 	typedef TDistortionModel_ TDistortionModel;
 
-	void init(const Eigen::Vector2f &principalPoint, const Eigen::Vector2f &focalLengths, Eigen::Vector2i &imageSize)
-	{
+	void init(
+		const Eigen::Vector2f &principalPoint
+		, const Eigen::Vector2f &focalLengths
+		, Eigen::Vector2i &imageSize
+	) {
 		mPrincipalPoint = principalPoint;
 		mFocalLengths = focalLengths;
 		mImageSize = imageSize;

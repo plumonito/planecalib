@@ -22,6 +22,12 @@
 namespace planecalib
 {
 
+template<typename T, typename... Args>
+std::unique_ptr<T> make_unique(Args&&... args) {
+    return std::unique_ptr<T>(new T(std::forward<Args>(args)...));
+}
+
+
 PlaneCalibSystem::~PlaneCalibSystem()
 {
 
@@ -297,7 +303,7 @@ void PlaneCalibSystem::createKeyframe()
 		{
 			auto &match = *matchesByOctave[octave][i];
 			uchar *descriptor = &descriptorBuffer(i, 0);
-			auto m = std::make_unique<FeatureMeasurement>(const_cast<Feature*>(&match.getFeature()), frame, match.getPosition(), octave, descriptor);
+			auto m = make_unique<FeatureMeasurement>(const_cast<Feature*>(&match.getFeature()), frame, match.getPosition(), octave, descriptor);
 
 			//Save measurement
 			frame->getMeasurements().push_back(m.get());

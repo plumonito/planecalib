@@ -123,15 +123,15 @@ void PnPRansac::getInliers(const std::pair<Eigen::Matrix3dr, Eigen::Vector3d> &m
 
 		Eigen::Vector2d residuals;
 		errorFunctor.evaluateWithRmat(model.first, model.second, residuals);
-		errors.reprojectionErrorsSq = (float)residuals.squaredNorm();
-		errors.isInlier = (errors.reprojectionErrorsSq < mOutlierErrorThresholdSq);
+		errors.bestReprojectionErrorSq = (float)residuals.squaredNorm();
+		errors.isInlier = (errors.bestReprojectionErrorSq < mOutlierErrorThresholdSq);
 			
 
 		if(errors.isInlier)
 			inlierCount++;
 
 		double robustError[3];
-		robustLoss.Evaluate(errors.reprojectionErrorsSq, robustError);
+		robustLoss.Evaluate(errors.bestReprojectionErrorSq, robustError);
 		errorSumSq += (float)robustError[0];
 	}
 }
@@ -160,9 +160,9 @@ void PnPRefiner::getInliers(const std::vector<Eigen::Vector3f> &refPoints,
 
 		Eigen::Vector2d residuals;
 		err.evaluateWithRmat(R, translation, residuals);
-		error.reprojectionErrorsSq = (float)residuals.squaredNorm();
+		error.bestReprojectionErrorSq = (float)residuals.squaredNorm();
 
-		error.isInlier = error.reprojectionErrorsSq < mOutlierPixelThresholdSq;
+		error.isInlier = error.bestReprojectionErrorSq < mOutlierPixelThresholdSq;
 
 		if(error.isInlier)
 			inlierCount++;

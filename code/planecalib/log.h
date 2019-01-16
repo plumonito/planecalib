@@ -71,7 +71,7 @@ public:
 		Instance().mVariables.insert(varName);
 		Stream() << varName << "=[" << value << "];\n" << std::flush;
 	}
-	template<>
+	template<class T>
 	static void SetValue(const std::string &varName, const std::string &value)
 	{
 		Instance().mVariables.insert(varName);
@@ -79,19 +79,11 @@ public:
 	}
 
 	template<class T>
-	static void AddValue(const std::string &varName, const T &value, bool newRow=false)
+	static void AddValue(const std::string &varName, const T &value)
 	{
-		if (Instance().mVariables.find(varName) == Instance().mVariables.end())
-		{
-			//ClearVar(varName);
-			Instance().mVariables.insert(varName);
-			Stream() << varName << "=[" << value << "];\n" << std::flush;
-		}
-		else
-		{
-			char sep = newRow ? ';' : ',';
-			Stream() << varName << "=[" << varName << sep << '[' << value << "]];\n" << std::flush;
-		}
+		if(Instance().mVariables.find(varName)==Instance().mVariables.end())
+			ClearVar(varName);
+		Stream() << varName << "=[" << varName << "," << value << "];\n" << std::flush;
 	}
 
 	template<class T>

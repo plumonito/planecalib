@@ -40,28 +40,30 @@ ConfigExternalProject(OpenCV
                      -DBUILD_DOCS:BOOL=OFF
                      -DBUILD_ANDROID_EXAMPLES:BOOL=OFF
                      -DBUILD_WITH_STATIC_CRT:BOOL=OFF
+                     -DUSE_FFMPEG:BOOL=ON
                      -DWITH_TESTS:BOOL=OFF)
 set(OpenCV_STATIC OFF CACHE BOOL "")
 list(APPEND DEBUG_DLL_GLOB_PATTERNS "${EP_PREFIX}/${OpenCV_ARCH}/${OpenCV_RUNTIME}/bin/*0d.dll")
+list(APPEND DEBUG_DLL_GLOB_PATTERNS "${EP_PREFIX}/${OpenCV_ARCH}/${OpenCV_RUNTIME}/bin/opencv_ffmpeg300.dll") #FFMPEG has no debug version
 list(APPEND RELEASE_DLL_GLOB_PATTERNS "${EP_PREFIX}/${OpenCV_ARCH}/${OpenCV_RUNTIME}/bin/*0.dll")
 
 # gflags -----------------------------------------------------------------
-ConfigExternalProject(gflags
-    SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/${GFLAGS_ROOT_DIR}
-    CMAKE_ARGS -DCMAKE_POSITION_INDEPENDENT_CODE:BOOL=TRUE
-    CMAKE_CACHE_ARGS -DGFLAGS_NAMESPACE:STRING=google)
-
-# we must fix the gflags-config, the gflags target is gflags-static!
-if(WIN32)
-    set(gflags_DIR "${EP_PREFIX}/CMake")
-else()
-    set(gflags_DIR "${EP_PREFIX}/lib/cmake/gflags")
-endif()
-file(STRINGS "${gflags_DIR}/gflags-config.cmake" NVMARK REGEX "NVMARK")
-if(NOT NVMARK AND EXISTS "${gflags_DIR}/gflags-config.cmake")
-    file(APPEND "${gflags_DIR}/gflags-config.cmake"
-                "\n# NVMARK\nset(gflags_LIBRARIES gflags-static)\n")
-endif()
+# ConfigExternalProject(gflags
+#     SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/${GFLAGS_ROOT_DIR}
+#     CMAKE_ARGS -DCMAKE_POSITION_INDEPENDENT_CODE:BOOL=TRUE
+#     CMAKE_CACHE_ARGS -DGFLAGS_NAMESPACE:STRING=google)
+# 
+# # we must fix the gflags-config, the gflags target is gflags-static!
+# if(WIN32)
+#     set(gflags_DIR "${EP_PREFIX}/CMake")
+# else()
+#     set(gflags_DIR "${EP_PREFIX}/lib/cmake/gflags")
+# endif()
+# file(STRINGS "${gflags_DIR}/gflags-config.cmake" NVMARK REGEX "NVMARK")
+# if(NOT NVMARK AND EXISTS "${gflags_DIR}/gflags-config.cmake")
+#     file(APPEND "${gflags_DIR}/gflags-config.cmake"
+#                 "\n# NVMARK\nset(gflags_LIBRARIES gflags-static)\n")
+# endif()
 
 
 # glog --------------------------------------------------------------------
@@ -125,7 +127,7 @@ ConfigExternalProject(Ceres
     ${blas_lapack_packages}
     CMAKE_ARGS -DBUILD_SHARED_LIBS:BOOL=TRUE
     CMAKE_CACHE_ARGS
-              -DCXSPARSE_LIBRARY:PATH=
+               -DCXSPARSE_LIBRARY:PATH=
                -DCMAKE_CXX_FLAGS:STRING=${CXXFLAGS}
                -DBUILD_TESTING:BOOL=OFF
                -DBUILD_EXAMPLES:BOOL=OFF

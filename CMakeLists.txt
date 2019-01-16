@@ -13,7 +13,7 @@ endif()
 find_package(freeglut REQUIRED QUIET PATHS "${EP_PREFIX}")
 find_package(glew REQUIRED QUIET PATHS "${EP_PREFIX}")
 find_package(OpenCV REQUIRED QUIET PATHS "${EP_PREFIX}")
-find_package(gflags REQUIRED PATHS "${EP_PREFIX}")
+# find_package(gflags REQUIRED PATHS "${EP_PREFIX}")
 find_package(glog REQUIRED PATHS "${EP_PREFIX}")
 
 if(WIN32)
